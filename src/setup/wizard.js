@@ -89,16 +89,16 @@ export async function runSetupWizard(opts = {}) {
 
   // Step 3: Wallet
   console.log('');
-  const { createWallet } = await inquirer.prompt([{
+  const { wantWallet } = await inquirer.prompt([{
     type: 'confirm',
-    name: 'createWallet',
+    name: 'wantWallet',
     message: theme.gold('Create a wallet now?'),
     default: true,
   }]);
 
-  if (createWallet) {
-    const { createWallet } = await import('../wallet/manager.js');
-    await createWallet();
+  if (wantWallet) {
+    const walletMod = await import('../wallet/manager.js');
+    await walletMod.createWallet();
   } else {
     info('Create one later: darksol wallet create <name>');
   }
