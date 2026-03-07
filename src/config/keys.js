@@ -1,7 +1,7 @@
 import { randomBytes, createCipheriv, createDecipheriv, scryptSync } from 'crypto';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
+import { homedir, hostname, userInfo } from 'os';
 import { theme } from '../ui/theme.js';
 import { kvDisplay, success, error, warn, info } from '../ui/components.js';
 import { showSection } from '../ui/banner.js';
@@ -315,6 +315,58 @@ export function listKeys() {
   console.log('');
   info('Add a key: darksol keys add <service>');
   info('Services: ' + Object.keys(SERVICES).join(', '));
+}
+
+/**
+ * Add a key directly (non-interactive, for setup wizard / OAuth)
+ * Uses a machine-derived vault password for seamless storage
+ */
+export function addKeyDirect(service, apiKey) {
+  const vaultPass = getMachineVaultPass();
+  const vault = loadVault();
+  const svc = SERVICES[service];
+  vault.keys[service] = {
+    encrypted: encrypt(apiKey, vaultPass),
+    service: svc?.name || service,
+    category: svc?.category || 'custom',
+    addedAt: new Date().toISOString(),
+    autoStored: true,  // flag: stored via wizard, not manual password
+  };
+  saveVault(vault);
+}
+
+/**
+ * Get a key stored via addKeyDirect (auto-stored, machine password)
+ */
+export function getKeyAuto(service) {
+  const vault = loadVault();
+  const entry = vault.keys[service];
+  if (!entry) return getKeyFromEnv(service);
+  if (!entry.autoStored) return getKeyFromEnv(service);  // manual entries need password
+  try {
+    return decrypt(entry.encrypted, getMachineVaultPass());
+  } catch {
+    return getKeyFromEnv(service);
+  }
+}
+
+/**
+ * Check if any key exists for a service (stored or env)
+ */
+export function hasKey(service) {
+  const vault = loadVault();
+  if (vault.keys[service]) return true;
+  const svc = SERVICES[service];
+  if (svc?.envVar && process.env[svc.envVar]) return true;
+  return false;
+}
+
+/**
+ * Machine-derived vault password for auto-stored keys
+ * (derived from hostname + username — not high security, but protects at rest)
+ */
+function getMachineVaultPass() {
+  return `darksol-vault-${hostname()}-${userInfo().username}`;
 }
 
 export { KEYS_DIR, KEYS_FILE };

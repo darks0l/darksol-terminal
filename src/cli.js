@@ -19,6 +19,7 @@ import { addKey, removeKey, listKeys } from './config/keys.js';
 import { parseIntent, startChat, adviseStrategy, analyzeToken, executeIntent } from './llm/intent.js';
 import { startAgentSigner, showAgentDocs } from './wallet/agent-signer.js';
 import { listSkills, installSkill, skillInfo, uninstallSkill } from './services/skills.js';
+import { runSetupWizard, checkFirstRun } from './setup/wizard.js';
 
 export function cli(argv) {
   const program = new Command();
@@ -292,6 +293,15 @@ export function cli(argv) {
     .command('settle <payment>')
     .description('Settle payment on-chain')
     .action((payment) => facilitatorSettle(payment));
+
+  // ═══════════════════════════════════════
+  // SETUP COMMAND
+  // ═══════════════════════════════════════
+  program
+    .command('setup')
+    .description('First-run setup wizard — configure AI provider, chain, wallet')
+    .option('-f, --force', 'Re-run even if already configured')
+    .action((opts) => runSetupWizard({ force: opts.force }));
 
   // ═══════════════════════════════════════
   // AI / LLM COMMANDS
@@ -589,6 +599,10 @@ export function cli(argv) {
     .action(async () => {
       showBanner();
 
+      // First-run detection — offer setup wizard
+      const ranSetup = await checkFirstRun();
+      if (ranSetup) return;
+
       const cfg = getAllConfig();
       const wallet = cfg.activeWallet;
 
@@ -621,6 +635,7 @@ export function cli(argv) {
         ['networks', 'Chain reference & explorers'],
         ['quickstart', 'Getting started guide'],
         ['lookup', 'Look up any address on-chain'],
+        ['setup', 'First-run setup wizard'],
       ];
 
       commands.forEach(([cmd, desc]) => {

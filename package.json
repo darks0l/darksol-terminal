@@ -1,6 +1,6 @@
 {
   "name": "@darksol/terminal",
-  "version": "0.2.2",
+  "version": "0.3.0",
   "description": "DARKSOL Terminal — unified CLI for all DARKSOL services. Market intel, trading, oracle, casino, and more.",
   "type": "module",
   "bin": {
@@ -10,7 +10,8 @@
   "scripts": {
     "start": "node bin/darksol.js",
     "dev": "node bin/darksol.js dashboard",
-    "test": "node --test tests/*.test.js"
+    "test": "node --test tests/*.test.js",
+    "postinstall": "echo \"\n🌑 DARKSOL Terminal installed. Run 'darksol setup' to configure your AI provider.\n\""
   },
   "keywords": [
     "darksol",
@@ -25,20 +26,21 @@
   "author": "DARKSOL <chris00claw@gmail.com>",
   "license": "MIT",
   "dependencies": {
-    "chalk": "^5.3.0",
-    "commander": "^12.1.0",
-    "ethers": "^6.13.0",
-    "boxen": "^8.0.1",
-    "ora": "^8.1.0",
-    "cli-table3": "^0.6.5",
-    "inquirer": "^12.0.0",
-    "figlet": "^1.8.0",
-    "gradient-string": "^3.0.0",
-    "conf": "^13.0.1",
-    "nanospinner": "^1.1.0",
-    "node-fetch": "^3.3.2",
     "blessed": "^0.1.81",
     "blessed-contrib": "^4.11.0",
+    "boxen": "^8.0.1",
+    "chalk": "^5.3.0",
+    "cli-table3": "^0.6.5",
+    "commander": "^12.1.0",
+    "conf": "^13.0.1",
+    "ethers": "^6.13.0",
+    "figlet": "^1.8.0",
+    "gradient-string": "^3.0.0",
+    "inquirer": "^12.0.0",
+    "nanospinner": "^1.1.0",
+    "node-fetch": "^3.3.2",
+    "open": "^11.0.0",
+    "ora": "^8.1.0",
     "terminal-link": "^3.0.0",
     "update-notifier": "^7.3.1"
   },
