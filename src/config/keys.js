@@ -351,13 +351,54 @@ export function getKeyAuto(service) {
 }
 
 /**
- * Check if any key exists for a service (stored or env)
+ * Check if a VALID key exists for a service (stored or env)
+ * Actually validates format, not just existence
  */
 export function hasKey(service) {
-  const vault = loadVault();
-  if (vault.keys[service]) return true;
   const svc = SERVICES[service];
-  if (svc?.envVar && process.env[svc.envVar]) return true;
+  const vault = loadVault();
+
+  // Check vault (auto-stored keys)
+  if (vault.keys[service]) {
+    // If auto-stored, try to decrypt and validate
+    if (vault.keys[service].autoStored) {
+      try {
+        const key = decrypt(vault.keys[service].encrypted, getMachineVaultPass());
+        if (svc?.validate && !svc.validate(key)) return false;
+        return true;
+      } catch { return false; }
+    }
+    return true;  // manually stored keys are assumed valid
+  }
+
+  // Check environment variable
+  if (svc?.envVar && process.env[svc.envVar]) {
+    const envVal = process.env[svc.envVar];
+    // For Ollama, just having OLLAMA_HOST doesn't mean AI is ready
+    // — we need actual LLM providers with API keys
+    if (service === 'ollama') {
+      // Ollama is "ready" if host is set and looks like a URL
+      return envVal.startsWith('http') && envVal.length > 10;
+    }
+    // For API key services, validate the key format
+    if (svc.validate) {
+      return svc.validate(envVal);
+    }
+    return envVal.length > 0;
+  }
+
+  return false;
+}
+
+/**
+ * Quick check: is any LLM provider properly configured?
+ * Only returns true if a real API key is validated
+ */
+export function hasAnyLLM() {
+  // Cloud providers — need real validated API keys
+  if (['openai', 'anthropic', 'openrouter'].some(s => hasKey(s))) return true;
+  // Ollama — check if explicitly configured via hasKey (validates URL format)
+  if (hasKey('ollama')) return true;
   return false;
 }
 

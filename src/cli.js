@@ -611,8 +611,8 @@ export function cli(argv) {
 
       const cfg = getAllConfig();
       const wallet = cfg.activeWallet;
-      const { hasKey } = await import('./config/keys.js');
-      const hasLLM = ['openai', 'anthropic', 'openrouter', 'ollama'].some(s => hasKey(s));
+      const { hasAnyLLM } = await import('./config/keys.js');
+      const hasLLM = hasAnyLLM();
 
       // ── Status bar ──
       const statusParts = [

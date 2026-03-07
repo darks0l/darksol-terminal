@@ -3,7 +3,7 @@ import { theme } from '../ui/theme.js';
 import { showSection, showDivider } from '../ui/banner.js';
 import { success, error, warn, info, kvDisplay } from '../ui/components.js';
 import { getConfig, setConfig } from '../config/store.js';
-import { addKeyDirect, hasKey, SERVICES } from '../config/keys.js';
+import { addKeyDirect, hasKey, hasAnyLLM, SERVICES } from '../config/keys.js';
 import { createServer } from 'http';
 import open from 'open';
 import crypto from 'crypto';
@@ -16,9 +16,9 @@ import crypto from 'crypto';
  * Check if this is a first run (no LLM keys configured)
  */
 export function isFirstRun() {
-  const hasAnyLLM = ['openai', 'anthropic', 'openrouter', 'ollama'].some(s => hasKey(s));
+  const llmReady = hasAnyLLM();
   const setupDone = getConfig('setupComplete');
-  return !hasAnyLLM && !setupDone;
+  return !llmReady && !setupDone;
 }
 
 /**
