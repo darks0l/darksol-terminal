@@ -8,6 +8,7 @@ import { showPortfolio } from './wallet/portfolio.js';
 import { showHistory } from './wallet/history.js';
 import { showGas } from './services/gas.js';
 import { watchPrice, checkPrices } from './services/watch.js';
+import { mailSetup, mailCreate, mailInboxes, mailSend, mailList, mailRead, mailReply, mailForward, mailThreads, mailDelete, mailUse, mailStats, mailStatus } from './services/mail.js';
 import { executeSwap } from './trading/swap.js';
 import { snipeToken, watchSnipe } from './trading/snipe.js';
 import { createDCA, listDCA, cancelDCA, runDCA } from './trading/dca.js';
@@ -309,6 +310,93 @@ export function cli(argv) {
     .command('settle <payment>')
     .description('Settle payment on-chain')
     .action((payment) => facilitatorSettle(payment));
+
+  // ═══════════════════════════════════════
+  // MAIL COMMANDS
+  // ═══════════════════════════════════════
+  const mail = program
+    .command('mail')
+    .description('📧 AgentMail — email for your agent');
+
+  mail
+    .command('setup')
+    .description('Set up AgentMail (API key, browser registration)')
+    .action(() => mailSetup());
+
+  mail
+    .command('status')
+    .description('Show AgentMail connection status')
+    .action(() => mailStatus());
+
+  mail
+    .command('create')
+    .description('Create a new email inbox')
+    .option('-u, --username <name>', 'Custom username')
+    .option('-d, --display-name <name>', 'Display name')
+    .action((opts) => mailCreate(opts));
+
+  mail
+    .command('inboxes')
+    .description('List all inboxes')
+    .action(() => mailInboxes());
+
+  mail
+    .command('use <inbox-id>')
+    .description('Set active inbox')
+    .action((id) => mailUse(id));
+
+  mail
+    .command('send')
+    .description('Send an email')
+    .option('--to <email>', 'Recipient email')
+    .option('--subject <subject>', 'Email subject')
+    .option('--text <body>', 'Email body')
+    .option('--inbox <id>', 'Inbox ID to send from')
+    .action((opts) => mailSend(opts));
+
+  mail
+    .command('inbox')
+    .description('List received messages')
+    .option('-l, --limit <n>', 'Number of messages', '10')
+    .option('--inbox <id>', 'Inbox ID')
+    .action((opts) => mailList(opts));
+
+  mail
+    .command('read <message>')
+    .description('Read a message (by number or ID)')
+    .option('--inbox <id>', 'Inbox ID')
+    .action((ref, opts) => mailRead(ref, opts));
+
+  mail
+    .command('reply <message>')
+    .description('Reply to a message')
+    .option('--text <body>', 'Reply text')
+    .option('--inbox <id>', 'Inbox ID')
+    .action((ref, opts) => mailReply(ref, opts));
+
+  mail
+    .command('forward <message>')
+    .description('Forward a message')
+    .option('--to <email>', 'Forward to email')
+    .option('--inbox <id>', 'Inbox ID')
+    .action((ref, opts) => mailForward(ref, opts));
+
+  mail
+    .command('threads')
+    .description('List email threads')
+    .option('--inbox <id>', 'Inbox ID')
+    .action((opts) => mailThreads(opts));
+
+  mail
+    .command('stats')
+    .description('Inbox metrics and stats')
+    .option('--inbox <id>', 'Inbox ID')
+    .action((opts) => mailStats(opts));
+
+  mail
+    .command('delete [inbox-id]')
+    .description('Delete an inbox')
+    .action((id) => mailDelete(id));
 
   // ═══════════════════════════════════════
   // PORTFOLIO SHORTCUT
@@ -841,6 +929,7 @@ function showCommandList() {
     ['casino', 'The Clawsino — betting'],
     ['cards', 'Prepaid Visa/MC cards'],
     ['builders', 'ERC-8021 builder index'],
+    ['mail', 'AgentMail — email for your agent'],
     ['facilitator', 'x402 payment facilitator'],
     ['skills', 'Agent skill directory'],
     ['setup', 'Re-run setup wizard'],

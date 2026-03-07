@@ -154,6 +154,14 @@ export const SERVICES = {
     docsUrl: 'https://portal.1inch.dev',
     validate: (key) => key.length > 10,
   },
+  agentmail: {
+    name: 'AgentMail',
+    category: 'email',
+    description: 'Email for AI agents — create inboxes, send/receive',
+    envVar: 'AGENTMAIL_API_KEY',
+    docsUrl: 'https://console.agentmail.to',
+    validate: (key) => key.startsWith('am_'),
+  },
   paraswap: {
     name: 'ParaSwap',
     category: 'trading',
@@ -287,8 +295,8 @@ export function listKeys() {
 
   showSection('API KEY VAULT');
 
-  const categories = ['llm', 'data', 'rpc', 'trading'];
-  const catNames = { llm: '🧠 LLM PROVIDERS', data: '📊 DATA PROVIDERS', rpc: '🌐 RPC PROVIDERS', trading: '📈 TRADING' };
+  const categories = ['llm', 'data', 'rpc', 'trading', 'email'];
+  const catNames = { llm: '🧠 LLM PROVIDERS', data: '📊 DATA PROVIDERS', rpc: '🌐 RPC PROVIDERS', trading: '📈 TRADING', email: '📧 EMAIL' };
 
   for (const cat of categories) {
     console.log('');
