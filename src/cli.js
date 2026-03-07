@@ -295,6 +295,16 @@ export function cli(argv) {
     .action((payment) => facilitatorSettle(payment));
 
   // ═══════════════════════════════════════
+  // CHAT SHORTCUT (darksol chat = darksol ai chat)
+  // ═══════════════════════════════════════
+  program
+    .command('chat')
+    .description('Start AI trading chat (shortcut for: darksol ai chat)')
+    .option('-p, --provider <name>', 'LLM provider')
+    .option('-m, --model <model>', 'Model name')
+    .action((opts) => startChat(opts));
+
+  // ═══════════════════════════════════════
   // SETUP COMMAND
   // ═══════════════════════════════════════
   program
@@ -591,58 +601,41 @@ export function cli(argv) {
     });
 
   // ═══════════════════════════════════════
-  // DASHBOARD (default) — CHAT-FIRST
+  // DASHBOARD (default) — commands + optional AI
   // ═══════════════════════════════════════
   program
     .command('dashboard', { isDefault: true })
-    .description('Show DARKSOL Terminal — chat-first interface')
+    .description('Show DARKSOL Terminal dashboard')
     .action(async () => {
       showBanner();
-
-      // First-run detection — force setup
-      const ranSetup = await checkFirstRun();
-      if (ranSetup) return;
 
       const cfg = getAllConfig();
       const wallet = cfg.activeWallet;
       const { hasKey } = await import('./config/keys.js');
       const hasLLM = ['openai', 'anthropic', 'openrouter', 'ollama'].some(s => hasKey(s));
 
-      // ── Status bar (compact) ──
+      // ── Status bar ──
       const statusParts = [
         wallet ? theme.success(`● ${wallet}`) : theme.dim('○ no wallet'),
         theme.dim(`${cfg.chain}`),
         theme.dim(`${cfg.slippage}% slip`),
-        hasLLM ? theme.success('● AI ready') : theme.accent('○ no AI'),
+        hasLLM ? theme.success('● AI ready') : theme.dim('○ no AI'),
       ];
       console.log(`  ${statusParts.join(theme.dim('  │  '))}`);
       console.log('');
 
-      // ── CHAT INTERFACE (primary) ──
-      if (hasLLM) {
-        // AI is connected — drop straight into chat
-        console.log(theme.gold('  ╔══════════════════════════════════════════════════════════╗'));
-        console.log(theme.gold('  ║') + theme.label('  DARKSOL AI — ready. Ask anything.                      ') + theme.gold('║'));
-        console.log(theme.gold('  ║') + theme.dim('  "swap 0.1 ETH for USDC" • "what\'s AERO at?" • "help"   ') + theme.gold('║'));
-        console.log(theme.gold('  ║') + theme.dim('  Type "commands" to see all tools. Type "exit" to quit.   ') + theme.gold('║'));
-        console.log(theme.gold('  ╚══════════════════════════════════════════════════════════╝'));
-        console.log('');
+      // ── Commands (always shown) ──
+      showCommandList();
 
-        // Start interactive chat loop
-        await startChatLoop(cfg);
-      } else {
-        // No AI — show connect prompt
-        console.log(theme.gold('  ╔══════════════════════════════════════════════════════════╗'));
-        console.log(theme.gold('  ║') + theme.accent('  ⚠  No AI provider connected                            ') + theme.gold('║'));
-        console.log(theme.gold('  ║') + theme.dim('  The DARKSOL AI needs an LLM to work.                    ') + theme.gold('║'));
-        console.log(theme.gold('  ║') + theme.dim('                                                          ') + theme.gold('║'));
-        console.log(theme.gold('  ║') + theme.dim('  Run: ') + theme.label('darksol setup') + theme.dim('          to connect OpenAI/Anthropic  ') + theme.gold('║'));
-        console.log(theme.gold('  ║') + theme.dim('  Run: ') + theme.label('darksol keys add openai') + theme.dim(' to add an API key       ') + theme.gold('║'));
-        console.log(theme.gold('  ║') + theme.dim('                                                          ') + theme.gold('║'));
-        console.log(theme.gold('  ║') + theme.dim('  Or use Ollama for free local AI — no key needed.        ') + theme.gold('║'));
-        console.log(theme.gold('  ╚══════════════════════════════════════════════════════════╝'));
+      // ── AI nudge or chat prompt ──
+      if (hasLLM) {
+        console.log(theme.gold('  💬 AI is ready — run ') + theme.label('darksol ai chat') + theme.gold(' or just ') + theme.label('darksol chat'));
+        console.log(theme.dim('     "swap 0.1 ETH for USDC" • "what\'s AERO at?" • any question'));
         console.log('');
-        showCommandList();
+      } else {
+        console.log(theme.dim('  💡 Want AI-powered trading? Run ') + theme.label('darksol setup') + theme.dim(' to connect an LLM'));
+        console.log(theme.dim('     Supports OpenAI, Anthropic, OpenRouter, or Ollama (free/local)'));
+        console.log('');
       }
     });
 

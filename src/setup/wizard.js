@@ -494,12 +494,10 @@ function showPostSetup() {
 }
 
 /**
- * Quick check on startup — if first run, FORCE setup (no prompt)
+ * Quick check on startup — nudge about AI, never block
+ * Returns false always so dashboard continues to render
  */
 export async function checkFirstRun() {
-  if (isFirstRun()) {
-    await runSetupWizard();
-    return true;
-  }
+  // Never block — just return false and let dashboard handle the nudge
   return false;
 }
