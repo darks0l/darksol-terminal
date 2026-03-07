@@ -14,6 +14,7 @@ import { cardsCatalog, cardsOrder, cardsStatus } from './services/cards.js';
 import { facilitatorHealth, facilitatorVerify, facilitatorSettle } from './services/facilitator.js';
 import { buildersLeaderboard, buildersLookup, buildersFeed } from './services/builders.js';
 import { createScript, listScripts, runScript, showScript, editScript, deleteScript, cloneScript, listTemplates } from './scripts/engine.js';
+import { showTradingTips, showScriptTips, showNetworkReference, showQuickStart, showWalletSummary, showTokenInfo, showTxResult } from './utils/helpers.js';
 
 export function cli(argv) {
   const program = new Command();
@@ -289,6 +290,61 @@ export function cli(argv) {
     .action((payment) => facilitatorSettle(payment));
 
   // ═══════════════════════════════════════
+  // TIPS & REFERENCE COMMANDS
+  // ═══════════════════════════════════════
+  program
+    .command('tips')
+    .description('Show trading and script writing tips')
+    .option('-t, --trading', 'Trading tips only')
+    .option('-s, --scripts', 'Script writing tips only')
+    .action((opts) => {
+      showMiniBanner();
+      if (opts.scripts) {
+        showScriptTips();
+      } else if (opts.trading) {
+        showTradingTips();
+      } else {
+        showTradingTips();
+        showScriptTips();
+      }
+    });
+
+  program
+    .command('networks')
+    .description('Show supported networks and chain info')
+    .action(() => {
+      showMiniBanner();
+      showNetworkReference();
+    });
+
+  program
+    .command('quickstart')
+    .description('Show getting started guide')
+    .action(() => {
+      showMiniBanner();
+      showQuickStart();
+    });
+
+  program
+    .command('lookup <address>')
+    .description('Look up a token or wallet address on-chain')
+    .option('-c, --chain <chain>', 'Chain to query')
+    .action(async (address, opts) => {
+      showMiniBanner();
+      if (address.length === 42 && address.startsWith('0x')) {
+        // Could be token or wallet — try token first
+        try {
+          await showTokenInfo(address, opts.chain);
+        } catch {
+          await showWalletSummary(address, opts.chain);
+        }
+      } else {
+        const { error } = await import('./ui/components.js');
+        error('Provide a valid 0x address');
+      }
+    });
+
+  // ═══════════════════════════════════════
   // SCRIPT COMMANDS
   // ═══════════════════════════════════════
   const script = program
@@ -418,6 +474,10 @@ export function cli(argv) {
         ['builders', 'ERC-8021 builder index'],
         ['facilitator', 'x402 payment facilitator'],
         ['config', 'Terminal configuration'],
+        ['tips', 'Trading & scripting tips'],
+        ['networks', 'Chain reference & explorers'],
+        ['quickstart', 'Getting started guide'],
+        ['lookup', 'Look up any address on-chain'],
       ];
 
       commands.forEach(([cmd, desc]) => {

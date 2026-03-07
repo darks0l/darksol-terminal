@@ -184,6 +184,105 @@ JSON output mode for programmatic use:
 darksol config set output json
 ```
 
+## Helper Functions
+
+When writing custom execution scripts, you have access to powerful helper utilities:
+
+```javascript
+import {
+  // Providers & Chain
+  getProvider,           // Get ethers provider for any chain
+  CHAIN_IDS,             // { base: 8453, ethereum: 1, ... }
+  EXPLORERS,             // Block explorer URLs per chain
+  txUrl, addressUrl,     // Generate explorer links
+
+  // Tokens
+  getERC20,              // Get ERC20 contract instance
+  getFullTokenInfo,      // Name, symbol, decimals, totalSupply
+  getTokenBalance,       // Formatted balance for any token
+  ensureApproval,        // Check & approve token spending
+  TOKENS,                // All known token addresses per chain
+  getUSDC, getWETH,      // Quick chain-specific lookups
+
+  // Gas
+  estimateGasCost,       // Estimate gas in ETH
+  getBoostedGas,         // Priority gas settings for snipes
+
+  // Formatting
+  formatCompact,         // 1234567 → "1.23M"
+  formatUSD,             // Format as $1,234.56
+  formatETH,             // Format wei to ETH string
+  formatTokenAmount,     // Format with symbol
+  shortAddress,          // 0x1234...5678
+  formatDuration,        // Seconds → "2h 30m"
+
+  // Validation
+  isValidAddress,        // Check Ethereum address
+  isValidPrivateKey,     // Check private key format
+  isValidAmount,         // Check positive number
+  parseTokenAmount,      // String → bigint with decimals
+
+  // Async
+  sleep,                 // await sleep(1000)
+  retry,                 // Retry with exponential backoff
+  waitForTx,             // Wait for tx with timeout
+
+  // Price
+  quickPrice,            // DexScreener price lookup
+  hasLiquidity,          // Check minimum liquidity
+} from './utils/helpers.js';
+```
+
+### Example: Custom Script Using Helpers
+
+```javascript
+module.exports = async function({ signer, provider, ethers, config, params }) {
+  // Import helpers (available in script context)
+  const helpers = await import('@darksol/terminal/src/utils/helpers.js');
+
+  // Check if token has enough liquidity
+  const liquid = await helpers.hasLiquidity(params.token, 5000);
+  if (!liquid) throw new Error('Insufficient liquidity');
+
+  // Get price
+  const price = await helpers.quickPrice(params.token);
+  console.log(`Price: ${helpers.formatUSD(price.price)}`);
+
+  // Get boosted gas for priority
+  const gas = await helpers.getBoostedGas(provider, 1.5);
+
+  // Execute trade with retry
+  const result = await helpers.retry(async () => {
+    const tx = await signer.sendTransaction({ ...txParams, ...gas });
+    return helpers.waitForTx(tx, 60000);
+  }, 3, 2000);
+
+  return { txHash: result.hash, price: price.price };
+};
+```
+
+## Tips & Reference
+
+```bash
+# Trading tips (slippage, MEV protection, etc.)
+darksol tips --trading
+
+# Script writing tips
+darksol tips --scripts
+
+# Both
+darksol tips
+
+# Network reference (chains, IDs, explorers, USDC addresses)
+darksol networks
+
+# Getting started guide
+darksol quickstart
+
+# Look up any address (auto-detects token vs wallet)
+darksol lookup 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+```
+
 ## Development
 
 ```bash
