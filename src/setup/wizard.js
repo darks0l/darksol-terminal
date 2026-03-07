@@ -97,8 +97,8 @@ export async function runSetupWizard(opts = {}) {
   }]);
 
   if (createWallet) {
-    const { createNewWallet } = await import('../wallet/manager.js');
-    await createNewWallet();
+    const { createWallet } = await import('../wallet/manager.js');
+    await createWallet();
   } else {
     info('Create one later: darksol wallet create <name>');
   }
