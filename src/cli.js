@@ -18,6 +18,7 @@ import { showTradingTips, showScriptTips, showNetworkReference, showQuickStart, 
 import { addKey, removeKey, listKeys } from './config/keys.js';
 import { parseIntent, startChat, adviseStrategy, analyzeToken } from './llm/intent.js';
 import { startAgentSigner, showAgentDocs } from './wallet/agent-signer.js';
+import { listSkills, installSkill, skillInfo, uninstallSkill } from './services/skills.js';
 
 export function cli(argv) {
   const program = new Command();
@@ -386,6 +387,33 @@ export function cli(argv) {
     .action(() => showAgentDocs());
 
   // ═══════════════════════════════════════
+  // SKILLS COMMANDS
+  // ═══════════════════════════════════════
+  const skills = program
+    .command('skills')
+    .description('DARKSOL skills directory — install agent skills');
+
+  skills
+    .command('list')
+    .description('List all available DARKSOL skills')
+    .action(() => listSkills());
+
+  skills
+    .command('install <name>')
+    .description('Install a skill to OpenClaw')
+    .action((name) => installSkill(name));
+
+  skills
+    .command('info <name>')
+    .description('Show skill details')
+    .action((name) => skillInfo(name));
+
+  skills
+    .command('uninstall <name>')
+    .description('Uninstall a skill')
+    .action((name) => uninstallSkill(name));
+
+  // ═══════════════════════════════════════
   // TIPS & REFERENCE COMMANDS
   // ═══════════════════════════════════════
   program
@@ -572,6 +600,7 @@ export function cli(argv) {
         ['cards', 'Prepaid Visa/MC cards'],
         ['builders', 'ERC-8021 builder index'],
         ['facilitator', 'x402 payment facilitator'],
+        ['skills', 'Agent skill directory & install'],
         ['config', 'Terminal configuration'],
         ['tips', 'Trading & scripting tips'],
         ['networks', 'Chain reference & explorers'],
