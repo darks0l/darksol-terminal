@@ -26,7 +26,7 @@ export function showBanner(opts = {}) {
   );
   console.log(
     theme.dim('  ║ ') +
-    theme.subtle(' v0.1.1') +
+    theme.subtle(' v0.2.0') +
     theme.dim('                                                ') +
     theme.gold('🌑') +
     theme.dim(' ║')
@@ -44,7 +44,7 @@ export function showBanner(opts = {}) {
 
 export function showMiniBanner() {
   console.log('');
-  console.log(theme.gold.bold('  🌑 DARKSOL TERMINAL') + theme.dim(' v0.1.1'));
+  console.log(theme.gold.bold('  🌑 DARKSOL TERMINAL') + theme.dim(' v0.2.0'));
   console.log(theme.dim('  ─────────────────────────────'));
   console.log('');
 }
@@ -58,4 +58,5 @@ export function showSection(title) {
 export function showDivider() {
   console.log(theme.dim('  ' + '─'.repeat(50)));
 }
+
 

@@ -15,6 +15,9 @@ import { facilitatorHealth, facilitatorVerify, facilitatorSettle } from './servi
 import { buildersLeaderboard, buildersLookup, buildersFeed } from './services/builders.js';
 import { createScript, listScripts, runScript, showScript, editScript, deleteScript, cloneScript, listTemplates } from './scripts/engine.js';
 import { showTradingTips, showScriptTips, showNetworkReference, showQuickStart, showWalletSummary, showTokenInfo, showTxResult } from './utils/helpers.js';
+import { addKey, removeKey, listKeys } from './config/keys.js';
+import { parseIntent, startChat, adviseStrategy, analyzeToken } from './llm/intent.js';
+import { startAgentSigner, showAgentDocs } from './wallet/agent-signer.js';
 
 export function cli(argv) {
   const program = new Command();
@@ -290,6 +293,99 @@ export function cli(argv) {
     .action((payment) => facilitatorSettle(payment));
 
   // ═══════════════════════════════════════
+  // AI / LLM COMMANDS
+  // ═══════════════════════════════════════
+  const ai = program
+    .command('ai')
+    .description('AI-powered trading assistant & analysis');
+
+  ai
+    .command('chat')
+    .description('Start interactive AI trading chat')
+    .option('-p, --provider <name>', 'LLM provider (openai, anthropic, openrouter, ollama)')
+    .option('-m, --model <model>', 'Model name')
+    .action((opts) => startChat(opts));
+
+  ai
+    .command('ask <prompt...>')
+    .description('One-shot AI query')
+    .option('-p, --provider <name>', 'LLM provider')
+    .option('-m, --model <model>', 'Model name')
+    .action(async (promptParts, opts) => {
+      const prompt = promptParts.join(' ');
+      const result = await parseIntent(prompt, opts);
+      if (result.action !== 'error' && result.action !== 'unknown') {
+        showSection('PARSED INTENT');
+        kvDisplay(Object.entries(result)
+          .filter(([k]) => !['raw', 'model'].includes(k))
+          .map(([k, v]) => [k, Array.isArray(v) ? v.join(', ') : String(v)])
+        );
+        if (result.command) {
+          console.log('');
+          info(`Suggested command: ${theme.gold(result.command)}`);
+        }
+      }
+    });
+
+  ai
+    .command('strategy <token>')
+    .description('Get DCA strategy recommendation')
+    .requiredOption('-b, --budget <usd>', 'Total budget in USD')
+    .option('-t, --timeframe <period>', 'Investment timeframe', '30 days')
+    .option('-p, --provider <name>', 'LLM provider')
+    .action((token, opts) => adviseStrategy(token, opts.budget, opts.timeframe, opts));
+
+  ai
+    .command('analyze <token>')
+    .description('AI-powered token analysis')
+    .option('-p, --provider <name>', 'LLM provider')
+    .action((token, opts) => analyzeToken(token, opts));
+
+  // ═══════════════════════════════════════
+  // API KEYS COMMANDS
+  // ═══════════════════════════════════════
+  const keys = program
+    .command('keys')
+    .description('API key vault — store keys for LLMs, data providers, RPCs');
+
+  keys
+    .command('list')
+    .description('List all services and stored keys')
+    .action(() => listKeys());
+
+  keys
+    .command('add <service>')
+    .description('Add or update an API key')
+    .option('-k, --key <key>', 'API key (or enter interactively)')
+    .action((service, opts) => addKey(service, opts));
+
+  keys
+    .command('remove <service>')
+    .description('Remove a stored key')
+    .action((service) => removeKey(service));
+
+  // ═══════════════════════════════════════
+  // AGENT SIGNER COMMANDS
+  // ═══════════════════════════════════════
+  const agent = program
+    .command('agent')
+    .description('Secure agent signer — PK-isolated wallet for AI agents');
+
+  agent
+    .command('start [wallet]')
+    .description('Start the agent signing proxy')
+    .option('--port <port>', 'Server port', '18790')
+    .option('--max-value <eth>', 'Max ETH per transaction', '1.0')
+    .option('--daily-limit <eth>', 'Daily spending limit in ETH', '5.0')
+    .option('--allowlist <contracts>', 'Comma-separated contract allowlist')
+    .action((wallet, opts) => startAgentSigner(wallet, opts));
+
+  agent
+    .command('docs')
+    .description('Show agent signer security documentation')
+    .action(() => showAgentDocs());
+
+  // ═══════════════════════════════════════
   // TIPS & REFERENCE COMMANDS
   // ═══════════════════════════════════════
   program
@@ -466,6 +562,9 @@ export function cli(argv) {
         ['wallet', 'Create, import, manage wallets'],
         ['trade', 'Swap tokens, snipe, trading'],
         ['dca', 'Dollar-cost averaging orders'],
+        ['ai', 'AI trading assistant & analysis'],
+        ['agent', 'Secure agent signer (PK-isolated)'],
+        ['keys', 'API key vault (LLMs, data, RPCs)'],
         ['script', 'Execution scripts & strategies'],
         ['market', 'Market intel & token data'],
         ['oracle', 'On-chain random oracle'],
