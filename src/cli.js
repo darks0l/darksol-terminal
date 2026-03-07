@@ -4,6 +4,10 @@ import { theme } from './ui/theme.js';
 import { kvDisplay, success, error, warn, info } from './ui/components.js';
 import { getConfig, setConfig, getAllConfig, getRPC, setRPC, configPath } from './config/store.js';
 import { createWallet, importWallet, showWallets, getBalance, useWallet, exportWallet } from './wallet/manager.js';
+import { showPortfolio } from './wallet/portfolio.js';
+import { showHistory } from './wallet/history.js';
+import { showGas } from './services/gas.js';
+import { watchPrice, checkPrices } from './services/watch.js';
 import { executeSwap } from './trading/swap.js';
 import { snipeToken, watchSnipe } from './trading/snipe.js';
 import { createDCA, listDCA, cancelDCA, runDCA } from './trading/dca.js';
@@ -68,6 +72,18 @@ export function cli(argv) {
     .command('export [name]')
     .description('Export wallet details')
     .action((name) => exportWallet(name));
+
+  wallet
+    .command('portfolio [name]')
+    .description('View balances across all EVM chains')
+    .action((name) => showPortfolio(name));
+
+  wallet
+    .command('history [name]')
+    .description('Recent transaction history')
+    .option('-c, --chain <chain>', 'Chain to check')
+    .option('-l, --limit <n>', 'Number of transactions', '10')
+    .action((name, opts) => showHistory(name, opts));
 
   // ═══════════════════════════════════════
   // TRADING COMMANDS
@@ -293,6 +309,39 @@ export function cli(argv) {
     .command('settle <payment>')
     .description('Settle payment on-chain')
     .action((payment) => facilitatorSettle(payment));
+
+  // ═══════════════════════════════════════
+  // PORTFOLIO SHORTCUT
+  // ═══════════════════════════════════════
+  program
+    .command('portfolio [name]')
+    .description('Multi-chain balance view (shortcut for: wallet portfolio)')
+    .action((name) => showPortfolio(name));
+
+  // ═══════════════════════════════════════
+  // GAS COMMAND
+  // ═══════════════════════════════════════
+  program
+    .command('gas [chain]')
+    .description('Show current gas prices and estimated costs')
+    .action((chain) => showGas(chain));
+
+  // ═══════════════════════════════════════
+  // PRICE COMMANDS
+  // ═══════════════════════════════════════
+  program
+    .command('price <tokens...>')
+    .description('Quick price check for one or more tokens')
+    .action((tokens) => checkPrices(tokens));
+
+  program
+    .command('watch <token>')
+    .description('Live price monitoring with alerts')
+    .option('-i, --interval <sec>', 'Poll interval in seconds', '10')
+    .option('--above <price>', 'Alert when price goes above')
+    .option('--below <price>', 'Alert when price drops below')
+    .option('-d, --duration <min>', 'Run for N minutes then stop')
+    .action((token, opts) => watchPrice(token, opts));
 
   // ═══════════════════════════════════════
   // CHAT SHORTCUT (darksol chat = darksol ai chat)
@@ -776,6 +825,10 @@ function showCommandList() {
   showSection('COMMANDS');
   const commands = [
     ['wallet', 'Create, import, manage wallets'],
+    ['portfolio', 'Multi-chain balance view'],
+    ['price', 'Quick token price check'],
+    ['watch', 'Live price monitoring + alerts'],
+    ['gas', 'Gas prices & cost estimates'],
     ['trade', 'Swap tokens, snipe, trading'],
     ['dca', 'Dollar-cost averaging orders'],
     ['ai chat', 'Standalone AI chat session'],
