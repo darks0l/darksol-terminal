@@ -307,4 +307,130 @@ Provide: sentiment, liquidity assessment, risk level (1-10), key considerations.
   }
 }
 
+// ──────────────────────────────────────────────────
+// INTENT EXECUTOR — Wire AI intents into real trades
+// ──────────────────────────────────────────────────
+
+/**
+ * Execute a parsed intent (from parseIntent or ai ask)
+ * Bridges natural language → actual swap/snipe/dca/transfer
+ *
+ * @param {object} intent - Parsed intent object from parseIntent
+ * @param {object} opts - { password, confirm, yes }
+ * @returns {Promise<object>} Execution result
+ */
+export async function executeIntent(intent, opts = {}) {
+  if (!intent || intent.action === 'unknown' || intent.action === 'error') {
+    error('Cannot execute: intent not recognized');
+    return { success: false, reason: 'unknown intent' };
+  }
+
+  if (intent.confidence !== undefined && intent.confidence < 0.6) {
+    warn(`Low confidence (${(intent.confidence * 100).toFixed(0)}%) — review the intent before executing`);
+    if (!opts.yes) {
+      const inquirer = (await import('inquirer')).default;
+      const { proceed } = await inquirer.prompt([{
+        type: 'confirm',
+        name: 'proceed',
+        message: theme.accent('Execute anyway?'),
+        default: false,
+      }]);
+      if (!proceed) return { success: false, reason: 'user cancelled' };
+    }
+  }
+
+  // Show intent summary for confirmation
+  if (!opts.yes) {
+    showSection('EXECUTE INTENT');
+    kvDisplay([
+      ['Action', intent.action],
+      ['Token In', intent.tokenIn || '-'],
+      ['Token Out', intent.tokenOut || '-'],
+      ['Amount', intent.amount || '-'],
+      ['Chain', intent.chain || getConfig('chain') || 'base'],
+      ['Confidence', intent.confidence ? `${(intent.confidence * 100).toFixed(0)}%` : '-'],
+    ]);
+
+    if (intent.warnings?.length > 0) {
+      console.log('');
+      intent.warnings.forEach(w => warn(w));
+    }
+
+    console.log('');
+    const inquirer = (await import('inquirer')).default;
+    const { confirm } = await inquirer.prompt([{
+      type: 'confirm',
+      name: 'confirm',
+      message: theme.gold('Execute this trade?'),
+      default: false,
+    }]);
+    if (!confirm) return { success: false, reason: 'user cancelled' };
+  }
+
+  try {
+    switch (intent.action) {
+      case 'swap': {
+        const { executeSwap } = await import('../trading/swap.js');
+        return await executeSwap({
+          tokenIn: intent.tokenIn,
+          tokenOut: intent.tokenOut,
+          amount: intent.amount,
+          chain: intent.chain,
+          password: opts.password,
+        });
+      }
+
+      case 'snipe': {
+        const { executeSnipe } = await import('../trading/snipe.js');
+        return await executeSnipe({
+          token: intent.tokenOut || intent.tokenIn,
+          amount: intent.amount,
+          chain: intent.chain,
+          gasMultiplier: intent.gasMultiplier,
+          password: opts.password,
+        });
+      }
+
+      case 'dca': {
+        const { createDCAOrder } = await import('../trading/dca.js');
+        return await createDCAOrder({
+          token: intent.tokenOut || intent.tokenIn,
+          amount: intent.amount,
+          interval: intent.interval || '1h',
+          orders: intent.orders || 10,
+          chain: intent.chain,
+        });
+      }
+
+      case 'transfer': {
+        // Transfer intent — use execution script engine
+        info(`Transfer intent detected. Use: darksol script create (template: transfer)`);
+        info(`To: ${intent.to || 'specify address'}, Amount: ${intent.amount || 'specify amount'}`);
+        return { success: true, action: 'transfer', note: 'Use script system for transfers' };
+      }
+
+      case 'info':
+      case 'analyze': {
+        const token = intent.tokenOut || intent.tokenIn || intent.token;
+        if (token) {
+          await analyzeToken(token, opts);
+          return { success: true, action: 'analyze' };
+        }
+        info('No token specified for analysis');
+        return { success: false, reason: 'no token specified' };
+      }
+
+      default:
+        warn(`Action "${intent.action}" not yet wired for execution`);
+        if (intent.command) {
+          info(`Suggested command: ${theme.gold(intent.command)}`);
+        }
+        return { success: false, reason: `unhandled action: ${intent.action}` };
+    }
+  } catch (err) {
+    error(`Execution failed: ${err.message}`);
+    return { success: false, error: err.message };
+  }
+}
+
 export { INTENT_SYSTEM_PROMPT };

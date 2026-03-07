@@ -1,0 +1,21 @@
+# Test files
+tests/
+
+# Dev files
+.gitignore
+.git/
+
+# Docs (keep README)
+CHANGELOG.md
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Temp
+*.log
+node_modules/

@@ -9,7 +9,11 @@
 
 **All DARKSOL services. One terminal. Zero trust required.**
 
-A unified CLI for market intel, trading, on-chain oracle, casino, prepaid cards, builder indexing, and more. Encrypted wallet management. Agent-native. OpenClaw-controllable.
+A unified CLI for market intel, trading, AI-powered analysis, on-chain oracle, casino, prepaid cards, builder indexing, secure agent signing, and more. Encrypted wallet management. Agent-native. OpenClaw-controllable.
+
+[![npm](https://img.shields.io/npm/v/@darksol/terminal)](https://www.npmjs.com/package/@darksol/terminal)
+[![License: MIT](https://img.shields.io/badge/License-MIT-gold.svg)](https://opensource.org/licenses/MIT)
+[![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
 
 ## Install
 
@@ -29,81 +33,198 @@ darksol wallet create main
 # Check balance
 darksol wallet balance
 
-# Set chain
-darksol config set chain base
-
-# Add custom RPC
-darksol config rpc base https://your-rpc-endpoint.com
-
 # Swap tokens
 darksol trade swap -i ETH -o USDC -a 0.1
 
-# Snipe a token
-darksol trade snipe 0xTOKEN_ADDRESS -a 0.05
+# AI trading assistant
+darksol ai chat
 
-# Create DCA order
-darksol dca create
-
-# Market data
-darksol market top
-darksol market token VIRTUAL
-darksol market compare ETH AERO VIRTUAL
-
-# Oracle
-darksol oracle flip
-darksol oracle dice 20
-
-# Casino
-darksol casino bet coin-flip heads
-darksol casino tables
-
-# Execution scripts (automated trading)
-darksol script templates          # See available templates
-darksol script create             # Create from template (interactive)
-darksol script list               # List your scripts
-darksol script run my-buy-script  # Execute (requires wallet password)
-darksol script show my-script     # View details + code
-darksol script edit my-script     # Edit params/wallet/chain
-darksol script clone my-script new-script
-darksol script delete old-script
-
-# Prepaid cards
-darksol cards catalog
-
-# Builder index
-darksol builders leaderboard
-
-# Facilitator
-darksol facilitator health
+# Start agent signer for OpenClaw
+darksol agent start main
 ```
-
-## Wallet Security
-
-- Private keys are **never stored in plaintext**
-- AES-256-GCM encryption with scrypt key derivation
-- Password required for every transaction
-- Keys stored in `~/.darksol/wallets/` (encrypted JSON)
-- No recovery without password — back it up
 
 ## Modules
 
 | Module | Description | Pricing |
 |--------|-------------|---------|
-| `wallet` | Create, import, manage wallets | Free |
-| `trade` | Swap, snipe, token trading | Gas only |
+| `wallet` | Create, import, manage encrypted wallets | Free |
+| `trade` | Swap (Uniswap V3), snipe (V2), token trading | Gas only |
 | `dca` | Dollar-cost averaging engine | Gas only |
-| `script` | Execution scripts & strategies | Free |
-| `market` | Market intel, top movers, analysis | x402 micropayments |
+| `ai` | LLM-powered trading assistant & analysis | Provider dependent |
+| `agent` | Secure agent signer (PK-isolated proxy) | Free |
+| `keys` | API key vault (LLMs, data, RPCs) | Free |
+| `script` | Execution scripts & automated strategies | Free |
+| `skills` | Agent skill directory & installer | Free |
+| `market` | Market intel, top movers, token analysis | x402 micropayments |
 | `oracle` | On-chain random number oracle | $0.05–$0.25 |
 | `casino` | The Clawsino — on-chain betting | $1 flat bets |
-| `cards` | Crypto → prepaid Visa/MC | 3% markup |
+| `cards` | Crypto → prepaid Visa/MC (no KYC) | 3% markup |
 | `builders` | ERC-8021 builder leaderboard | Free |
-| `facilitator` | x402 payment verification | Free |
+| `facilitator` | x402 payment verification & settlement | Free |
 | `config` | Terminal configuration | Free |
 
-## Execution Scripts
+---
 
-Automated trading strategies with full PK access. Scripts unlock your wallet at runtime and execute on-chain transactions.
+## 🔐 Secure Agent Signer
+
+**The killer feature.** A PK-isolated signing proxy for AI agents (OpenClaw, etc.).
+
+```bash
+# Start the signing proxy
+darksol agent start my-wallet
+
+# With spending limits
+darksol agent start my-wallet --max-value 0.5 --daily-limit 2.0
+
+# With contract allowlist
+darksol agent start my-wallet --allowlist 0xContract1,0xContract2
+
+# View security documentation
+darksol agent docs
+```
+
+**Why it exists:** AI agents need to sign transactions, but exposing private keys to LLMs is dangerous — prompt injection could leak the key. Existing wallets (Bankr, Phantom MCP) can't do x402 payments or real contract signing.
+
+**How it works:**
+1. You unlock your wallet ONCE with your password
+2. The key decrypts into memory (never to disk/API)
+3. A local HTTP server at `127.0.0.1:18790` exposes signing endpoints
+4. AI agents call `/send`, `/sign` — never see the key
+5. Every TX is validated against your security policy
+
+**Endpoints:**
+
+| Endpoint | Method | Description |
+|----------|--------|-------------|
+| `/address` | GET | Wallet address (safe) |
+| `/balance` | GET | ETH balance (safe) |
+| `/chain` | GET | Active chain info |
+| `/send` | POST | Sign + broadcast transaction |
+| `/sign` | POST | Sign transaction (return raw) |
+| `/sign-message` | POST | Sign EIP-191 message |
+| `/sign-typed-data` | POST | Sign EIP-712 typed data (x402) |
+| `/policy` | GET | View spending policy |
+| `/audit` | GET | Operation audit log |
+| `/health` | GET | Health check |
+
+**Security guarantees:**
+- ✅ No `/private-key` endpoint exists — literally impossible to extract
+- ✅ Loopback-only (127.0.0.1) — not accessible from network
+- ✅ One-time bearer token auth (shown only in terminal)
+- ✅ Per-TX value limits + daily spending cap
+- ✅ Contract allowlist support
+- ✅ Dangerous selectors blocked (transferOwnership, selfdestruct)
+- ✅ Full audit log of all operations
+- ✅ Prompt injection proof — the LLM cannot access what doesn't exist in any API response
+
+---
+
+## 🧠 AI Trading Assistant
+
+Natural language trading powered by multi-provider LLM support.
+
+```bash
+# Interactive chat with live market data
+darksol ai chat
+
+# One-shot intent parsing
+darksol ai ask "buy 0.5 ETH worth of AERO on Base"
+
+# DCA strategy recommendation
+darksol ai strategy VIRTUAL --budget 500 --timeframe "30 days"
+
+# AI-powered token analysis
+darksol ai analyze AERO
+
+# Use specific provider
+darksol ai chat --provider ollama --model llama3
+```
+
+**Supported providers:** OpenAI, Anthropic, OpenRouter, Ollama (local = free)
+
+The AI gets live market context (prices from DexScreener), knows your config (chain, slippage, wallet), and returns structured intents with confidence scores and risk warnings.
+
+---
+
+## 🔑 API Key Vault
+
+Encrypted storage for all your API keys.
+
+```bash
+# List all services and status
+darksol keys list
+
+# Add keys (encrypted with AES-256-GCM)
+darksol keys add openai
+darksol keys add coingecko
+darksol keys add alchemy
+
+# Remove a key
+darksol keys remove openai
+```
+
+**Supported services:**
+| Category | Services |
+|----------|----------|
+| LLM | OpenAI, Anthropic, OpenRouter, Ollama |
+| Data | CoinGecko Pro, DexScreener, DefiLlama |
+| RPC | Alchemy, Infura, QuickNode |
+| Trading | 1inch, ParaSwap |
+
+Keys can also come from environment variables (e.g., `OPENAI_API_KEY`).
+
+---
+
+## 💰 Trading
+
+```bash
+# Swap via Uniswap V3
+darksol trade swap -i ETH -o USDC -a 0.1
+
+# Snipe a token (Uniswap V2, fast buy)
+darksol trade snipe 0xTOKEN -a 0.05
+
+# Snipe with gas boost
+darksol trade snipe 0xTOKEN -a 0.05 -g 2.0
+
+# Watch for new pairs
+darksol trade watch
+```
+
+## 📊 DCA Engine
+
+```bash
+darksol dca create     # Interactive order creation
+darksol dca list       # List active orders
+darksol dca run        # Execute pending orders
+darksol dca cancel <id>
+```
+
+## 📈 Market Intel
+
+```bash
+darksol market top                      # Top movers on Base
+darksol market top -c ethereum          # Top movers on Ethereum
+darksol market token VIRTUAL            # Full token detail
+darksol market compare ETH AERO VIRTUAL # Side-by-side comparison
+```
+
+---
+
+## ⚡ Execution Scripts
+
+Automated trading strategies with full wallet access.
+
+```bash
+darksol script templates    # Available templates
+darksol script create       # Create from template (interactive)
+darksol script list         # List scripts
+darksol script run my-buy   # Execute (password required)
+darksol script show my-buy  # View code + params
+darksol script edit my-buy  # Edit params
+darksol script clone my-buy new-buy
+darksol script delete old
+```
 
 ### Templates
 
@@ -117,171 +238,123 @@ Automated trading strategies with full PK access. Scripts unlock your wallet at 
 | `transfer` | Transfer ETH or tokens to an address |
 | `empty` | Custom script — full ethers.js context |
 
-### Script Context
-
-Every script gets:
-```javascript
-module.exports = async function({ signer, provider, ethers, config, params }) {
-  // signer   — ethers.Wallet (unlocked, connected to provider)
-  // provider — ethers.JsonRpcProvider for active chain
-  // ethers   — the ethers library
-  // config   — { chain, slippage, gasMultiplier, rpcs }
-  // params   — your custom parameters
-};
-```
-
-### Automation (OpenClaw / cron)
+### Automation
 
 ```bash
-# Run without prompts (password via flag)
+# Non-interactive execution (for cron/OpenClaw)
 darksol script run my-dca --password "mypass" --yes
-
-# JSON output for programmatic use
-darksol config set output json
 ```
 
-## Configuration
+---
 
-Config stored at `~/.config/darksol-terminal/config.json`
+## 🧩 Skills Directory
+
+Install DARKSOL skills for OpenClaw agents.
 
 ```bash
-# View all settings
-darksol config show
-
-# Set active chain
-darksol config set chain base
-
-# Set slippage tolerance
-darksol config set slippage 1.0
-
-# Custom RPC
-darksol config rpc base https://mainnet.base.org
-darksol config rpc ethereum https://eth.llamarpc.com
-darksol config rpc arbitrum https://arb1.arbitrum.io/rpc
+darksol skills list              # Browse available skills
+darksol skills install darksol-terminal  # Install to OpenClaw
+darksol skills info darksol-terminal     # Skill details
+darksol skills uninstall darksol-terminal
 ```
 
-## Supported Chains
+**Available skills:** darksol-terminal, darksol-facilitator, darksol-prepaid-cards, random-oracle, the-clawsino
 
-- **Base** (default)
-- Ethereum
-- Polygon
-- Arbitrum
-- Optimism
+---
 
-## OpenClaw Integration
-
-DARKSOL Terminal is designed to be controlled by AI agents via OpenClaw:
+## 🎲 Services
 
 ```bash
-# Agents can run any command non-interactively
-darksol market top --output json
-darksol wallet balance main
+# Oracle — on-chain randomness
 darksol oracle flip
+darksol oracle dice 20
+darksol oracle number 1 100
+
+# Casino — on-chain betting
+darksol casino bet coin-flip heads
+darksol casino tables
+darksol casino stats
+
+# Prepaid Cards — crypto to Visa/MC
+darksol cards catalog
+darksol cards order -p swype -a 50
+darksol cards status <id>
+
+# Builder Index — ERC-8021 rankings
+darksol builders leaderboard
+darksol builders lookup <code>
+
+# Facilitator — x402 payments
+darksol facilitator health
+darksol facilitator verify <payment>
 ```
 
-JSON output mode for programmatic use:
-```bash
-darksol config set output json
-```
+---
 
-## Helper Functions
+## 🔒 Wallet Security
 
-When writing custom execution scripts, you have access to powerful helper utilities:
-
-```javascript
-import {
-  // Providers & Chain
-  getProvider,           // Get ethers provider for any chain
-  CHAIN_IDS,             // { base: 8453, ethereum: 1, ... }
-  EXPLORERS,             // Block explorer URLs per chain
-  txUrl, addressUrl,     // Generate explorer links
-
-  // Tokens
-  getERC20,              // Get ERC20 contract instance
-  getFullTokenInfo,      // Name, symbol, decimals, totalSupply
-  getTokenBalance,       // Formatted balance for any token
-  ensureApproval,        // Check & approve token spending
-  TOKENS,                // All known token addresses per chain
-  getUSDC, getWETH,      // Quick chain-specific lookups
-
-  // Gas
-  estimateGasCost,       // Estimate gas in ETH
-  getBoostedGas,         // Priority gas settings for snipes
-
-  // Formatting
-  formatCompact,         // 1234567 → "1.23M"
-  formatUSD,             // Format as $1,234.56
-  formatETH,             // Format wei to ETH string
-  formatTokenAmount,     // Format with symbol
-  shortAddress,          // 0x1234...5678
-  formatDuration,        // Seconds → "2h 30m"
-
-  // Validation
-  isValidAddress,        // Check Ethereum address
-  isValidPrivateKey,     // Check private key format
-  isValidAmount,         // Check positive number
-  parseTokenAmount,      // String → bigint with decimals
-
-  // Async
-  sleep,                 // await sleep(1000)
-  retry,                 // Retry with exponential backoff
-  waitForTx,             // Wait for tx with timeout
-
-  // Price
-  quickPrice,            // DexScreener price lookup
-  hasLiquidity,          // Check minimum liquidity
-} from './utils/helpers.js';
-```
-
-### Example: Custom Script Using Helpers
-
-```javascript
-module.exports = async function({ signer, provider, ethers, config, params }) {
-  // Import helpers (available in script context)
-  const helpers = await import('@darksol/terminal/src/utils/helpers.js');
-
-  // Check if token has enough liquidity
-  const liquid = await helpers.hasLiquidity(params.token, 5000);
-  if (!liquid) throw new Error('Insufficient liquidity');
-
-  // Get price
-  const price = await helpers.quickPrice(params.token);
-  console.log(`Price: ${helpers.formatUSD(price.price)}`);
-
-  // Get boosted gas for priority
-  const gas = await helpers.getBoostedGas(provider, 1.5);
-
-  // Execute trade with retry
-  const result = await helpers.retry(async () => {
-    const tx = await signer.sendTransaction({ ...txParams, ...gas });
-    return helpers.waitForTx(tx, 60000);
-  }, 3, 2000);
-
-  return { txHash: result.hash, price: price.price };
-};
-```
-
-## Tips & Reference
+- Private keys **never stored in plaintext**
+- AES-256-GCM encryption with scrypt key derivation (N=2^18)
+- Password required for every transaction
+- Keys stored in `~/.darksol/wallets/` (encrypted JSON)
+- No recovery without password — back it up
 
 ```bash
-# Trading tips (slippage, MEV protection, etc.)
-darksol tips --trading
-
-# Script writing tips
-darksol tips --scripts
-
-# Both
-darksol tips
-
-# Network reference (chains, IDs, explorers, USDC addresses)
-darksol networks
-
-# Getting started guide
-darksol quickstart
-
-# Look up any address (auto-detects token vs wallet)
-darksol lookup 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
+darksol wallet create <name>     # Create new (generates keypair)
+darksol wallet import <name>     # Import from private key
+darksol wallet list              # List all wallets
+darksol wallet balance [name]    # ETH + USDC balance
+darksol wallet use <name>        # Set active wallet
+darksol wallet export [name]     # Export (password required for PK)
 ```
+
+---
+
+## ⚙️ Configuration
+
+```bash
+darksol config show              # View all settings
+darksol config set chain base    # Set active chain
+darksol config set slippage 1.0  # Slippage tolerance (%)
+darksol config rpc base https://your-rpc.com
+```
+
+### Supported Chains
+
+| Chain | ID | Default RPC |
+|-------|---:|-------------|
+| Base | 8453 | mainnet.base.org |
+| Ethereum | 1 | eth.llamarpc.com |
+| Polygon | 137 | polygon-rpc.com |
+| Arbitrum | 42161 | arb1.arbitrum.io/rpc |
+| Optimism | 10 | mainnet.optimism.io |
+
+---
+
+## 📚 Reference
+
+```bash
+darksol tips              # Trading + scripting tips
+darksol tips --trading    # Trading tips only
+darksol networks          # Chain reference table
+darksol quickstart        # Getting started guide
+darksol lookup 0x...      # Look up any address
+```
+
+---
+
+## 🤖 OpenClaw Integration
+
+DARKSOL Terminal is agent-native:
+
+1. **Install the skill:** `darksol skills install darksol-terminal`
+2. **Start the agent signer:** `darksol agent start my-wallet`
+3. **Run commands non-interactively** with flags (`-p`, `-y`, `--key`)
+4. **JSON output:** `darksol config set output json`
+
+All commands work without prompts when flags are provided.
+
+---
 
 ## Development
 
@@ -289,6 +362,7 @@ darksol lookup 0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913
 git clone https://gitlab.com/darks0l/darksol-terminal
 cd darksol-terminal
 npm install
+npm test           # Run test suite (node:test)
 node bin/darksol.js
 ```
 

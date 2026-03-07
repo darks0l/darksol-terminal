@@ -16,7 +16,7 @@ import { buildersLeaderboard, buildersLookup, buildersFeed } from './services/bu
 import { createScript, listScripts, runScript, showScript, editScript, deleteScript, cloneScript, listTemplates } from './scripts/engine.js';
 import { showTradingTips, showScriptTips, showNetworkReference, showQuickStart, showWalletSummary, showTokenInfo, showTxResult } from './utils/helpers.js';
 import { addKey, removeKey, listKeys } from './config/keys.js';
-import { parseIntent, startChat, adviseStrategy, analyzeToken } from './llm/intent.js';
+import { parseIntent, startChat, adviseStrategy, analyzeToken, executeIntent } from './llm/intent.js';
 import { startAgentSigner, showAgentDocs } from './wallet/agent-signer.js';
 import { listSkills, installSkill, skillInfo, uninstallSkill } from './services/skills.js';
 
@@ -325,6 +325,21 @@ export function cli(argv) {
           console.log('');
           info(`Suggested command: ${theme.gold(result.command)}`);
         }
+      }
+    });
+
+  ai
+    .command('execute <prompt...>')
+    .description('Parse intent AND execute the trade')
+    .option('-p, --provider <name>', 'LLM provider')
+    .option('-m, --model <model>', 'Model name')
+    .option('--password <pw>', 'Wallet password (for non-interactive)')
+    .option('-y, --yes', 'Skip confirmation')
+    .action(async (promptParts, opts) => {
+      const prompt = promptParts.join(' ');
+      const intent = await parseIntent(prompt, opts);
+      if (intent.action !== 'error' && intent.action !== 'unknown') {
+        await executeIntent(intent, { password: opts.password, yes: opts.yes });
       }
     });
 
