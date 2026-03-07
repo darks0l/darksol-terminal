@@ -32,7 +32,7 @@ export function cli(argv) {
   program
     .name('darksol')
     .description(theme.gold('DARKSOL Terminal') + theme.dim(' — Ghost in the machine with teeth 🌑'))
-    .version('0.1.0')
+    .version('0.4.1')
 ;
 
   // ═══════════════════════════════════════

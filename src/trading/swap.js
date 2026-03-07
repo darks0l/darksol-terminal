@@ -56,6 +56,18 @@ const SWAP_ROUTER_ABI = [
   'function multicall(uint256 deadline, bytes[] data) external payable returns (bytes[])',
 ];
 
+// Uniswap V3 Quoter V2 ABI (for getting expected output)
+const QUOTER_ABI = [
+  'function quoteExactInputSingle((address tokenIn, address tokenOut, uint256 amountIn, uint24 fee, uint160 sqrtPriceLimitX96)) external returns (uint256 amountOut, uint160 sqrtPriceX96After, uint32 initializedTicksCrossed, uint256 gasEstimate)',
+];
+
+// Quoter V2 addresses per chain
+const QUOTERS = {
+  base: '0x3d4e44Eb1374240CE5F1B871ab261CD16335B76a',
+  ethereum: '0x61fFE014bA17989E743c5F6cB21bF9697530B21e',
+  arbitrum: '0x61fFE014bA17989E743c5F6cB21bF9697530B21e',
+};
+
 // Resolve token symbol to address
 export function resolveToken(symbol, chain) {
   const upper = symbol.toUpperCase();
@@ -177,7 +189,7 @@ export async function executeSwap(opts = {}) {
       return;
     }
 
-    const swapSpin = spinner('Executing swap...').start();
+    let swapSpin = spinner('Executing swap...').start();
 
     // Approve if needed (non-native)
     if (!isNativeIn) {
@@ -191,15 +203,54 @@ export async function executeSwap(opts = {}) {
     }
 
     // Execute swap
-    swapSpin.text = 'Sending swap transaction...';
+    swapSpin.text = 'Getting quote for slippage protection...';
     const swapRouter = new ethers.Contract(router, SWAP_ROUTER_ABI, signer);
+    const actualTokenOut = tokenOutAddr === ethers.ZeroAddress ? TOKENS[chain]?.WETH : tokenOutAddr;
 
     const deadline = Math.floor(Date.now() / 1000) + 300; // 5 min
-    const amountOutMin = 0; // TODO: get quote for proper slippage protection
 
+    // Get quote from Quoter V2 for proper slippage protection
+    let amountOutMin = 0n;
+    const quoterAddr = QUOTERS[chain];
+    if (quoterAddr) {
+      try {
+        const quoter = new ethers.Contract(quoterAddr, QUOTER_ABI, provider);
+        const quoteResult = await quoter.quoteExactInputSingle.staticCall({
+          tokenIn: actualTokenIn,
+          tokenOut: actualTokenOut,
+          amountIn,
+          fee: 3000,
+          sqrtPriceLimitX96: 0,
+        });
+        // staticCall returns [amountOut, sqrtPriceX96After, initializedTicksCrossed, gasEstimate]
+        const expectedOut = quoteResult[0];
+        // Apply slippage tolerance: minOut = expectedOut * (100 - slippage) / 100
+        amountOutMin = (expectedOut * BigInt(Math.floor((100 - maxSlippage) * 100))) / 10000n;
+        swapSpin.text = `Quote: ~${ethers.formatUnits(expectedOut, tokenOutInfo.decimals)} ${tokenOutInfo.symbol} (min: ${ethers.formatUnits(amountOutMin, tokenOutInfo.decimals)})`;
+      } catch (quoteErr) {
+        // If quote fails, warn but allow user to proceed with zero protection
+        swapSpin.warn('Could not get quote — no slippage protection');
+        warn(`Quote failed: ${quoteErr.message}`);
+        const { proceedAnyway } = await inquirer.prompt([{
+          type: 'confirm',
+          name: 'proceedAnyway',
+          message: theme.accent('Proceed WITHOUT slippage protection? (risky)'),
+          default: false,
+        }]);
+        if (!proceedAnyway) {
+          warn('Swap cancelled — no slippage protection available');
+          return;
+        }
+        swapSpin = spinner('Sending swap transaction...').start();
+      }
+    } else {
+      warn(`No Quoter available for ${chain} — swap will have no slippage protection`);
+    }
+
+    swapSpin.text = 'Sending swap transaction...';
     const swapParams = {
       tokenIn: actualTokenIn,
-      tokenOut: tokenOutAddr === ethers.ZeroAddress ? TOKENS[chain]?.WETH : tokenOutAddr,
+      tokenOut: actualTokenOut,
       fee: 3000, // 0.3% fee tier
       recipient: address,
       deadline,
@@ -222,6 +273,7 @@ export async function executeSwap(opts = {}) {
       ['TX Hash', receipt.hash],
       ['Block', receipt.blockNumber.toString()],
       ['Gas Used', receipt.gasUsed.toString()],
+      ['Min Output', amountOutMin > 0n ? `${ethers.formatUnits(amountOutMin, tokenOutInfo.decimals)} ${tokenOutInfo.symbol}` : theme.error('None (unprotected)')],
       ['Status', receipt.status === 1 ? theme.success('Success') : theme.error('Failed')],
     ]);
     console.log('');
