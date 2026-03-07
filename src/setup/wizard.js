@@ -494,23 +494,12 @@ function showPostSetup() {
 }
 
 /**
- * Quick check on startup — if first run, prompt setup
+ * Quick check on startup — if first run, FORCE setup (no prompt)
  */
 export async function checkFirstRun() {
   if (isFirstRun()) {
-    console.log('');
-    warn('No AI provider configured yet.');
-    const { runSetup } = await inquirer.prompt([{
-      type: 'confirm',
-      name: 'runSetup',
-      message: theme.gold('Run setup wizard?'),
-      default: true,
-    }]);
-    if (runSetup) {
-      await runSetupWizard();
-      return true;
-    }
-    info('Skip for now. Run later: darksol setup');
+    await runSetupWizard();
+    return true;
   }
   return false;
 }

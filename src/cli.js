@@ -591,62 +591,221 @@ export function cli(argv) {
     });
 
   // ═══════════════════════════════════════
-  // DASHBOARD (default)
+  // DASHBOARD (default) — CHAT-FIRST
   // ═══════════════════════════════════════
   program
     .command('dashboard', { isDefault: true })
-    .description('Show DARKSOL Terminal dashboard')
+    .description('Show DARKSOL Terminal — chat-first interface')
     .action(async () => {
       showBanner();
 
-      // First-run detection — offer setup wizard
+      // First-run detection — force setup
       const ranSetup = await checkFirstRun();
       if (ranSetup) return;
 
       const cfg = getAllConfig();
       const wallet = cfg.activeWallet;
+      const { hasKey } = await import('./config/keys.js');
+      const hasLLM = ['openai', 'anthropic', 'openrouter', 'ollama'].some(s => hasKey(s));
 
-      showSection('STATUS');
-      kvDisplay([
-        ['Wallet', wallet || theme.dim('Not set — run: darksol wallet create')],
-        ['Chain', cfg.chain],
-        ['Slippage', `${cfg.slippage}%`],
-      ]);
-
-      console.log('');
-      showSection('COMMANDS');
-      const commands = [
-        ['wallet', 'Create, import, manage wallets'],
-        ['trade', 'Swap tokens, snipe, trading'],
-        ['dca', 'Dollar-cost averaging orders'],
-        ['ai', 'AI trading assistant & analysis'],
-        ['agent', 'Secure agent signer (PK-isolated)'],
-        ['keys', 'API key vault (LLMs, data, RPCs)'],
-        ['script', 'Execution scripts & strategies'],
-        ['market', 'Market intel & token data'],
-        ['oracle', 'On-chain random oracle'],
-        ['casino', 'The Clawsino — betting'],
-        ['cards', 'Prepaid Visa/MC cards'],
-        ['builders', 'ERC-8021 builder index'],
-        ['facilitator', 'x402 payment facilitator'],
-        ['skills', 'Agent skill directory & install'],
-        ['config', 'Terminal configuration'],
-        ['tips', 'Trading & scripting tips'],
-        ['networks', 'Chain reference & explorers'],
-        ['quickstart', 'Getting started guide'],
-        ['lookup', 'Look up any address on-chain'],
-        ['setup', 'First-run setup wizard'],
+      // ── Status bar (compact) ──
+      const statusParts = [
+        wallet ? theme.success(`● ${wallet}`) : theme.dim('○ no wallet'),
+        theme.dim(`${cfg.chain}`),
+        theme.dim(`${cfg.slippage}% slip`),
+        hasLLM ? theme.success('● AI ready') : theme.accent('○ no AI'),
       ];
-
-      commands.forEach(([cmd, desc]) => {
-        console.log(`  ${theme.gold(cmd.padEnd(16))} ${theme.dim(desc)}`);
-      });
-
+      console.log(`  ${statusParts.join(theme.dim('  │  '))}`);
       console.log('');
-      console.log(theme.dim('  Run any command with --help for details'));
-      console.log(theme.dim('  Example: darksol trade swap --help'));
-      console.log('');
+
+      // ── CHAT INTERFACE (primary) ──
+      if (hasLLM) {
+        // AI is connected — drop straight into chat
+        console.log(theme.gold('  ╔══════════════════════════════════════════════════════════╗'));
+        console.log(theme.gold('  ║') + theme.label('  DARKSOL AI — ready. Ask anything.                      ') + theme.gold('║'));
+        console.log(theme.gold('  ║') + theme.dim('  "swap 0.1 ETH for USDC" • "what\'s AERO at?" • "help"   ') + theme.gold('║'));
+        console.log(theme.gold('  ║') + theme.dim('  Type "commands" to see all tools. Type "exit" to quit.   ') + theme.gold('║'));
+        console.log(theme.gold('  ╚══════════════════════════════════════════════════════════╝'));
+        console.log('');
+
+        // Start interactive chat loop
+        await startChatLoop(cfg);
+      } else {
+        // No AI — show connect prompt
+        console.log(theme.gold('  ╔══════════════════════════════════════════════════════════╗'));
+        console.log(theme.gold('  ║') + theme.accent('  ⚠  No AI provider connected                            ') + theme.gold('║'));
+        console.log(theme.gold('  ║') + theme.dim('  The DARKSOL AI needs an LLM to work.                    ') + theme.gold('║'));
+        console.log(theme.gold('  ║') + theme.dim('                                                          ') + theme.gold('║'));
+        console.log(theme.gold('  ║') + theme.dim('  Run: ') + theme.label('darksol setup') + theme.dim('          to connect OpenAI/Anthropic  ') + theme.gold('║'));
+        console.log(theme.gold('  ║') + theme.dim('  Run: ') + theme.label('darksol keys add openai') + theme.dim(' to add an API key       ') + theme.gold('║'));
+        console.log(theme.gold('  ║') + theme.dim('                                                          ') + theme.gold('║'));
+        console.log(theme.gold('  ║') + theme.dim('  Or use Ollama for free local AI — no key needed.        ') + theme.gold('║'));
+        console.log(theme.gold('  ╚══════════════════════════════════════════════════════════╝'));
+        console.log('');
+        showCommandList();
+      }
     });
 
   program.parse(argv);
+}
+
+// ═══════════════════════════════════════
+// CHAT-FIRST LOOP (default experience)
+// ═══════════════════════════════════════
+
+async function startChatLoop(cfg) {
+  const { createLLM } = await import('./llm/engine.js');
+  const { quickPrice } = await import('./utils/helpers.js');
+  const { executeIntent, parseIntent, INTENT_SYSTEM_PROMPT } = await import('./llm/intent.js');
+
+  let llm;
+  try {
+    llm = await createLLM({});
+    const chain = cfg.chain || 'base';
+    const wallet = cfg.activeWallet || '(not set)';
+    const slippage = cfg.slippage || 0.5;
+
+    const systemPrompt = INTENT_SYSTEM_PROMPT
+      .replace('{{chain}}', chain)
+      .replace('{{wallet}}', wallet)
+      .replace('{{slippage}}', slippage);
+
+    llm.setSystemPrompt(systemPrompt);
+  } catch (err) {
+    error(`AI init failed: ${err.message}`);
+    info('Run: darksol setup');
+    return;
+  }
+
+  const inquirerMod = await import('inquirer');
+  const inquirerDefault = inquirerMod.default;
+
+  while (true) {
+    const { input } = await inquirerDefault.prompt([{
+      type: 'input',
+      name: 'input',
+      message: theme.gold('🌑'),
+      validate: (v) => v.length > 0 || ' ',
+    }]);
+
+    const trimmed = input.trim().toLowerCase();
+
+    // Meta-commands within chat
+    if (['exit', 'quit', 'q'].includes(trimmed)) {
+      const usage = llm.getUsage();
+      info(`Session: ${usage.calls} calls, ${usage.totalTokens} tokens`);
+      break;
+    }
+
+    if (['commands', 'help', 'cmds', '?'].includes(trimmed)) {
+      showCommandList();
+      continue;
+    }
+
+    if (trimmed === 'status') {
+      kvDisplay([
+        ['Wallet', cfg.activeWallet || theme.dim('(none)')],
+        ['Chain', cfg.chain],
+        ['Provider', `${llm.provider}/${llm.model}`],
+        ['Slippage', `${cfg.slippage}%`],
+      ]);
+      continue;
+    }
+
+    // Check if it looks like a trade intent
+    const tradeWords = ['buy', 'sell', 'swap', 'snipe', 'transfer', 'send', 'trade'];
+    const isTradeIntent = tradeWords.some(w => trimmed.startsWith(w));
+
+    if (isTradeIntent) {
+      // Parse as trade intent with confirmation
+      const intent = await parseIntent(input, {});
+      if (intent.action !== 'error' && intent.action !== 'unknown') {
+        showSection('PARSED INTENT');
+        kvDisplay(Object.entries(intent)
+          .filter(([k]) => !['raw', 'model', 'reasoning'].includes(k))
+          .map(([k, v]) => [k, Array.isArray(v) ? v.join(', ') : String(v)])
+        );
+        if (intent.warnings?.length) intent.warnings.forEach(w => warn(w));
+        if (intent.command) info(`Command: ${theme.gold(intent.command)}`);
+        console.log('');
+      } else {
+        // Fall through to regular chat
+        await chatResponse(llm, input);
+      }
+      continue;
+    }
+
+    // Regular chat
+    await chatResponse(llm, input);
+  }
+}
+
+async function chatResponse(llm, input) {
+  const { quickPrice } = await import('./utils/helpers.js');
+  const { spinner: spin } = await import('./ui/components.js');
+  const s = spin('Thinking...').start();
+
+  try {
+    // Enrich with live price data
+    let enriched = input;
+    const tokenPattern = /\b([A-Z]{2,10})\b/g;
+    const tokens = [...new Set(input.toUpperCase().match(tokenPattern) || [])];
+    const skipTokens = ['ETH', 'THE', 'FOR', 'AND', 'BUY', 'SELL', 'DCA', 'SWAP', 'WHAT', 'PRICE', 'HOW', 'MUCH', 'NOT', 'CAN', 'YOU', 'HELP'];
+
+    const priceData = [];
+    for (const t of tokens.filter(t => !skipTokens.includes(t)).slice(0, 3)) {
+      const p = await quickPrice(t);
+      if (p) priceData.push(`${p.symbol}: $${p.price} (liq: $${p.liquidity})`);
+    }
+
+    if (priceData.length > 0) {
+      enriched += `\n\n[Live data: ${priceData.join(', ')}]`;
+    }
+
+    const result = await llm.chat(enriched);
+    s.succeed('');
+
+    // Display response
+    console.log('');
+    const lines = result.content.split('\n');
+    for (const line of lines) {
+      console.log(theme.dim('  ') + line);
+    }
+    console.log('');
+  } catch (err) {
+    s.fail('Error');
+    error(err.message);
+  }
+}
+
+function showCommandList() {
+  console.log('');
+  showSection('COMMANDS');
+  const commands = [
+    ['wallet', 'Create, import, manage wallets'],
+    ['trade', 'Swap tokens, snipe, trading'],
+    ['dca', 'Dollar-cost averaging orders'],
+    ['ai chat', 'Standalone AI chat session'],
+    ['ai execute', 'Parse + execute a trade via AI'],
+    ['agent start', 'Start secure agent signer'],
+    ['keys', 'API key vault'],
+    ['script', 'Execution scripts & strategies'],
+    ['market', 'Market intel & token data'],
+    ['oracle', 'On-chain random oracle'],
+    ['casino', 'The Clawsino — betting'],
+    ['cards', 'Prepaid Visa/MC cards'],
+    ['builders', 'ERC-8021 builder index'],
+    ['facilitator', 'x402 payment facilitator'],
+    ['skills', 'Agent skill directory'],
+    ['setup', 'Re-run setup wizard'],
+    ['config', 'Terminal configuration'],
+  ];
+
+  commands.forEach(([cmd, desc]) => {
+    console.log(`  ${theme.gold(cmd.padEnd(16))} ${theme.dim(desc)}`);
+  });
+
+  console.log('');
+  console.log(theme.dim('  Run any command: darksol <command> --help'));
+  console.log('');
 }
