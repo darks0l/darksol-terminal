@@ -63,9 +63,13 @@ export async function createWallet(name, opts = {}) {
   kvDisplay([
     ['Name', name],
     ['Address', wallet.address],
-    ['Chain', chain],
+    ['Type', 'EVM (works on all chains)'],
+    ['Active Chain', chain],
     ['Stored', WALLET_DIR],
   ]);
+  console.log('');
+  info('This wallet works on Base, Ethereum, Arbitrum, Optimism, Polygon — all EVM chains.');
+  info('Switch chains anytime: darksol config set chain <name>');
   console.log('');
   warn('Back up your password — there is NO recovery if lost.');
   warn('Private key is AES-256-GCM encrypted with scrypt KDF.');
@@ -126,8 +130,11 @@ export async function importWallet(name, opts = {}) {
   kvDisplay([
     ['Name', name],
     ['Address', wallet.address],
-    ['Chain', chain],
+    ['Type', 'EVM (works on all chains)'],
+    ['Active Chain', chain],
   ]);
+  console.log('');
+  info('This wallet works on Base, Ethereum, Arbitrum, Optimism, Polygon — all EVM chains.');
   console.log('');
   success('Private key encrypted and stored securely.');
 }
@@ -147,11 +154,13 @@ export async function showWallets() {
   const rows = wallets.map(w => [
     w.name === active ? theme.gold('► ' + w.name) : '  ' + w.name,
     w.address,
-    w.chain,
+    'EVM (all chains)',
     new Date(w.createdAt).toLocaleDateString(),
   ]);
 
-  table(['Name', 'Address', 'Chain', 'Created'], rows);
+  table(['Name', 'Address', 'Type', 'Created'], rows);
+  console.log('');
+  info(`Active chain: ${getConfig('chain') || 'base'} — switch with: darksol config set chain <name>`);
 }
 
 // Get a signer (unlocked wallet) for transactions
@@ -217,7 +226,8 @@ export async function getBalance(walletName) {
     showSection(`BALANCE — ${name}`);
     kvDisplay([
       ['Address', walletData.address],
-      ['Chain', walletData.chain],
+      ['Type', 'EVM (all chains)'],
+      ['Viewing', `${walletData.chain} — switch with: darksol config set chain <name>`],
       ['Native', `${parseFloat(ethBalance).toFixed(6)} ETH`],
       ['USDC', `$${parseFloat(usdcBalance).toFixed(2)}`],
     ]);
