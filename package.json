@@ -1,0 +1,39 @@
+{
+  "name": "@darksol/terminal",
+  "version": "0.1.0",
+  "description": "DARKSOL Terminal — unified CLI for all DARKSOL services. Market intel, trading, oracle, casino, and more.",
+  "type": "module",
+  "bin": {
+    "darksol": "./bin/darksol.js"
+  },
+  "main": "./src/cli.js",
+  "scripts": {
+    "start": "node bin/darksol.js",
+    "dev": "node bin/darksol.js dashboard",
+    "test": "node --test tests/*.test.js"
+  },
+  "keywords": ["darksol", "crypto", "trading", "cli", "x402", "base", "ethereum", "defi"],
+  "author": "DARKSOL <chris00claw@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "chalk": "^5.3.0",
+    "commander": "^12.1.0",
+    "ethers": "^6.13.0",
+    "boxen": "^8.0.1",
+    "ora": "^8.1.0",
+    "cli-table3": "^0.6.5",
+    "inquirer": "^12.0.0",
+    "figlet": "^1.8.0",
+    "gradient-string": "^3.0.0",
+    "conf": "^13.0.1",
+    "nanospinner": "^1.1.0",
+    "node-fetch": "^3.3.2",
+    "blessed": "^0.1.81",
+    "blessed-contrib": "^4.11.0",
+    "terminal-link": "^3.0.0",
+    "update-notifier": "^7.3.1"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  }
+}
