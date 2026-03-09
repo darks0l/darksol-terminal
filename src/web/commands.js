@@ -173,6 +173,51 @@ export async function handleMenuSelect(id, value, item, ws) {
       });
       return {};
 
+    case 'cards_action':
+      if (value === 'order') {
+        ws.sendMenu('cards_provider', '◆ Select Provider', [
+          { value: 'swype', label: 'Swype', desc: 'Mastercard · Global' },
+          { value: 'mpc', label: 'MPC', desc: 'Mastercard · US Only' },
+          { value: 'reward', label: 'Reward', desc: 'Visa · US Only' },
+          { value: 'back', label: '← Back', desc: '' },
+        ]);
+        return {};
+      }
+      if (value === 'status') {
+        ws.sendPrompt('cards_status_id', 'Trade ID:', {});
+        return {};
+      }
+      return {};
+
+    case 'cards_provider':
+      if (value === 'back') return {};
+      // Store provider, ask for amount
+      ws.sendMenu('cards_amount', `◆ Card Amount (${value})`, [
+        { value: '10', label: '$10', desc: 'Pay ~$10.60' },
+        { value: '25', label: '$25', desc: 'Pay ~$26.50' },
+        { value: '50', label: '$50', desc: 'Pay ~$53' },
+        { value: '100', label: '$100', desc: 'Pay ~$106' },
+        { value: '250', label: '$250', desc: 'Pay ~$265' },
+        { value: '500', label: '$500', desc: 'Pay ~$530' },
+        { value: '1000', label: '$1,000', desc: 'Pay ~$1,060' },
+        { value: 'back', label: '← Back', desc: '' },
+      ].map(i => ({ ...i, meta: { provider: value } })));
+      return {};
+
+    case 'cards_amount':
+      if (value === 'back') return {};
+      // Store provider+amount, ask for email
+      ws.sendPrompt('cards_email', 'Delivery email (card activation link will be sent here):', {
+        provider: item?.meta?.provider || 'swype',
+        amount: value,
+      });
+      return {};
+
+    case 'cards_crypto':
+      if (value === 'back') return {};
+      // Execute the order
+      return await executeCardOrder(item?.meta || {}, ws);
+
     case 'agent_action':
       if (value === 'start') {
         const { listWallets } = await import('../wallet/keystore.js');
@@ -275,6 +320,31 @@ export async function handlePromptResponse(id, value, meta, ws) {
     return {};
   }
 
+  if (id === 'cards_status_id') {
+    if (!value) { ws.sendLine(`  ${ANSI.red}✗ Cancelled${ANSI.reset}`); ws.sendLine(''); return {}; }
+    return await showCardStatus(value.trim(), ws);
+  }
+
+  if (id === 'cards_email') {
+    if (!value) { ws.sendLine(`  ${ANSI.red}✗ Cancelled${ANSI.reset}`); ws.sendLine(''); return {}; }
+    const provider = meta.provider || 'swype';
+    const amount = meta.amount || '100';
+    const email = value.trim();
+
+    // Ask for crypto selection
+    ws.sendMenu('cards_crypto', `◆ Pay With (${provider} $${amount} → ${email})`, [
+      { value: 'usdc_base', label: 'USDC on Base', desc: 'Default · fast & cheap', meta: { provider, amount, email, ticker: 'usdc', network: 'base' } },
+      { value: 'usdc_eth', label: 'USDC on Ethereum', desc: 'Higher fees', meta: { provider, amount, email, ticker: 'usdc', network: 'eth' } },
+      { value: 'usdt_trc20', label: 'USDT on Tron', desc: 'TRC-20', meta: { provider, amount, email, ticker: 'usdt', network: 'trc20' } },
+      { value: 'btc', label: 'Bitcoin', desc: 'BTC mainnet', meta: { provider, amount, email, ticker: 'btc', network: 'mainnet' } },
+      { value: 'eth', label: 'Ethereum', desc: 'ETH mainnet', meta: { provider, amount, email, ticker: 'eth', network: 'eth' } },
+      { value: 'sol', label: 'Solana', desc: 'SOL', meta: { provider, amount, email, ticker: 'sol', network: 'sol' } },
+      { value: 'xmr', label: 'Monero', desc: 'XMR', meta: { provider, amount, email, ticker: 'xmr', network: 'xmr' } },
+      { value: 'default', label: 'Default (USDC/Base)', desc: 'Let API choose', meta: { provider, amount, email } },
+    ]);
+    return {};
+  }
+
   if (id === 'agent_signer_password') {
     const wallet = meta.wallet;
     if (!wallet || !value) {
@@ -359,6 +429,8 @@ export async function handleCommand(cmd, ws) {
       return await cmdConfig(ws);
     case 'oracle':
       return await cmdOracle(args, ws);
+    case 'cards':
+      return await cmdCards(args, ws);
     case 'casino':
       return await cmdCasino(args, ws);
     case 'facilitator':
@@ -910,6 +982,140 @@ async function cmdHistory(args, ws) {
 
 // ══════════════════════════════════════════════════
 // SERVICE COMMANDS (thin wrappers)
+// ══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+// CARDS (interactive ordering)
+// ══════════════════════════════════════════════════
+const CARDS_API = 'https://acp.darksol.net/api/cards';
+
+async function cmdCards(args, ws) {
+  const sub = (args[0] || '').toLowerCase();
+
+  if (sub === 'status' && args[1]) {
+    return await showCardStatus(args[1], ws);
+  }
+
+  // Show catalog + order menu
+  ws.sendLine(`${ANSI.gold}  ◆ PREPAID CARDS${ANSI.reset}`);
+  ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+
+  try {
+    const resp = await fetch(`${CARDS_API}/catalog`);
+    const data = await resp.json();
+
+    if (data.providers) {
+      for (const p of data.providers) {
+        ws.sendLine(`  ${ANSI.gold}${p.name}${ANSI.reset}  ${ANSI.dim}${p.brand} · ${p.region}${ANSI.reset}`);
+      }
+    }
+    if (data.pricing?.tiers) {
+      ws.sendLine('');
+      ws.sendLine(`  ${ANSI.darkGold}Pricing${ANSI.reset}  ${ANSI.dim}${data.pricing.markup} + ${data.pricing.issuanceFee}${ANSI.reset}`);
+      const tierStr = data.pricing.tiers.map(t => `$${t.denomination}→$${t.youPay}`).join('  ');
+      ws.sendLine(`  ${ANSI.dim}${tierStr}${ANSI.reset}`);
+    }
+    ws.sendLine('');
+  } catch {
+    ws.sendLine(`  ${ANSI.dim}Could not load catalog${ANSI.reset}`);
+    ws.sendLine('');
+  }
+
+  ws.sendMenu('cards_action', '◆ Prepaid Cards', [
+    { value: 'order', label: '💳 Order Card', desc: 'Start a new order' },
+    { value: 'status', label: '🔍 Check Status', desc: 'Track existing order' },
+    { value: 'back', label: '← Back', desc: '' },
+  ]);
+  return {};
+}
+
+async function showCardStatus(tradeId, ws) {
+  try {
+    const resp = await fetch(`${CARDS_API}/status?tradeId=${tradeId}`);
+    const ct = resp.headers.get('content-type') || '';
+    if (!ct.includes('json')) {
+      ws.sendLine(`  ${ANSI.red}✗ Invalid response from status endpoint${ANSI.reset}`);
+      return {};
+    }
+    const data = await resp.json();
+    ws.sendLine(`${ANSI.gold}  ◆ ORDER STATUS — ${tradeId}${ANSI.reset}`);
+    ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+    const order = data.order || data;
+    for (const [k, v] of Object.entries(order)) {
+      if (v !== null && v !== undefined) {
+        ws.sendLine(`  ${ANSI.darkGold}${k}${ANSI.reset}  ${ANSI.white}${v}${ANSI.reset}`);
+      }
+    }
+    ws.sendLine('');
+  } catch (err) {
+    ws.sendLine(`  ${ANSI.red}✗ ${err.message}${ANSI.reset}`);
+    ws.sendLine('');
+  }
+  return {};
+}
+
+async function executeCardOrder(orderMeta, ws) {
+  const { provider, amount, email, ticker, network } = orderMeta;
+  ws.sendLine(`  ${ANSI.dim}Placing order...${ANSI.reset}`);
+
+  try {
+    const body = { provider: provider || 'swype', amount: Number(amount), email };
+    if (ticker) body.tickerFrom = ticker;
+    if (network) body.networkFrom = network;
+
+    const resp = await fetch(`${CARDS_API}/order`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+    const ct = resp.headers.get('content-type') || '';
+    if (!ct.includes('json')) {
+      const text = await resp.text();
+      ws.sendLine(`  ${ANSI.red}✗ API returned non-JSON: ${text.substring(0, 80)}${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+    const data = await resp.json();
+
+    if (!data.success || !data.order) {
+      ws.sendLine(`  ${ANSI.red}✗ Order failed: ${data.error || JSON.stringify(data)}${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+
+    const o = data.order;
+    ws.sendLine('');
+    ws.sendLine(`${ANSI.gold}  ◆ ORDER PLACED${ANSI.reset}`);
+    ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Trade ID${ANSI.reset}      ${ANSI.gold}${o.tradeId}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Status${ANSI.reset}        ${ANSI.white}${o.status}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Card${ANSI.reset}          ${ANSI.white}$${o.cardAmount} ${o.currency} ${o.brand}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Provider${ANSI.reset}      ${ANSI.white}${o.provider}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Delivery${ANSI.reset}      ${ANSI.white}${email}${ANSI.reset}`);
+    ws.sendLine('');
+    ws.sendLine(`  ${ANSI.green}PAY EXACTLY:${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.gold}${o.amountCrypto} ${(o.ticker || '').toUpperCase()}${ANSI.reset} ${ANSI.dim}(${o.network})${ANSI.reset}`);
+    ws.sendLine('');
+    ws.sendLine(`  ${ANSI.darkGold}To Address:${ANSI.reset}`);
+    const addr = o.paymentAddress;
+    ws.sendLine(`  ${ANSI.dim}┌${'─'.repeat(addr.length + 4)}┐${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.dim}│  ${ANSI.gold}${addr}${ANSI.dim}  │${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.dim}└${'─'.repeat(addr.length + 4)}┘${ANSI.reset}`);
+    if (o.paymentMemo) {
+      ws.sendLine(`  ${ANSI.darkGold}Memo:${ANSI.reset} ${ANSI.white}${o.paymentMemo}${ANSI.reset}`);
+    }
+    ws.sendLine('');
+    ws.sendLine(`  ${ANSI.dim}${o.message}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.dim}Check status: cards status ${o.tradeId}${ANSI.reset}`);
+    ws.sendLine('');
+  } catch (err) {
+    ws.sendLine(`  ${ANSI.red}✗ ${err.message}${ANSI.reset}`);
+    ws.sendLine('');
+  }
+  return {};
+}
+
+// ══════════════════════════════════════════════════
+// ORACLE
 // ══════════════════════════════════════════════════
 async function cmdOracle(args, ws) {
   try {

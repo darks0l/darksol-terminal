@@ -7,6 +7,22 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.5.1] - 2026-03-09
+### Added
+- **Interactive card ordering in web shell** (`cards`):
+  - Provider selection menu (Swype/MPC/Reward)
+  - Amount picker ($10–$1,000)
+  - Email prompt for card delivery
+  - Crypto payment selector (USDC/Base, USDC/ETH, USDT/TRC20, BTC, ETH, SOL, XMR)
+  - Order confirmation with payment address in copy box
+  - Status checker by trade ID
+- Cards in help menu + autocomplete
+
+### Fixed
+- **Cards CLI**: Added required `--email` flag, optional `--ticker`/`--network` flags
+- **Cards API URL**: Fixed base URL path (was `/cards/api/`, now `/api/`)
+- **Cards status**: Uses `tradeId` param (was `orderId`)
+
 ## [0.5.0] - 2026-03-09
 ### Changed
 - Version milestone release: promoted latest stable line from `0.4.x` to `0.5.0`

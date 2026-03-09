@@ -274,13 +274,20 @@ export function cli(argv) {
   cards
     .command('order')
     .description('Order a prepaid card')
-    .requiredOption('-p, --provider <name>', 'Card provider')
+    .requiredOption('-p, --provider <name>', 'Card provider (swype/mpc/reward)')
     .requiredOption('-a, --amount <usd>', 'Card amount in USD')
-    .action((opts) => cardsOrder(opts.provider, parseFloat(opts.amount)));
+    .requiredOption('-e, --email <address>', 'Delivery email for card activation link')
+    .option('-t, --ticker <coin>', 'Payment crypto (default: usdc)')
+    .option('-n, --network <net>', 'Payment network (default: base)')
+    .action((opts) => cardsOrder(opts.provider, parseFloat(opts.amount), {
+      email: opts.email,
+      ticker: opts.ticker,
+      network: opts.network,
+    }));
 
   cards
-    .command('status <orderId>')
-    .description('Check order status')
+    .command('status <tradeId>')
+    .description('Check order status by trade ID')
     .action((id) => cardsStatus(id));
 
   // ═══════════════════════════════════════

@@ -16,7 +16,7 @@ const A = {
 
 const COMMANDS = [
   'ai', 'price', 'watch', 'gas', 'portfolio', 'history', 'market',
-  'wallet', 'send', 'receive', 'agent', 'mail', 'keys', 'oracle', 'casino',
+  'wallet', 'send', 'receive', 'agent', 'cards', 'mail', 'keys', 'oracle', 'casino',
   'facilitator', 'config', 'logs', 'help', 'clear', 'banner', 'exit',
 ];
 
