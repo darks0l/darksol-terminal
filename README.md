@@ -15,6 +15,8 @@ A unified CLI for market intel, trading, AI-powered analysis, on-chain oracle, c
 [![License: MIT](https://img.shields.io/badge/License-MIT-gold.svg)](https://opensource.org/licenses/MIT)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
 
+- Changelog: `CHANGELOG.md`
+
 ## Install
 
 ```bash
@@ -33,6 +35,10 @@ darksol wallet create main
 # Check balance + multi-chain portfolio
 darksol wallet balance
 darksol portfolio
+
+# Send / receive
+darksol receive
+darksol send --to 0xabc... --amount 10 --token USDC
 
 # Token prices & live monitoring
 darksol price ETH AERO VIRTUAL
@@ -58,34 +64,56 @@ darksol serve
 darksol agent start main
 ```
 
+## `darksol serve` (Web Terminal UX)
+
+`darksol serve` now supports an interactive keyboard-driven UI:
+
+- Arrow-key menus (`↑/↓` + `Enter`) for wallet/config flows
+- Interactive wallet picker + wallet action menu (receive/send/portfolio/history/switch chain)
+- AI connection check at startup (shows ready/not configured)
+- Interactive key setup from web terminal:
+  - `keys` → select provider → paste key/host directly
+  - masked input for API keys, plain input for Ollama URL
+- Local chat memory logs at `~/.darksol/chat-logs/YYYY-MM-DD.jsonl`
+- Natural language fuzzy routing to AI for non-command prompts
+
+Useful web-shell commands:
+
+```bash
+keys          # provider status + interactive add/update
+wallet        # interactive wallet picker and actions
+config        # interactive config menu
+logs 20       # show recent AI chat log lines
+ai <prompt>   # chat with trading assistant
+```
+
 ## Modules
 
 | Module | Description | Pricing |
 |--------|-------------|---------|
-| `wallet` | Create, import, manage encrypted wallets | Free |
+| `wallet` | Create/import/manage encrypted EVM wallets | Free |
+| `send` | Send ETH or ERC-20 tokens | Gas only |
+| `receive` | Show receive address + chain safety hints | Free |
 | `trade` | Swap (Uniswap V3), snipe (V2), token trading | Gas only |
 | `dca` | Dollar-cost averaging engine | Gas only |
-| `ai` | LLM-powered trading assistant & analysis | Provider dependent |
+| `ai` | LLM-powered trading assistant & intent execution | Provider dependent |
 | `agent` | Secure agent signer (PK-isolated proxy) | Free |
-| `keys` | API key vault (LLMs, data, RPCs) | Free |
+| `keys` | Encrypted API key vault (LLMs/data/RPCs) | Free |
 | `script` | Execution scripts & automated strategies | Free |
 | `skills` | Agent skill directory & installer | Free |
-| `market` | Market intel, top movers, token analysis | x402 micropayments |
-| `oracle` | On-chain random number oracle | $0.05–$0.25 |
-| `casino` | The Clawsino — on-chain betting | $1 flat bets |
 | `portfolio` | Multi-chain balance view (5 EVM chains) | Free |
+| `history` | Transaction history via block explorers | Free |
 | `gas` | Gas prices & cost estimates | Free |
 | `price` | Quick token price check (DexScreener) | Free |
 | `watch` | Live price monitoring with alerts | Free |
-| `history` | Transaction history via block explorers | Free |
+| `market` | Market intel, top movers, token analysis | x402 micropayments |
 | `mail` | AgentMail — email for AI agents | Free tier |
-| `serve` | Web terminal in browser (xterm.js) | Free |
-| `facilitator` | x402 payment facilitator | Free |
-| `cards` | Prepaid Visa/MC cards | Service fees |
-| `builders` | ERC-8021 builder code directory | Free |
-| `cards` | Crypto → prepaid Visa/MC (no KYC) | 3% markup |
-| `builders` | ERC-8021 builder leaderboard | Free |
+| `oracle` | On-chain random number oracle | $0.05–$0.25 |
+| `casino` | The Clawsino — on-chain betting | $1 flat bets |
+| `cards` | Crypto → prepaid Visa/MC cards | Service fees |
+| `builders` | ERC-8021 builder directory + leaderboard | Free |
 | `facilitator` | x402 payment verification & settlement | Free |
+| `serve` | Local interactive web terminal (xterm.js) | Free |
 | `config` | Terminal configuration | Free |
 
 ---
@@ -152,8 +180,11 @@ Natural language trading powered by multi-provider LLM support.
 # Interactive chat with live market data
 darksol ai chat
 
-# One-shot intent parsing
+# One-shot intent parsing (+ optional execution prompt)
 darksol ai ask "buy 0.5 ETH worth of AERO on Base"
+
+# Parse + execute directly
+darksol ai execute "send 10 USDC to 0x..."
 
 # DCA strategy recommendation
 darksol ai strategy VIRTUAL --budget 500 --timeframe "30 days"
