@@ -4,11 +4,20 @@
 
 const PROMPT = '\x1b[38;2;255;215;0m❯\x1b[0m ';
 const PROMPT_LENGTH = 2; // visible chars: ❯ + space
+const A = {
+  gold: '\x1b[38;2;255;215;0m',
+  dim: '\x1b[38;2;102;102;102m',
+  green: '\x1b[38;2;0;255;136m',
+  red: '\x1b[38;2;233;69;96m',
+  white: '\x1b[1;37m',
+  blue: '\x1b[38;2;68;136;255m',
+  r: '\x1b[0m',
+};
 
 const COMMANDS = [
-  'price', 'watch', 'gas', 'portfolio', 'history', 'market',
-  'wallet', 'mail', 'oracle', 'casino', 'facilitator', 'config',
-  'help', 'clear', 'banner', 'exit',
+  'ai', 'price', 'watch', 'gas', 'portfolio', 'history', 'market',
+  'wallet', 'send', 'receive', 'mail', 'keys', 'oracle', 'casino',
+  'facilitator', 'config', 'logs', 'help', 'clear', 'banner', 'exit',
 ];
 
 let term;
@@ -18,8 +27,14 @@ let commandHistory = [];
 let historyIndex = -1;
 let connected = false;
 
+// ── MENU STATE ────────────────────────────────
+let menuActive = false;
+let menuItems = [];
+let menuIndex = 0;
+let menuId = '';
+let menuTitle = '';
+
 async function init() {
-  // Load xterm.js
   term = new Terminal({
     theme: {
       background: '#0a0a1a',
@@ -64,16 +79,42 @@ async function init() {
 
   window.addEventListener('resize', () => fitAddon.fit());
 
-  // Connect WebSocket
   connectWS();
 
-  // Input handling
   term.onKey(({ key, domEvent }) => {
     const code = domEvent.keyCode;
     const ctrl = domEvent.ctrlKey;
 
+    // ── MENU MODE ──
+    if (menuActive) {
+      if (code === 38) { // Up
+        if (menuIndex > 0) { menuIndex--; renderMenu(); }
+        return;
+      }
+      if (code === 40) { // Down
+        if (menuIndex < menuItems.length - 1) { menuIndex++; renderMenu(); }
+        return;
+      }
+      if (code === 13) { // Enter — select
+        const selected = menuItems[menuIndex];
+        menuActive = false;
+        // Clear menu display
+        term.write('\x1b[?25h'); // show cursor
+        sendMenuSelection(menuId, selected);
+        return;
+      }
+      if (code === 27 || (ctrl && code === 67)) { // Esc or Ctrl+C — cancel
+        menuActive = false;
+        term.write('\r\n');
+        term.write(`  ${A.dim}Cancelled${A.r}\r\n\r\n`);
+        writePrompt();
+        return;
+      }
+      return; // Ignore other keys in menu mode
+    }
+
+    // ── NORMAL MODE ──
     if (ctrl && code === 67) {
-      // Ctrl+C — cancel
       currentLine = '';
       term.write('^C\r\n');
       writePrompt();
@@ -81,14 +122,12 @@ async function init() {
     }
 
     if (ctrl && code === 76) {
-      // Ctrl+L — clear
       term.clear();
       writePrompt();
       return;
     }
 
     if (code === 13) {
-      // Enter
       term.write('\r\n');
       const cmd = currentLine.trim();
 
@@ -106,7 +145,6 @@ async function init() {
     }
 
     if (code === 8) {
-      // Backspace
       if (currentLine.length > 0) {
         currentLine = currentLine.slice(0, -1);
         term.write('\b \b');
@@ -115,7 +153,6 @@ async function init() {
     }
 
     if (code === 38) {
-      // Arrow up — history
       if (historyIndex < commandHistory.length - 1) {
         historyIndex++;
         replaceInput(commandHistory[historyIndex]);
@@ -124,7 +161,6 @@ async function init() {
     }
 
     if (code === 40) {
-      // Arrow down — history
       if (historyIndex > 0) {
         historyIndex--;
         replaceInput(commandHistory[historyIndex]);
@@ -136,13 +172,11 @@ async function init() {
     }
 
     if (code === 9) {
-      // Tab — autocomplete
       domEvent.preventDefault();
       autocomplete();
       return;
     }
 
-    // Printable characters
     if (key.length === 1 && !ctrl) {
       currentLine += key;
       term.write(key);
@@ -151,7 +185,7 @@ async function init() {
 
   // Paste support
   term.onData((data) => {
-    // Only handle paste (multi-char input)
+    if (menuActive) return;
     if (data.length > 1 && !data.startsWith('\x1b')) {
       const clean = data.replace(/[\r\n]/g, '');
       currentLine += clean;
@@ -162,6 +196,67 @@ async function init() {
   term.focus();
 }
 
+// ── MENU RENDERING ────────────────────────────
+function renderMenu() {
+  // Move cursor up to redraw (clear previous menu)
+  const totalLines = menuItems.length + 2; // title + items + hint
+  term.write(`\x1b[${totalLines}A\x1b[J`);
+
+  term.write(`  ${A.gold}${menuTitle}${A.r}\r\n`);
+
+  for (let i = 0; i < menuItems.length; i++) {
+    const item = menuItems[i];
+    const label = item.label || item.value || String(item);
+    const desc = item.desc ? `  ${A.dim}${item.desc}${A.r}` : '';
+
+    if (i === menuIndex) {
+      term.write(`  ${A.gold}► ${A.white}${label}${A.r}${desc}\r\n`);
+    } else {
+      term.write(`    ${A.dim}${label}${A.r}${desc}\r\n`);
+    }
+  }
+
+  term.write(`  ${A.dim}↑/↓ navigate • Enter select • Esc cancel${A.r}\r\n`);
+}
+
+function showMenu(id, title, items) {
+  menuActive = true;
+  menuId = id;
+  menuTitle = title;
+  menuItems = items;
+  menuIndex = 0;
+
+  term.write('\x1b[?25l'); // hide cursor during menu
+  term.write('\r\n');
+
+  // Initial render
+  term.write(`  ${A.gold}${menuTitle}${A.r}\r\n`);
+  for (let i = 0; i < menuItems.length; i++) {
+    const item = menuItems[i];
+    const label = item.label || item.value || String(item);
+    const desc = item.desc ? `  ${A.dim}${item.desc}${A.r}` : '';
+
+    if (i === menuIndex) {
+      term.write(`  ${A.gold}► ${A.white}${label}${A.r}${desc}\r\n`);
+    } else {
+      term.write(`    ${A.dim}${label}${A.r}${desc}\r\n`);
+    }
+  }
+  term.write(`  ${A.dim}↑/↓ navigate • Enter select • Esc cancel${A.r}\r\n`);
+}
+
+function sendMenuSelection(id, item) {
+  if (ws && ws.readyState === WebSocket.OPEN) {
+    ws.send(JSON.stringify({
+      type: 'menu_select',
+      id,
+      value: item.value || item.label || String(item),
+      item,
+    }));
+  }
+}
+
+// ── WEBSOCKET ─────────────────────────────────
 function connectWS() {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   ws = new WebSocket(`${protocol}//${window.location.host}`);
@@ -177,13 +272,15 @@ function connectWS() {
 
       if (msg.type === 'output') {
         term.write(msg.data);
-        writePrompt();
+        if (!menuActive) writePrompt();
       } else if (msg.type === 'clear') {
         term.clear();
         writePrompt();
+      } else if (msg.type === 'menu') {
+        // Server is requesting user to pick from a menu
+        showMenu(msg.id, msg.title, msg.items);
       }
     } catch {
-      // Raw text fallback
       term.write(event.data);
     }
   };
@@ -191,12 +288,8 @@ function connectWS() {
   ws.onclose = () => {
     connected = false;
     updateStatus(false);
-    term.write('\r\n\x1b[38;2;233;69;96m  ⚡ Connection lost. Reconnecting...\x1b[0m\r\n');
-
-    // Reconnect after 3s
-    setTimeout(() => {
-      connectWS();
-    }, 3000);
+    term.write(`\r\n${A.red}  ⚡ Connection lost. Reconnecting...${A.r}\r\n`);
+    setTimeout(() => connectWS(), 3000);
   };
 
   ws.onerror = () => {
@@ -209,7 +302,7 @@ function sendCommand(cmd) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify({ type: 'command', data: cmd }));
   } else {
-    term.write('\x1b[38;2;233;69;96m  ✗ Not connected\x1b[0m\r\n');
+    term.write(`${A.red}  ✗ Not connected${A.r}\r\n`);
     writePrompt();
   }
 }
@@ -219,28 +312,20 @@ function writePrompt() {
 }
 
 function replaceInput(text) {
-  // Clear current input
   const clearLen = currentLine.length;
-  for (let i = 0; i < clearLen; i++) {
-    term.write('\b \b');
-  }
+  for (let i = 0; i < clearLen; i++) term.write('\b \b');
   currentLine = text;
   term.write(text);
 }
 
 function autocomplete() {
   if (!currentLine) return;
-
   const matches = COMMANDS.filter((c) => c.startsWith(currentLine.toLowerCase()));
-
   if (matches.length === 1) {
     replaceInput(matches[0]);
   } else if (matches.length > 1) {
-    // Show options
     term.write('\r\n');
-    term.write(
-      matches.map((m) => `  \x1b[38;2;102;102;102m${m}\x1b[0m`).join('    ')
-    );
+    term.write(matches.map((m) => `  ${A.dim}${m}${A.r}`).join('    '));
     term.write('\r\n');
     writePrompt();
     term.write(currentLine);
@@ -250,13 +335,8 @@ function autocomplete() {
 function updateStatus(isConnected) {
   const dot = document.querySelector('.status-dot');
   const text = document.querySelector('.status-text');
-  if (dot) {
-    dot.className = isConnected ? 'status-dot' : 'status-dot disconnected';
-  }
-  if (text) {
-    text.textContent = isConnected ? 'Connected' : 'Disconnected';
-  }
+  if (dot) dot.className = isConnected ? 'status-dot' : 'status-dot disconnected';
+  if (text) text.textContent = isConnected ? 'Connected' : 'Disconnected';
 }
 
-// Boot
 document.addEventListener('DOMContentLoaded', init);

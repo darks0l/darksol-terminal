@@ -100,6 +100,27 @@ export async function startWebShell(opts = {}) {
       try {
         const msg = JSON.parse(raw.toString());
 
+        if (msg.type === 'menu_select') {
+          // User selected something from an interactive menu
+          try {
+            const { handleMenuSelect } = await import('./commands.js');
+            const result = await handleMenuSelect(msg.id, msg.value, msg.item, {
+              send: (text) => ws.send(JSON.stringify({ type: 'output', data: text })),
+              sendLine: (text) => ws.send(JSON.stringify({ type: 'output', data: text + '\r\n' })),
+              sendMenu: (id, title, items) => ws.send(JSON.stringify({ type: 'menu', id, title, items })),
+            });
+            if (result?.output) {
+              ws.send(JSON.stringify({ type: 'output', data: result.output }));
+            }
+          } catch (err) {
+            ws.send(JSON.stringify({
+              type: 'output',
+              data: `\r\n  \x1b[31m✗ Error: ${err.message}\x1b[0m\r\n`,
+            }));
+          }
+          return;
+        }
+
         if (msg.type === 'command') {
           const cmd = msg.data.trim();
 
@@ -133,6 +154,7 @@ export async function startWebShell(opts = {}) {
             const result = await handleCommand(cmd, {
               send: (text) => ws.send(JSON.stringify({ type: 'output', data: text })),
               sendLine: (text) => ws.send(JSON.stringify({ type: 'output', data: text + '\r\n' })),
+              sendMenu: (id, title, items) => ws.send(JSON.stringify({ type: 'menu', id, title, items })),
             });
 
             if (result?.output) {

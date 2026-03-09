@@ -70,6 +70,96 @@ const USDC_ADDRESSES = {
 const ERC20_ABI = ['function balanceOf(address) view returns (uint256)'];
 
 /**
+ * Handle interactive menu selections from the client
+ */
+export async function handleMenuSelect(id, value, item, ws) {
+  switch (id) {
+    case 'wallet_select':
+      return await showWalletDetail(value, ws);
+
+    case 'wallet_action':
+      switch (value) {
+        case 'receive': {
+          const name = getConfig('activeWallet');
+          if (!name) return {};
+          const { loadWallet } = await import('../wallet/keystore.js');
+          const w = loadWallet(name);
+          ws.sendLine('');
+          ws.sendLine(`${ANSI.gold}  ◆ RECEIVE — ${name}${ANSI.reset}`);
+          ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+          ws.sendLine('');
+          ws.sendLine(`  ${ANSI.white}Your address:${ANSI.reset}`);
+          ws.sendLine('');
+          const addr = w.address;
+          ws.sendLine(`  ${ANSI.dim}┌${'─'.repeat(addr.length + 4)}┐${ANSI.reset}`);
+          ws.sendLine(`  ${ANSI.dim}│  ${ANSI.gold}${addr}${ANSI.dim}  │${ANSI.reset}`);
+          ws.sendLine(`  ${ANSI.dim}└${'─'.repeat(addr.length + 4)}┘${ANSI.reset}`);
+          ws.sendLine('');
+          ws.sendLine(`  ${ANSI.dim}Works on ALL EVM chains: Base • Ethereum • Arbitrum • Optimism • Polygon${ANSI.reset}`);
+          ws.sendLine(`  ${ANSI.red}Make sure the sender is on the same chain!${ANSI.reset}`);
+          ws.sendLine('');
+          return {};
+        }
+        case 'send':
+          ws.sendLine('');
+          ws.sendLine(`  ${ANSI.gold}◆ SEND${ANSI.reset}`);
+          ws.sendLine(`  ${ANSI.dim}Sending requires wallet password — use the CLI:${ANSI.reset}`);
+          ws.sendLine(`  ${ANSI.gold}darksol send --to 0x... --amount 0.1 --token ETH${ANSI.reset}`);
+          ws.sendLine(`  ${ANSI.gold}darksol send${ANSI.reset}  ${ANSI.dim}(interactive mode)${ANSI.reset}`);
+          ws.sendLine('');
+          return {};
+        case 'portfolio':
+          return await handleCommand('portfolio', ws);
+        case 'history':
+          return await handleCommand('history', ws);
+        case 'switch': {
+          const chains = ['base', 'ethereum', 'arbitrum', 'optimism', 'polygon'];
+          const current = getConfig('chain') || 'base';
+          ws.sendMenu('chain_select', '◆ Select Chain', chains.map(c => ({
+            value: c,
+            label: c === current ? `★ ${c}` : c,
+            desc: c === current ? 'current' : '',
+          })));
+          return {};
+        }
+        case 'back':
+          ws.sendLine('');
+          return {};
+      }
+      break;
+
+    case 'chain_select':
+      setConfig('chain', value);
+      ws.sendLine('');
+      ws.sendLine(`  ${ANSI.green}✓ Chain set to ${value}${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+
+    case 'config_action':
+      if (value === 'chain') {
+        const chains = ['base', 'ethereum', 'arbitrum', 'optimism', 'polygon'];
+        const current = getConfig('chain') || 'base';
+        ws.sendMenu('chain_select', '◆ Select Chain', chains.map(c => ({
+          value: c,
+          label: c === current ? `★ ${c}` : c,
+          desc: c === current ? 'current' : '',
+        })));
+        return {};
+      }
+      if (value === 'keys') {
+        return await handleCommand('keys', ws);
+      }
+      ws.sendLine('');
+      return {};
+
+    case 'main_menu':
+      return await handleCommand(value, ws);
+  }
+
+  return {};
+}
+
+/**
  * AI status check — shown on connection
  */
 export function getAIStatus() {
@@ -402,47 +492,121 @@ async function cmdMarket(args, ws) {
 // WALLET
 // ══════════════════════════════════════════════════
 async function cmdWallet(args, ws) {
-  const sub = args[0] || 'list';
+  const sub = args[0];
 
-  if (sub === 'list') {
-    const { listWallets } = await import('../wallet/keystore.js');
-    const wallets = listWallets();
-    const active = getConfig('activeWallet');
+  // If a specific subcommand, handle directly
+  if (sub === 'balance') {
+    return await showWalletDetail(args[1] || getConfig('activeWallet'), ws);
+  }
 
+  if (sub === 'use' && args[1]) {
+    setConfig('activeWallet', args[1]);
+    ws.sendLine(`  ${ANSI.green}✓ Active wallet set to "${args[1]}"${ANSI.reset}`);
+    ws.sendLine('');
+    return {};
+  }
+
+  // Default: interactive wallet picker
+  const { listWallets } = await import('../wallet/keystore.js');
+  const wallets = listWallets();
+  const active = getConfig('activeWallet');
+
+  if (wallets.length === 0) {
     ws.sendLine(`${ANSI.gold}  ◆ WALLETS${ANSI.reset}`);
     ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.dim}No wallets found.${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.dim}Create one: ${ANSI.gold}darksol wallet create <name>${ANSI.reset}`);
+    ws.sendLine('');
+    return {};
+  }
 
-    if (wallets.length === 0) {
-      ws.sendLine(`  ${ANSI.dim}No wallets. Create one in the CLI: darksol wallet create${ANSI.reset}`);
-    } else {
-      for (const w of wallets) {
-        const indicator = w === active ? `${ANSI.gold}► ${ANSI.reset}` : '  ';
-        ws.sendLine(`  ${indicator}${ANSI.white}${w}${ANSI.reset}`);
-      }
+  if (wallets.length === 1) {
+    // Only one wallet — go straight to it
+    return await showWalletDetail(wallets[0].name, ws);
+  }
+
+  // Multiple wallets — show interactive menu
+  const menuItems = wallets.map(w => ({
+    value: w.name,
+    label: `${w.name === active ? '★ ' : ''}${w.name}`,
+    desc: `${w.address.slice(0, 6)}...${w.address.slice(-4)}`,
+  }));
+
+  ws.sendMenu('wallet_select', '◆ Select Wallet', menuItems);
+  return {};
+}
+
+async function showWalletDetail(name, ws) {
+  if (!name) {
+    ws.sendLine(`  ${ANSI.red}No wallet selected${ANSI.reset}`);
+    ws.sendLine('');
+    return {};
+  }
+
+  const { loadWallet } = await import('../wallet/keystore.js');
+  let walletData;
+  try {
+    walletData = loadWallet(name);
+  } catch {
+    ws.sendLine(`  ${ANSI.red}Wallet "${name}" not found${ANSI.reset}`);
+    ws.sendLine('');
+    return {};
+  }
+
+  const chain = getConfig('chain') || 'base';
+  const provider = new ethers.JsonRpcProvider(RPCS[chain]);
+
+  ws.sendLine(`${ANSI.gold}  ◆ WALLET — ${name}${ANSI.reset}`);
+  ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.darkGold}Address${ANSI.reset}      ${ANSI.white}${walletData.address}${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.darkGold}Chain${ANSI.reset}        ${ANSI.white}${chain}${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.darkGold}Created${ANSI.reset}      ${ANSI.dim}${walletData.createdAt ? new Date(walletData.createdAt).toLocaleDateString() : 'unknown'}${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.darkGold}Encryption${ANSI.reset}   ${ANSI.dim}AES-256-GCM + scrypt${ANSI.reset}`);
+
+  // Fetch balance
+  ws.sendLine('');
+  ws.sendLine(`  ${ANSI.dim}Fetching balance...${ANSI.reset}`);
+
+  try {
+    const balance = await provider.getBalance(walletData.address);
+    const ethBal = parseFloat(ethers.formatEther(balance));
+
+    // Also check USDC
+    const usdcAddr = USDC_ADDRESSES[chain];
+    let usdcBal = 0;
+    if (usdcAddr) {
+      try {
+        const usdc = new ethers.Contract(usdcAddr, ['function balanceOf(address) view returns (uint256)'], provider);
+        const raw = await usdc.balanceOf(walletData.address);
+        usdcBal = parseFloat(ethers.formatUnits(raw, 6));
+      } catch {}
     }
 
-    ws.sendLine('');
-    return {};
+    // Get ETH price for USD value
+    const ethPrice = await getEthPrice();
+    const usdValue = (ethBal * ethPrice) + usdcBal;
+
+    // Overwrite "Fetching..." line
+    ws.sendLine(`\x1b[1A\x1b[2K  ${ANSI.darkGold}ETH${ANSI.reset}          ${ANSI.white}${ethBal.toFixed(6)}${ANSI.reset} ${ANSI.dim}($${(ethBal * ethPrice).toFixed(2)})${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}USDC${ANSI.reset}         ${ANSI.white}$${usdcBal.toFixed(2)}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Total${ANSI.reset}        ${ANSI.green}$${usdValue.toFixed(2)}${ANSI.reset}`);
+  } catch (err) {
+    ws.sendLine(`  ${ANSI.red}Balance fetch failed: ${err.message}${ANSI.reset}`);
   }
 
-  if (sub === 'balance') {
-    const name = args[1] || getConfig('activeWallet');
-    if (!name) return { output: `  ${ANSI.red}No active wallet${ANSI.reset}\r\n` };
+  ws.sendLine('');
 
-    const { loadWallet } = await import('../wallet/keystore.js');
-    const w = loadWallet(name);
-    const chain = getConfig('chain') || 'base';
-    const provider = new ethers.JsonRpcProvider(RPCS[chain]);
-    const bal = parseFloat(ethers.formatEther(await provider.getBalance(w.address)));
+  // Show action menu
+  ws.sendMenu('wallet_action', '◆ What would you like to do?', [
+    { value: 'receive', label: '📥 Receive', desc: 'Show address to receive funds' },
+    { value: 'send', label: '📤 Send', desc: 'Send ETH or tokens (CLI required)' },
+    { value: 'portfolio', label: '📊 Portfolio', desc: 'Multi-chain balance view' },
+    { value: 'history', label: '📜 History', desc: 'Transaction history' },
+    { value: 'switch', label: '🔄 Switch chain', desc: `Currently: ${chain}` },
+    { value: 'back', label: '← Back', desc: '' },
+  ]);
 
-    ws.sendLine(`${ANSI.gold}  ◆ BALANCE — ${name}${ANSI.reset}`);
-    ws.sendLine(`${ANSI.dim}  ${w.address}${ANSI.reset}`);
-    ws.sendLine(`  ${ANSI.white}${bal.toFixed(6)} ETH${ANSI.reset} on ${chain}`);
-    ws.sendLine('');
-    return {};
-  }
-
-  return { output: `  ${ANSI.dim}Wallet commands: list, balance${ANSI.reset}\r\n` };
+  return {};
 }
 
 // ══════════════════════════════════════════════════
@@ -581,8 +745,16 @@ async function cmdConfig(ws) {
   ws.sendLine(`  ${ANSI.darkGold}Wallet${ANSI.reset}        ${ANSI.white}${wallet}${ANSI.reset}`);
   ws.sendLine(`  ${ANSI.darkGold}Slippage${ANSI.reset}      ${ANSI.white}${slippage}%${ANSI.reset}`);
   ws.sendLine(`  ${ANSI.darkGold}Mail${ANSI.reset}          ${ANSI.white}${email}${ANSI.reset}`);
-  ws.sendLine(`  ${ANSI.darkGold}AI${ANSI.reset}            ${hasKey('openai') || hasKey('anthropic') || hasKey('openrouter') || hasKey('ollama') ? `${ANSI.green}● Ready${ANSI.reset}` : `${ANSI.dim}○ Not configured${ANSI.reset}`}`);
+  ws.sendLine(`  ${ANSI.darkGold}AI${ANSI.reset}            ${hasAnyLLM() ? `${ANSI.green}● Ready${ANSI.reset}` : `${ANSI.dim}○ Not configured${ANSI.reset}`}`);
   ws.sendLine('');
+
+  // Offer interactive config
+  ws.sendMenu('config_action', '◆ Configure', [
+    { value: 'chain', label: '🔗 Change chain', desc: `Currently: ${chain}` },
+    { value: 'keys', label: '🔑 LLM / API keys', desc: '' },
+    { value: 'back', label: '← Back', desc: '' },
+  ]);
+
   return {};
 }
 
