@@ -26,6 +26,9 @@ import { parseIntent, startChat, adviseStrategy, analyzeToken, executeIntent } f
 import { startAgentSigner, showAgentDocs } from './wallet/agent-signer.js';
 import { listSkills, installSkill, skillInfo, uninstallSkill } from './services/skills.js';
 import { runSetupWizard, checkFirstRun } from './setup/wizard.js';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { version: PKG_VERSION } = require('../package.json');
 
 export function cli(argv) {
   const program = new Command();
@@ -33,7 +36,7 @@ export function cli(argv) {
   program
     .name('darksol')
     .description(theme.gold('DARKSOL Terminal') + theme.dim(' — Ghost in the machine with teeth 🌑'))
-    .version('0.4.1')
+    .version(PKG_VERSION)
 ;
 
   // ═══════════════════════════════════════
@@ -721,6 +724,8 @@ export function cli(argv) {
         ['Output', cfg.output],
         ['Slippage', `${cfg.slippage}%`],
         ['Gas Multiplier', `${cfg.gasMultiplier}x`],
+        ['Mail', cfg.mailEmail || theme.dim('(not set)')],
+        ['Version', PKG_VERSION],
         ['Config File', configPath()],
       ]);
       console.log('');

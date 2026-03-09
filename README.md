@@ -30,14 +30,29 @@ darksol
 # Create a wallet (AES-256-GCM encrypted)
 darksol wallet create main
 
-# Check balance
+# Check balance + multi-chain portfolio
 darksol wallet balance
+darksol portfolio
 
-# Swap tokens
+# Token prices & live monitoring
+darksol price ETH AERO VIRTUAL
+darksol watch AERO --above 2.0
+
+# Gas estimates
+darksol gas base
+
+# Swap tokens (Uniswap V3 with slippage protection)
 darksol trade swap -i ETH -o USDC -a 0.1
 
 # AI trading assistant
 darksol ai chat
+
+# Agent email
+darksol mail setup
+darksol mail send --to user@example.com --subject "Hello"
+
+# Web terminal in browser
+darksol serve
 
 # Start agent signer for OpenClaw
 darksol agent start main
@@ -58,6 +73,16 @@ darksol agent start main
 | `market` | Market intel, top movers, token analysis | x402 micropayments |
 | `oracle` | On-chain random number oracle | $0.05–$0.25 |
 | `casino` | The Clawsino — on-chain betting | $1 flat bets |
+| `portfolio` | Multi-chain balance view (5 EVM chains) | Free |
+| `gas` | Gas prices & cost estimates | Free |
+| `price` | Quick token price check (DexScreener) | Free |
+| `watch` | Live price monitoring with alerts | Free |
+| `history` | Transaction history via block explorers | Free |
+| `mail` | AgentMail — email for AI agents | Free tier |
+| `serve` | Web terminal in browser (xterm.js) | Free |
+| `facilitator` | x402 payment facilitator | Free |
+| `cards` | Prepaid Visa/MC cards | Service fees |
+| `builders` | ERC-8021 builder code directory | Free |
 | `cards` | Crypto → prepaid Visa/MC (no KYC) | 3% markup |
 | `builders` | ERC-8021 builder leaderboard | Free |
 | `facilitator` | x402 payment verification & settlement | Free |
