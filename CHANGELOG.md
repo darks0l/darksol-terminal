@@ -7,6 +7,19 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.5.0] - 2026-03-09
+### Changed
+- Version milestone release: promoted latest stable line from `0.4.x` to `0.5.0`
+- Documentation synchronized to current `serve` UX and interactive control model
+
+### Includes (from latest stable work)
+- Interactive web-shell menus (arrow keys + Enter)
+- Click-through help menu
+- Wallet picker + wallet action controls (receive/send/portfolio/history/switch chain)
+- Agent signer control center (`agent`) in `serve` (start/stop/status/docs)
+- Interactive LLM/API key setup from web shell (`keys`)
+- Chat memory logs in `~/.darksol/chat-logs/`
+
 ## [0.4.11] - 2026-03-09
 ### Added
 - `serve` agent signer control center (`agent`) with interactive menus:
