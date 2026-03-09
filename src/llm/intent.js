@@ -9,42 +9,70 @@ import { showSection } from '../ui/banner.js';
 // INTENT SYSTEM PROMPT
 // ──────────────────────────────────────────────────
 
-const INTENT_SYSTEM_PROMPT = `You are DARKSOL Terminal's trading AI assistant. You help users execute trades, analyze markets, manage DCA strategies, and navigate the DARKSOL ecosystem.
+const INTENT_SYSTEM_PROMPT = `You are DARKSOL Terminal's trading AI assistant. You help users execute trades, send/receive tokens, analyze markets, manage DCA strategies, and navigate the DARKSOL ecosystem.
 
 CAPABILITIES:
-- Parse natural language trade instructions into structured commands
-- Analyze token prices, liquidity, and market conditions  
+- Parse natural language into structured trade/transfer commands
+- Analyze token prices, liquidity, and market conditions
 - Suggest DCA strategies based on user goals
 - Explain transaction results and gas costs
 - Warn about risks (low liquidity, high slippage, unverified contracts)
 
 SUPPORTED CHAINS: Base (default), Ethereum, Polygon, Arbitrum, Optimism
-
-RESPONSE RULES:
-- Be concise and direct
-- Always include risk warnings for trades
-- When parsing trade intent, output structured JSON
-- Never reveal private keys or sensitive wallet info
-- If uncertain about a token, say so
-- Use plain numbers, avoid scientific notation
+KNOWN TOKENS: ETH, USDC, USDT, DAI, WETH, AERO, VIRTUAL, ARB, OP, WMATIC
 
 USER CONTEXT:
 - Active chain: {{chain}}
 - Active wallet: {{wallet}}
 - Slippage setting: {{slippage}}%
 
-When parsing trade instructions, respond with JSON:
+RESPONSE RULES:
+- Be concise and direct
+- Always include risk warnings for trades
+- When parsing trade/transfer intent, output structured JSON
+- Never reveal private keys or sensitive wallet info
+- If uncertain about a token, say so — don't guess contract addresses
+- Use plain numbers, avoid scientific notation
+- For ambiguous amounts, ask for clarification (confidence < 0.5)
+
+ACTIONS (use the most specific one):
+- "swap" — exchange one token for another (e.g. "swap ETH to USDC", "buy VIRTUAL with 0.1 ETH")
+- "send" — transfer tokens to an address (e.g. "send 10 USDC to 0x...", "transfer 0.5 ETH to vitalik.eth")
+- "snipe" — fast-buy a new/low-liquidity token with ETH
+- "dca" — set up recurring buys (e.g. "DCA $100 into ETH over 30 days")
+- "price" — check current price (e.g. "price of AERO", "how much is VIRTUAL")
+- "balance" — check wallet balance
+- "info" — general question about a token or protocol
+- "analyze" — deep analysis of a token
+- "gas" — gas price check
+- "unknown" — can't determine what the user wants
+
+When parsing, respond with ONLY valid JSON:
 {
-  "action": "swap|snipe|dca|transfer|info|analyze|unknown",
-  "tokenIn": "symbol or address",
-  "tokenOut": "symbol or address",
-  "amount": "number",
-  "chain": "chain name",
-  "confidence": 0-1,
-  "reasoning": "brief explanation",
+  "action": "swap|send|snipe|dca|price|balance|info|analyze|gas|unknown",
+  "tokenIn": "symbol or address (for swaps)",
+  "tokenOut": "symbol or address (for swaps)",
+  "token": "symbol (for send/price/analyze)",
+  "amount": "number as string",
+  "to": "recipient address (for send)",
+  "chain": "chain name if specified, null if not",
+  "interval": "for DCA: 1h, 4h, 1d, etc.",
+  "orders": "for DCA: number of orders",
+  "confidence": 0.0-1.0,
+  "reasoning": "brief explanation of interpretation",
   "warnings": ["array of risk warnings"],
-  "command": "the CLI command to execute"
-}`;
+  "command": "the exact darksol CLI command to run"
+}
+
+COMMAND MAPPING:
+- swap → darksol trade swap -i <tokenIn> -o <tokenOut> -a <amount>
+- send → darksol send --to <address> --amount <amount> --token <token>
+- snipe → darksol trade snipe <address> <ethAmount>
+- dca → darksol dca create -t <token> -a <amount> -i <interval> -n <orders>
+- price → darksol price <token>
+- balance → darksol wallet balance
+- gas → darksol gas <chain>
+- analyze → darksol ai analyze <token>`;
 
 // ──────────────────────────────────────────────────
 // INTENT PARSER
@@ -126,7 +154,8 @@ export async function parseIntent(input, opts = {}) {
 export async function startChat(opts = {}) {
   showSection('DARKSOL AI — TRADING ASSISTANT');
   console.log(theme.dim('  Natural language trading. Type "exit" to quit.'));
-  console.log(theme.dim('  Examples: "buy 0.1 ETH worth of VIRTUAL", "what\'s the price of AERO?"'));
+  console.log(theme.dim('  Try: "swap 0.1 ETH to USDC", "send 5 USDC to 0x...", "price of AERO"'));
+  console.log(theme.dim('  Actions auto-detected — you\'ll be asked to confirm before execution.'));
   console.log('');
 
   const spin = spinner('Initializing AI...').start();
@@ -187,7 +216,31 @@ export async function startChat(opts = {}) {
         enriched += `\n\n[Live data: ${priceData.join(', ')}]`;
       }
 
-      const result = await llm.chat(enriched);
+      // Try to detect actionable intent
+      const actionKeywords = /\b(swap|send|transfer|buy|sell|snipe|dca|price|balance|gas)\b/i;
+      const isActionable = actionKeywords.test(input);
+
+      let result;
+      let parsedIntent = null;
+
+      if (isActionable) {
+        // Use JSON mode to get structured intent
+        const intentResult = await llm.json(
+          `Parse this as a trading/transfer instruction:\n\n"${enriched}"`,
+          { ephemeral: true }
+        );
+
+        if (intentResult.parsed && intentResult.parsed.action && intentResult.parsed.action !== 'unknown') {
+          parsedIntent = intentResult.parsed;
+          // Also get a human-readable response
+          result = await llm.chat(enriched);
+        } else {
+          result = await llm.chat(enriched);
+        }
+      } else {
+        result = await llm.chat(enriched);
+      }
+
       spin2.succeed('');
 
       // Display response
@@ -198,6 +251,41 @@ export async function startChat(opts = {}) {
         console.log(theme.dim('  ') + line);
       }
       console.log('');
+
+      // If actionable intent was detected, offer to execute
+      if (parsedIntent) {
+        const execActions = ['swap', 'send', 'transfer', 'snipe', 'dca', 'price', 'balance', 'gas'];
+        if (execActions.includes(parsedIntent.action)) {
+          const displayPairs = [];
+          if (parsedIntent.action) displayPairs.push(['Action', parsedIntent.action]);
+          if (parsedIntent.tokenIn) displayPairs.push(['From', parsedIntent.tokenIn]);
+          if (parsedIntent.tokenOut) displayPairs.push(['To token', parsedIntent.tokenOut]);
+          if (parsedIntent.token) displayPairs.push(['Token', parsedIntent.token]);
+          if (parsedIntent.amount) displayPairs.push(['Amount', parsedIntent.amount]);
+          if (parsedIntent.to) displayPairs.push(['Recipient', parsedIntent.to]);
+          if (parsedIntent.confidence) displayPairs.push(['Confidence', `${(parsedIntent.confidence * 100).toFixed(0)}%`]);
+
+          if (displayPairs.length > 1) {
+            showSection('DETECTED INTENT');
+            kvDisplay(displayPairs);
+            if (parsedIntent.warnings?.length > 0) {
+              parsedIntent.warnings.forEach(w => warn(w));
+            }
+            console.log('');
+
+            const { execute } = await inquirer.prompt([{
+              type: 'confirm',
+              name: 'execute',
+              message: theme.gold(`Execute ${parsedIntent.action}?`),
+              default: false,
+            }]);
+
+            if (execute) {
+              await executeIntent(parsedIntent, {});
+            }
+          }
+        }
+      }
 
     } catch (err) {
       spin2.fail('Error');
@@ -402,11 +490,37 @@ export async function executeIntent(intent, opts = {}) {
         });
       }
 
+      case 'send':
       case 'transfer': {
-        // Transfer intent — use execution script engine
-        info(`Transfer intent detected. Use: darksol script create (template: transfer)`);
-        info(`To: ${intent.to || 'specify address'}, Amount: ${intent.amount || 'specify amount'}`);
-        return { success: true, action: 'transfer', note: 'Use script system for transfers' };
+        const { sendFunds } = await import('../wallet/manager.js');
+        return await sendFunds({
+          to: intent.to,
+          amount: intent.amount,
+          token: intent.token || intent.tokenIn || 'ETH',
+        });
+      }
+
+      case 'price': {
+        const token = intent.token || intent.tokenOut || intent.tokenIn;
+        if (token) {
+          const { checkPrices } = await import('../services/watch.js');
+          await checkPrices([token]);
+          return { success: true, action: 'price' };
+        }
+        info('No token specified');
+        return { success: false, reason: 'no token specified' };
+      }
+
+      case 'balance': {
+        const { getBalance } = await import('../wallet/manager.js');
+        await getBalance();
+        return { success: true, action: 'balance' };
+      }
+
+      case 'gas': {
+        const { showGas } = await import('../services/gas.js');
+        await showGas(intent.chain || getConfig('chain') || 'base');
+        return { success: true, action: 'gas' };
       }
 
       case 'info':

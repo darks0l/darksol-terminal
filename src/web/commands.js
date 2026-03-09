@@ -72,6 +72,10 @@ export async function handleCommand(cmd, ws) {
       return await cmdCasino(args, ws);
     case 'facilitator':
       return await cmdFacilitator(args, ws);
+    case 'send':
+      return await cmdSend(args, ws);
+    case 'receive':
+      return await cmdReceive(ws);
     default:
       return {
         output: `\r\n  ${ANSI.red}✗ Unknown command: ${cmd}${ANSI.reset}\r\n  ${ANSI.dim}Type ${ANSI.gold}help${ANSI.dim} for available commands.${ANSI.reset}\r\n\r\n`,
@@ -501,6 +505,84 @@ async function cmdConfig(ws) {
   ws.sendLine(`  ${ANSI.darkGold}Mail${ANSI.reset}          ${ANSI.white}${email}${ANSI.reset}`);
   ws.sendLine(`  ${ANSI.darkGold}AI${ANSI.reset}            ${hasKey('openai') || hasKey('anthropic') || hasKey('openrouter') || hasKey('ollama') ? `${ANSI.green}● Ready${ANSI.reset}` : `${ANSI.dim}○ Not configured${ANSI.reset}`}`);
   ws.sendLine('');
+  return {};
+}
+
+// ══════════════════════════════════════════════════
+// SEND / RECEIVE (web shell — info only, actual sends require CLI)
+// ══════════════════════════════════════════════════
+async function cmdSend(args, ws) {
+  const chain = getConfig('chain') || 'base';
+  const wallet = getConfig('activeWallet');
+
+  ws.sendLine(`${ANSI.gold}  ◆ SEND TOKENS${ANSI.reset}`);
+  ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+  ws.sendLine('');
+
+  if (!wallet) {
+    ws.sendLine(`  ${ANSI.red}No wallet configured.${ANSI.reset}`);
+    ws.sendLine(`  Create one: ${ANSI.gold}darksol wallet create <name>${ANSI.reset}`);
+    ws.sendLine('');
+    return {};
+  }
+
+  ws.sendLine(`  ${ANSI.white}Send ETH or any ERC-20 token from your wallet.${ANSI.reset}`);
+  ws.sendLine('');
+  ws.sendLine(`  ${ANSI.darkGold}Usage:${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.gold}darksol send --to 0x... --amount 0.1 --token ETH${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.gold}darksol send --to 0x... --amount 50 --token USDC${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.gold}darksol send${ANSI.reset}  ${ANSI.dim}(interactive mode — prompts for everything)${ANSI.reset}`);
+  ws.sendLine('');
+  ws.sendLine(`  ${ANSI.darkGold}Features:${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.dim}•${ANSI.reset} ETH and any ERC-20 token`);
+  ws.sendLine(`  ${ANSI.dim}•${ANSI.reset} Balance check before sending`);
+  ws.sendLine(`  ${ANSI.dim}•${ANSI.reset} Gas estimation in preview`);
+  ws.sendLine(`  ${ANSI.dim}•${ANSI.reset} Confirmation prompt before execution`);
+  ws.sendLine(`  ${ANSI.dim}•${ANSI.reset} On-chain receipt after confirmation`);
+  ws.sendLine('');
+  ws.sendLine(`  ${ANSI.darkGold}Active:${ANSI.reset} ${ANSI.white}${wallet}${ANSI.reset} on ${ANSI.white}${chain}${ANSI.reset}`);
+  ws.sendLine('');
+  ws.sendLine(`  ${ANSI.dim}⚠ Sending requires the CLI. Install: npm i -g @darksol/terminal${ANSI.reset}`);
+  ws.sendLine('');
+  return {};
+}
+
+async function cmdReceive(ws) {
+  const chain = getConfig('chain') || 'base';
+  const wallet = getConfig('activeWallet');
+
+  ws.sendLine(`${ANSI.gold}  ◆ RECEIVE${ANSI.reset}`);
+  ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+  ws.sendLine('');
+
+  if (!wallet) {
+    ws.sendLine(`  ${ANSI.red}No wallet configured.${ANSI.reset}`);
+    ws.sendLine(`  Create one: ${ANSI.gold}darksol wallet create <name>${ANSI.reset}`);
+    ws.sendLine('');
+    return {};
+  }
+
+  try {
+    const { loadWallet } = await import('../wallet/keystore.js');
+    const walletData = loadWallet(wallet);
+    const addr = walletData.address;
+
+    ws.sendLine(`  ${ANSI.white}Your address:${ANSI.reset}`);
+    ws.sendLine('');
+    ws.sendLine(`  ${ANSI.dim}┌${'─'.repeat(addr.length + 4)}┐${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.dim}│  ${ANSI.gold}${addr}${ANSI.dim}  │${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.dim}└${'─'.repeat(addr.length + 4)}┘${ANSI.reset}`);
+    ws.sendLine('');
+    ws.sendLine(`  ${ANSI.dim}Works on ALL EVM chains:${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.dim}Base • Ethereum • Arbitrum • Optimism • Polygon${ANSI.reset}`);
+    ws.sendLine('');
+    ws.sendLine(`  ${ANSI.darkGold}Active chain:${ANSI.reset} ${ANSI.white}${chain}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.red}Make sure the sender is on the same chain!${ANSI.reset}`);
+    ws.sendLine('');
+  } catch {
+    ws.sendLine(`  ${ANSI.dim}Run: darksol wallet receive${ANSI.reset}`);
+    ws.sendLine('');
+  }
   return {};
 }
 

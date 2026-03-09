@@ -516,18 +516,53 @@ export function cli(argv) {
     .description('One-shot AI query')
     .option('-p, --provider <name>', 'LLM provider')
     .option('-m, --model <model>', 'Model name')
+    .option('-x, --execute', 'Auto-execute if confidence > 60%')
     .action(async (promptParts, opts) => {
       const prompt = promptParts.join(' ');
       const result = await parseIntent(prompt, opts);
       if (result.action !== 'error' && result.action !== 'unknown') {
         showSection('PARSED INTENT');
-        kvDisplay(Object.entries(result)
-          .filter(([k]) => !['raw', 'model'].includes(k))
-          .map(([k, v]) => [k, Array.isArray(v) ? v.join(', ') : String(v)])
-        );
+        const displayEntries = Object.entries(result)
+          .filter(([k]) => !['raw', 'model', 'reasoning'].includes(k))
+          .map(([k, v]) => [k, Array.isArray(v) ? v.join(', ') : String(v)]);
+        kvDisplay(displayEntries);
+
+        if (result.reasoning) {
+          console.log('');
+          info(result.reasoning);
+        }
+
+        if (result.warnings?.length > 0) {
+          result.warnings.forEach(w => warn(w));
+        }
+
         if (result.command) {
           console.log('');
-          info(`Suggested command: ${theme.gold(result.command)}`);
+          info(`Command: ${theme.gold(result.command)}`);
+        }
+
+        // Offer to execute actionable intents
+        const actionable = ['swap', 'send', 'transfer', 'snipe', 'dca', 'price', 'balance', 'gas', 'analyze'];
+        if (actionable.includes(result.action)) {
+          if (opts.execute && result.confidence >= 0.6) {
+            console.log('');
+            await executeIntent(result, {});
+          } else if (!opts.execute) {
+            console.log('');
+            const inquirer = (await import('inquirer')).default;
+            const { run } = await inquirer.prompt([{
+              type: 'confirm',
+              name: 'run',
+              message: theme.gold('Execute this?'),
+              default: result.confidence >= 0.7,
+            }]);
+            if (run) await executeIntent(result, {});
+          }
+        }
+      } else {
+        if (result.raw) {
+          console.log('');
+          console.log(theme.dim('  ') + result.raw);
         }
       }
     });
