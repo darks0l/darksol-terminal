@@ -5,6 +5,9 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import open from 'open';
 import { theme } from '../ui/theme.js';
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const { version: PKG_VERSION } = require('../../package.json');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -46,7 +49,7 @@ export async function startWebShell(opts = {}) {
         res.end(js);
       } else if (pathname === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'ok', version: '0.4.0' }));
+        res.end(JSON.stringify({ status: 'ok', version: PKG_VERSION }));
       } else {
         res.writeHead(404);
         res.end('Not found');
@@ -194,12 +197,13 @@ function getBanner() {
     '',
     `${dim}  ╔══════════════════════════════════════════════════════════╗${reset}`,
     `${dim}  ║${reset} ${gold}${white} DARKSOL TERMINAL${reset}${dim}  —  ${reset}${dim}Ghost in the machine with teeth${reset}${dim}  ║${reset}`,
-    `${dim}  ║${reset}${dim}  v0.4.0                                                ${reset}${gold}🌑${reset}${dim} ║${reset}`,
+    `${dim}  ║${reset}${dim}  v${PKG_VERSION}${' '.repeat(Math.max(0, 52 - PKG_VERSION.length))}${reset}${gold}🌑${reset}${dim} ║${reset}`,
     `${dim}  ╚══════════════════════════════════════════════════════════╝${reset}`,
     '',
     `${dim}  All services. One terminal. Zero trust required.${reset}`,
     '',
-    `${dim}  Type ${gold}help${dim} for commands. Tab to autocomplete.${reset}`,
+    `${dim}  Type ${gold}ai <question>${dim} to chat with the trading AI.${reset}`,
+    `${dim}  Type ${gold}help${dim} for all commands.${reset}`,
     '',
   ].join('\r\n');
 }
@@ -211,20 +215,31 @@ function getHelp() {
   const reset = '\x1b[0m';
 
   const cmds = [
+    ['', `${gold}AI ASSISTANT${reset}`],
+    ['ai <question>', 'Chat with trading AI'],
+    ['ai clear', 'Reset chat history'],
+    ['ai status', 'Show AI session info'],
+    ['', ''],
+    ['', `${gold}TRADING & WALLET${reset}`],
     ['price <token...>', 'Quick price check'],
     ['watch <token>', 'Live price monitor'],
     ['gas [chain]', 'Gas prices & estimates'],
     ['portfolio', 'Multi-chain balances'],
+    ['send', 'Send ETH or tokens'],
+    ['receive', 'Show address to receive'],
+    ['wallet list', 'List wallets'],
+    ['wallet balance', 'Wallet balance'],
     ['history', 'Transaction history'],
+    ['', ''],
+    ['', `${gold}SERVICES${reset}`],
     ['market <token>', 'Market intel & data'],
     ['mail status', 'AgentMail status'],
     ['mail inbox', 'Check email inbox'],
-    ['mail send', 'Send an email'],
     ['oracle roll', 'On-chain random oracle'],
     ['casino status', 'Casino status'],
-    ['wallet list', 'List wallets'],
-    ['wallet balance', 'Wallet balance'],
     ['config', 'Show configuration'],
+    ['', ''],
+    ['', `${gold}GENERAL${reset}`],
     ['banner', 'Show banner'],
     ['clear', 'Clear screen'],
     ['help', 'This help message'],
@@ -236,7 +251,13 @@ function getHelp() {
   out += `${dim}  ${'─'.repeat(50)}${reset}\r\n`;
 
   for (const [cmd, desc] of cmds) {
-    out += `  ${green}${cmd.padEnd(22)}${reset}${dim}${desc}${reset}\r\n`;
+    if (!cmd && !desc) {
+      out += '\r\n';
+    } else if (!cmd) {
+      out += `  ${desc}\r\n`;
+    } else {
+      out += `  ${green}${cmd.padEnd(22)}${reset}${dim}${desc}${reset}\r\n`;
+    }
   }
 
   out += '\r\n';

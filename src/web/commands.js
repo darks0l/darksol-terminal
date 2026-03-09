@@ -76,10 +76,20 @@ export async function handleCommand(cmd, ws) {
       return await cmdSend(args, ws);
     case 'receive':
       return await cmdReceive(ws);
-    default:
+    case 'ai':
+    case 'ask':
+    case 'chat':
+      return await cmdAI(args, ws);
+    default: {
+      // Fuzzy: if it looks like natural language, route to AI
+      const nlKeywords = /\b(swap|buy|sell|send|transfer|price|what|how|should|analyze|check|balance|gas|dca)\b/i;
+      if (nlKeywords.test(cmd)) {
+        return await cmdAI(cmd.split(/\s+/), ws);
+      }
       return {
-        output: `\r\n  ${ANSI.red}✗ Unknown command: ${cmd}${ANSI.reset}\r\n  ${ANSI.dim}Type ${ANSI.gold}help${ANSI.dim} for available commands.${ANSI.reset}\r\n\r\n`,
+        output: `\r\n  ${ANSI.red}✗ Unknown command: ${cmd}${ANSI.reset}\r\n  ${ANSI.dim}Type ${ANSI.gold}help${ANSI.dim} for commands, or ${ANSI.gold}ai <question>${ANSI.dim} to chat.${ANSI.reset}\r\n\r\n`,
       };
+    }
   }
 }
 
@@ -505,6 +515,178 @@ async function cmdConfig(ws) {
   ws.sendLine(`  ${ANSI.darkGold}Mail${ANSI.reset}          ${ANSI.white}${email}${ANSI.reset}`);
   ws.sendLine(`  ${ANSI.darkGold}AI${ANSI.reset}            ${hasKey('openai') || hasKey('anthropic') || hasKey('openrouter') || hasKey('ollama') ? `${ANSI.green}● Ready${ANSI.reset}` : `${ANSI.dim}○ Not configured${ANSI.reset}`}`);
   ws.sendLine('');
+  return {};
+}
+
+// ══════════════════════════════════════════════════
+// AI CHAT — LLM-powered assistant in the web shell
+// ══════════════════════════════════════════════════
+
+// Persistent chat engine per WebSocket connection
+const chatEngines = new WeakMap();
+
+async function cmdAI(args, ws) {
+  const input = args.join(' ').trim();
+
+  if (!input || input === 'help') {
+    ws.sendLine(`${ANSI.gold}  ◆ AI TRADING ASSISTANT${ANSI.reset}`);
+    ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+    ws.sendLine('');
+    ws.sendLine(`  ${ANSI.white}Natural language trading — just describe what you want.${ANSI.reset}`);
+    ws.sendLine('');
+    ws.sendLine(`  ${ANSI.darkGold}Usage:${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.gold}ai swap 0.1 ETH to USDC${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.gold}ai what's the price of AERO?${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.gold}ai analyze VIRTUAL on base${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.gold}ai should I DCA into ETH?${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.gold}ai send 10 USDC to 0x1234...${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.gold}ai gas on base${ANSI.reset}`);
+    ws.sendLine('');
+    ws.sendLine(`  ${ANSI.dim}Conversation history is kept for the session.${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.dim}Type ${ANSI.gold}ai clear${ANSI.dim} to reset history.${ANSI.reset}`);
+    ws.sendLine('');
+    return {};
+  }
+
+  if (input === 'clear' || input === 'reset') {
+    if (chatEngines.has(ws)) {
+      chatEngines.get(ws).clearHistory();
+    }
+    ws.sendLine(`  ${ANSI.green}✓ Chat history cleared${ANSI.reset}`);
+    ws.sendLine('');
+    return {};
+  }
+
+  if (input === 'status') {
+    const engine = chatEngines.get(ws);
+    if (engine) {
+      const usage = engine.getUsage();
+      ws.sendLine(`${ANSI.gold}  ◆ AI STATUS${ANSI.reset}`);
+      ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.darkGold}Provider${ANSI.reset}     ${ANSI.white}${usage.provider}${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.darkGold}Model${ANSI.reset}        ${ANSI.white}${usage.model}${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.darkGold}Messages${ANSI.reset}     ${ANSI.white}${usage.calls}${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.darkGold}Tokens${ANSI.reset}       ${ANSI.white}${usage.totalTokens}${ANSI.reset}`);
+      ws.sendLine('');
+    } else {
+      ws.sendLine(`  ${ANSI.dim}No active AI session${ANSI.reset}`);
+      ws.sendLine('');
+    }
+    return {};
+  }
+
+  // Initialize or retrieve the LLM engine
+  let engine = chatEngines.get(ws);
+  if (!engine) {
+    try {
+      const { createLLM } = await import('../llm/engine.js');
+      engine = await createLLM({});
+
+      const chain = getConfig('chain') || 'base';
+      const wallet = getConfig('activeWallet') || '(not set)';
+      const slippage = getConfig('slippage') || 0.5;
+
+      engine.setSystemPrompt(`You are DARKSOL Terminal's AI trading assistant running in a web terminal.
+
+You help users with:
+- Token swaps, sends, and transfers
+- Price checks and market analysis
+- DCA strategy recommendations
+- Gas estimates and chain info
+- Portfolio analysis
+- General crypto/DeFi questions
+
+USER CONTEXT:
+- Active chain: ${chain}
+- Active wallet: ${wallet}
+- Slippage: ${slippage}%
+- Supported chains: Base (default), Ethereum, Polygon, Arbitrum, Optimism
+
+RULES:
+- Be concise — this is a terminal, not a blog
+- Use short paragraphs, bullet points where helpful
+- Include risk warnings for any trade suggestions
+- Never reveal private keys or sensitive info
+- When suggesting trades, give the exact darksol CLI command
+- If you detect an actionable intent (swap, send, price, etc), include the command at the end
+
+COMMAND REFERENCE:
+- darksol trade swap -i ETH -o USDC -a 0.1
+- darksol send --to 0x... --amount 0.1 --token ETH
+- darksol price ETH AERO VIRTUAL
+- darksol gas base
+- darksol wallet balance
+- darksol portfolio
+- darksol dca create -t ETH -a 0.01 -i 1h -n 24
+- darksol ai analyze <token>`);
+
+      chatEngines.set(ws, engine);
+      ws.sendLine(`  ${ANSI.green}● AI connected${ANSI.reset} ${ANSI.dim}(${engine.provider}/${engine.model})${ANSI.reset}`);
+      ws.sendLine('');
+    } catch (err) {
+      ws.sendLine(`  ${ANSI.red}✗ AI initialization failed: ${err.message}${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.dim}Configure an API key: darksol keys add openai${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+  }
+
+  // Enrich with live price data
+  let enriched = input;
+  const tokenPattern = /\b([A-Z]{2,10})\b/g;
+  const tokens = [...new Set(input.toUpperCase().match(tokenPattern) || [])];
+  const skipWords = ['ETH', 'THE', 'FOR', 'AND', 'BUY', 'SELL', 'DCA', 'SWAP', 'WHAT', 'PRICE', 'HOW', 'MUCH', 'SEND', 'SHOULD', 'CAN', 'ANALYZE', 'CHECK'];
+
+  const priceData = [];
+  for (const t of tokens.filter(t => !skipWords.includes(t)).slice(0, 3)) {
+    try {
+      const { quickPrice } = await import('../utils/helpers.js');
+      const p = await quickPrice(t);
+      if (p) priceData.push(`${p.symbol}: $${p.price} (24h: ${p.change24h}%)`);
+    } catch {}
+  }
+  if (priceData.length > 0) {
+    enriched += `\n\n[Live market data: ${priceData.join(', ')}]`;
+  }
+
+  // Send to LLM
+  ws.sendLine(`  ${ANSI.dim}Thinking...${ANSI.reset}`);
+
+  try {
+    const result = await engine.chat(enriched);
+    const usage = engine.getUsage();
+
+    // Display response with formatting
+    ws.sendLine('');
+    ws.sendLine(`${ANSI.gold}  ◆ DARKSOL AI${ANSI.reset}`);
+    ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+
+    const lines = result.content.split('\n');
+    for (const line of lines) {
+      // Highlight code blocks
+      if (line.trim().startsWith('```')) {
+        ws.sendLine(`  ${ANSI.dim}${line}${ANSI.reset}`);
+      } else if (line.trim().startsWith('darksol ') || line.trim().startsWith('$ darksol')) {
+        // Highlight CLI commands
+        ws.sendLine(`  ${ANSI.gold}${line}${ANSI.reset}`);
+      } else if (line.trim().startsWith('⚠') || line.trim().startsWith('Warning') || line.trim().toLowerCase().startsWith('risk')) {
+        ws.sendLine(`  ${ANSI.red}${line}${ANSI.reset}`);
+      } else if (line.trim().startsWith('•') || line.trim().startsWith('-') || line.trim().startsWith('*')) {
+        ws.sendLine(`  ${ANSI.white}${line}${ANSI.reset}`);
+      } else {
+        ws.sendLine(`  ${line}`);
+      }
+    }
+
+    ws.sendLine('');
+    ws.sendLine(`  ${ANSI.dim}[${usage.calls} msgs | ${usage.totalTokens} tokens | ${engine.provider}/${engine.model}]${ANSI.reset}`);
+    ws.sendLine('');
+
+  } catch (err) {
+    ws.sendLine(`  ${ANSI.red}✗ ${err.message}${ANSI.reset}`);
+    ws.sendLine('');
+  }
+
   return {};
 }
 
