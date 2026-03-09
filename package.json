@@ -1,6 +1,6 @@
 {
   "name": "@darksol/terminal",
-  "version": "0.4.1",
+  "version": "0.4.1-beta.1",
   "description": "DARKSOL Terminal — unified CLI for all DARKSOL services. Market intel, trading, oracle, casino, and more.",
   "type": "module",
   "bin": {
@@ -43,7 +43,8 @@
     "open": "^11.0.0",
     "ora": "^8.1.0",
     "terminal-link": "^3.0.0",
-    "update-notifier": "^7.3.1"
+    "update-notifier": "^7.3.1",
+    "ws": "^8.19.0"
   },
   "engines": {
     "node": ">=18.0.0"

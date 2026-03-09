@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DARKSOL Terminal</title>
+  <meta name="description" content="DARKSOL Terminal — Ghost in the machine with teeth. All services. One terminal." />
+  <meta name="theme-color" content="#0a0a1a" />
+
+  <!-- Favicon -->
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌑</text></svg>" />
+
+  <!-- xterm.js from CDN -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css" />
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+
+  <!-- Terminal theme -->
+  <link rel="stylesheet" href="/terminal.css" />
+</head>
+<body>
+  <!-- Top bar (macOS-style window chrome) -->
+  <div class="top-bar">
+    <div class="dots">
+      <div class="dot red"></div>
+      <div class="dot yellow"></div>
+      <div class="dot green"></div>
+    </div>
+    <span class="title">DARKSOL TERMINAL</span>
+    <span class="badge">v0.4.0</span>
+  </div>
+
+  <!-- Terminal -->
+  <div id="terminal-container"></div>
+
+  <!-- Status bar -->
+  <div class="status-bar">
+    <span class="status-dot"></span>
+    <span class="status-text">Connecting...</span>
+    <span style="flex: 1;"></span>
+    <span>127.0.0.1</span>
+    <span>•</span>
+    <span>ws</span>
+  </div>
+
+  <!-- Terminal client -->
+  <script src="/terminal.js"></script>
+</body>
+</html>

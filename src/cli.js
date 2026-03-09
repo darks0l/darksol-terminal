@@ -9,6 +9,7 @@ import { showHistory } from './wallet/history.js';
 import { showGas } from './services/gas.js';
 import { watchPrice, checkPrices } from './services/watch.js';
 import { mailSetup, mailCreate, mailInboxes, mailSend, mailList, mailRead, mailReply, mailForward, mailThreads, mailDelete, mailUse, mailStats, mailStatus } from './services/mail.js';
+import { startWebShell } from './web/server.js';
 import { executeSwap } from './trading/swap.js';
 import { snipeToken, watchSnipe } from './trading/snipe.js';
 import { createDCA, listDCA, cancelDCA, runDCA } from './trading/dca.js';
@@ -397,6 +398,16 @@ export function cli(argv) {
     .command('delete [inbox-id]')
     .description('Delete an inbox')
     .action((id) => mailDelete(id));
+
+  // ═══════════════════════════════════════
+  // WEB SHELL
+  // ═══════════════════════════════════════
+  program
+    .command('serve')
+    .description('🌐 Launch web terminal in browser')
+    .option('-p, --port <port>', 'Server port', '18791')
+    .option('--no-open', 'Don\'t auto-open browser')
+    .action((opts) => startWebShell(opts));
 
   // ═══════════════════════════════════════
   // PORTFOLIO SHORTCUT
@@ -932,6 +943,7 @@ function showCommandList() {
     ['mail', 'AgentMail — email for your agent'],
     ['facilitator', 'x402 payment facilitator'],
     ['skills', 'Agent skill directory'],
+    ['serve', 'Launch web terminal in browser'],
     ['setup', 'Re-run setup wizard'],
     ['config', 'Terminal configuration'],
   ];
