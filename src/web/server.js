@@ -20,7 +20,7 @@ const __dirname = dirname(__filename);
  * Command handler registry — maps command strings to async functions
  * that return { output: string } with ANSI stripped for web
  */
-import { handleCommand } from './commands.js';
+import { handleCommand, getAIStatus } from './commands.js';
 
 export async function startWebShell(opts = {}) {
   process.on('uncaughtException', (err) => {
@@ -87,6 +87,13 @@ export async function startWebShell(opts = {}) {
     ws.send(JSON.stringify({
       type: 'output',
       data: getBanner(),
+    }));
+
+    // AI connection check right after banner
+    const aiStatus = getAIStatus();
+    ws.send(JSON.stringify({
+      type: 'output',
+      data: aiStatus,
     }));
 
     ws.on('message', async (raw) => {

@@ -1,7 +1,37 @@
 import fetch from 'node-fetch';
 import { getConfig, setConfig } from '../config/store.js';
-import { hasKey, getKeyAuto } from '../config/keys.js';
+import { hasKey, hasAnyLLM, getKeyAuto, addKeyDirect, SERVICES } from '../config/keys.js';
 import { ethers } from 'ethers';
+import { existsSync, mkdirSync, appendFileSync, readFileSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
+
+// ══════════════════════════════════════════════════
+// CHAT LOG PERSISTENCE
+// ══════════════════════════════════════════════════
+const CHAT_LOG_DIR = join(homedir(), '.darksol', 'chat-logs');
+
+function ensureChatLogDir() {
+  if (!existsSync(CHAT_LOG_DIR)) mkdirSync(CHAT_LOG_DIR, { recursive: true });
+}
+
+function logChat(role, content) {
+  ensureChatLogDir();
+  const date = new Date().toISOString().slice(0, 10);
+  const time = new Date().toISOString().slice(11, 19);
+  const file = join(CHAT_LOG_DIR, `${date}.jsonl`);
+  const entry = JSON.stringify({ ts: new Date().toISOString(), time, role, content });
+  appendFileSync(file, entry + '\n');
+}
+
+function getChatHistory(limit = 20) {
+  ensureChatLogDir();
+  const date = new Date().toISOString().slice(0, 10);
+  const file = join(CHAT_LOG_DIR, `${date}.jsonl`);
+  if (!existsSync(file)) return [];
+  const lines = readFileSync(file, 'utf-8').trim().split('\n').filter(Boolean);
+  return lines.slice(-limit).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+}
 
 // ══════════════════════════════════════════════════
 // WEB SHELL COMMAND HANDLER
@@ -38,6 +68,38 @@ const USDC_ADDRESSES = {
 };
 
 const ERC20_ABI = ['function balanceOf(address) view returns (uint256)'];
+
+/**
+ * AI status check — shown on connection
+ */
+export function getAIStatus() {
+  const gold = '\x1b[38;2;255;215;0m';
+  const green = '\x1b[38;2;0;255;136m';
+  const red = '\x1b[38;2;233;69;96m';
+  const dim = '\x1b[38;2;102;102;102m';
+  const reset = '\x1b[0m';
+
+  const providers = ['openai', 'anthropic', 'openrouter', 'ollama'];
+  const connected = providers.filter(p => hasKey(p));
+
+  if (connected.length > 0) {
+    const names = connected.map(p => SERVICES[p]?.name || p).join(', ');
+    return `  ${green}● AI ready${reset} ${dim}(${names})${reset}\r\n  ${dim}Type ${gold}ai <question>${dim} to start chatting. Chat logs saved to ~/.darksol/chat-logs/${reset}\r\n\r\n`;
+  }
+
+  return [
+    `  ${red}○ AI not configured${reset} ${dim}— no LLM provider connected${reset}`,
+    '',
+    `  ${gold}Quick setup — pick one:${reset}`,
+    `  ${green}keys add openai sk-...${reset}         ${dim}OpenAI (GPT-4o)${reset}`,
+    `  ${green}keys add anthropic sk-ant-...${reset}   ${dim}Anthropic (Claude)${reset}`,
+    `  ${green}keys add openrouter sk-or-...${reset}   ${dim}OpenRouter (any model)${reset}`,
+    `  ${green}keys add ollama http://...${reset}      ${dim}Ollama (free, local)${reset}`,
+    '',
+    `  ${dim}Or run the full setup wizard: ${gold}darksol setup${reset}`,
+    '',
+  ].join('\r\n');
+}
 
 /**
  * Handle a command string, return { output } or stream via ws helpers
@@ -80,6 +142,12 @@ export async function handleCommand(cmd, ws) {
     case 'ask':
     case 'chat':
       return await cmdAI(args, ws);
+    case 'keys':
+    case 'llm':
+      return await cmdKeys(args, ws);
+    case 'logs':
+    case 'chatlog':
+      return await cmdChatLogs(args, ws);
     default: {
       // Fuzzy: if it looks like natural language, route to AI
       const nlKeywords = /\b(swap|buy|sell|send|transfer|price|what|how|should|analyze|check|balance|gas|dca)\b/i;
@@ -649,12 +717,18 @@ COMMAND REFERENCE:
     enriched += `\n\n[Live market data: ${priceData.join(', ')}]`;
   }
 
+  // Log user message
+  logChat('user', input);
+
   // Send to LLM
   ws.sendLine(`  ${ANSI.dim}Thinking...${ANSI.reset}`);
 
   try {
     const result = await engine.chat(enriched);
     const usage = engine.getUsage();
+
+    // Log AI response
+    logChat('assistant', result.content);
 
     // Display response with formatting
     ws.sendLine('');
@@ -687,6 +761,130 @@ COMMAND REFERENCE:
     ws.sendLine('');
   }
 
+  return {};
+}
+
+// ══════════════════════════════════════════════════
+// KEYS — LLM provider configuration from web shell
+// ══════════════════════════════════════════════════
+async function cmdKeys(args, ws) {
+  const sub = args[0]?.toLowerCase();
+
+  if (sub === 'add' && args[1]) {
+    const service = args[1].toLowerCase();
+    const key = args[2];
+    const svc = SERVICES[service];
+
+    if (!svc) {
+      ws.sendLine(`  ${ANSI.red}✗ Unknown service: ${service}${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.dim}Available: openai, anthropic, openrouter, ollama${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+
+    if (!key) {
+      ws.sendLine(`  ${ANSI.red}✗ No key provided${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.dim}Usage: keys add ${service} <your-api-key>${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.dim}Get a key: ${svc.docsUrl}${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+
+    if (svc.validate && !svc.validate(key)) {
+      ws.sendLine(`  ${ANSI.red}✗ Invalid key format for ${svc.name}${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+
+    try {
+      addKeyDirect(service, key);
+      ws.sendLine(`  ${ANSI.green}✓ ${svc.name} key stored securely${ANSI.reset}`);
+
+      // Clear cached engine so it picks up new key
+      chatEngines.delete(ws);
+      ws.sendLine(`  ${ANSI.dim}AI session refreshed — type ${ANSI.gold}ai <question>${ANSI.dim} to chat${ANSI.reset}`);
+      ws.sendLine('');
+    } catch (err) {
+      ws.sendLine(`  ${ANSI.red}✗ Failed to store key: ${err.message}${ANSI.reset}`);
+      ws.sendLine('');
+    }
+    return {};
+  }
+
+  if (sub === 'remove' && args[1]) {
+    const service = args[1].toLowerCase();
+    // Can't remove via web shell without password prompt — point to CLI
+    ws.sendLine(`  ${ANSI.dim}To remove keys, use the CLI:${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.gold}darksol keys remove ${service}${ANSI.reset}`);
+    ws.sendLine('');
+    return {};
+  }
+
+  // Default: show status
+  ws.sendLine(`${ANSI.gold}  ◆ API KEYS / LLM CONFIG${ANSI.reset}`);
+  ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+  ws.sendLine('');
+
+  const llmProviders = ['openai', 'anthropic', 'openrouter', 'ollama'];
+  ws.sendLine(`  ${ANSI.gold}LLM Providers:${ANSI.reset}`);
+  for (const p of llmProviders) {
+    const svc = SERVICES[p];
+    const has = hasKey(p);
+    const status = has ? `${ANSI.green}● Connected${ANSI.reset}` : `${ANSI.dim}○ Not set${ANSI.reset}`;
+    ws.sendLine(`    ${status}  ${ANSI.white}${svc.name.padEnd(20)}${ANSI.reset}${ANSI.dim}${svc.description}${ANSI.reset}`);
+  }
+
+  ws.sendLine('');
+  ws.sendLine(`  ${ANSI.gold}Quick Setup:${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.green}keys add openai sk-...${ANSI.reset}       ${ANSI.dim}Add OpenAI key${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.green}keys add anthropic sk-ant-...${ANSI.reset} ${ANSI.dim}Add Anthropic key${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.green}keys add openrouter sk-or-...${ANSI.reset} ${ANSI.dim}Add OpenRouter key${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.green}keys add ollama http://...${ANSI.reset}   ${ANSI.dim}Add Ollama host${ANSI.reset}`);
+  ws.sendLine('');
+
+  const dataProviders = ['coingecko', 'dexscreener', 'alchemy', 'agentmail'];
+  ws.sendLine(`  ${ANSI.gold}Other Services:${ANSI.reset}`);
+  for (const p of dataProviders) {
+    const svc = SERVICES[p];
+    if (!svc) continue;
+    const has = hasKey(p);
+    const status = has ? `${ANSI.green}●${ANSI.reset}` : `${ANSI.dim}○${ANSI.reset}`;
+    ws.sendLine(`    ${status}  ${ANSI.white}${svc.name.padEnd(20)}${ANSI.reset}${ANSI.dim}${svc.description}${ANSI.reset}`);
+  }
+
+  ws.sendLine('');
+  ws.sendLine(`  ${ANSI.dim}Keys are AES-256-GCM encrypted at ~/.darksol/keys/vault.json${ANSI.reset}`);
+  ws.sendLine('');
+  return {};
+}
+
+// ══════════════════════════════════════════════════
+// CHAT LOGS — View conversation history
+// ══════════════════════════════════════════════════
+async function cmdChatLogs(args, ws) {
+  const limit = parseInt(args[0]) || 20;
+  const history = getChatHistory(limit);
+
+  ws.sendLine(`${ANSI.gold}  ◆ CHAT LOG${ANSI.reset}`);
+  ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+  ws.sendLine('');
+
+  if (history.length === 0) {
+    ws.sendLine(`  ${ANSI.dim}No chat history today. Start with: ai <question>${ANSI.reset}`);
+    ws.sendLine('');
+    return {};
+  }
+
+  for (const entry of history) {
+    const time = entry.time || '';
+    const role = entry.role === 'user' ? `${ANSI.gold}You${ANSI.reset}` : `${ANSI.green}AI${ANSI.reset}`;
+    const preview = entry.content.split('\n')[0].slice(0, 80);
+    ws.sendLine(`  ${ANSI.dim}${time}${ANSI.reset} ${role}: ${preview}${entry.content.length > 80 ? ANSI.dim + '...' + ANSI.reset : ''}`);
+  }
+
+  ws.sendLine('');
+  ws.sendLine(`  ${ANSI.dim}Logs: ~/.darksol/chat-logs/ (${history.length} messages shown)${ANSI.reset}`);
+  ws.sendLine('');
   return {};
 }
 
