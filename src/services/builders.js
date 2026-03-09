@@ -1,4 +1,4 @@
-import fetch from 'node-fetch';
+import { fetchJSON } from '../utils/fetch.js';
 import { getServiceURL } from '../config/store.js';
 import { theme } from '../ui/theme.js';
 import { spinner, table, kvDisplay, error } from '../ui/components.js';
@@ -9,8 +9,7 @@ const getURL = () => getServiceURL('builders') || 'https://builders.darksol.net'
 export async function buildersLeaderboard(opts = {}) {
   const spin = spinner('Loading builder leaderboard...').start();
   try {
-    const resp = await fetch(`${getURL()}/api/leaderboard?limit=${opts.limit || 20}`);
-    const data = await resp.json();
+    const data = await fetchJSON(`${getURL()}/api/leaderboard?limit=${opts.limit || 20}`);
     spin.succeed('Leaderboard loaded');
 
     showSection('ERC-8021 BUILDER LEADERBOARD');
@@ -34,8 +33,7 @@ export async function buildersLeaderboard(opts = {}) {
 export async function buildersLookup(code) {
   const spin = spinner(`Looking up builder: ${code}...`).start();
   try {
-    const resp = await fetch(`${getURL()}/api/builders/${code}`);
-    const data = await resp.json();
+    const data = await fetchJSON(`${getURL()}/api/builders/${code}`);
     spin.succeed('Builder found');
 
     showSection(`BUILDER — ${code}`);
@@ -49,8 +47,7 @@ export async function buildersLookup(code) {
 export async function buildersFeed(opts = {}) {
   const spin = spinner('Loading builder feed...').start();
   try {
-    const resp = await fetch(`${getURL()}/api/feed?limit=${opts.limit || 20}`);
-    const data = await resp.json();
+    const data = await fetchJSON(`${getURL()}/api/feed?limit=${opts.limit || 20}`);
     spin.succeed('Feed loaded');
 
     showSection('BUILDER FEED');

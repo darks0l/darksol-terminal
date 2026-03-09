@@ -1,3 +1,4 @@
+import { fetchJSON } from '../utils/fetch.js';
 import fetch from 'node-fetch';
 import { getServiceURL } from '../config/store.js';
 import { theme } from '../ui/theme.js';
@@ -9,7 +10,7 @@ const getURL = () => getServiceURL('casino') || 'https://casino.darksol.net';
 export async function casinoBet(game, opts = {}) {
   const spin = spinner(`Placing ${game} bet...`).start();
   try {
-    const resp = await fetch(`${getURL()}/api/bet`, {
+    const data = await fetchJSON(`${getURL()}/api/bet`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
@@ -19,7 +20,6 @@ export async function casinoBet(game, opts = {}) {
         wallet: opts.wallet,
       }),
     });
-    const data = await resp.json();
     spin.succeed('Bet placed');
 
     showSection(`CASINO — ${game.toUpperCase()}`);
@@ -40,8 +40,7 @@ export async function casinoBet(game, opts = {}) {
 export async function casinoTables() {
   const spin = spinner('Loading tables...').start();
   try {
-    const resp = await fetch(`${getURL()}/api/tables`);
-    const data = await resp.json();
+    const data = await fetchJSON(`${getURL()}/api/tables`);
     spin.succeed('Tables loaded');
 
     showSection('CASINO TABLES');
@@ -66,8 +65,7 @@ export async function casinoTables() {
 export async function casinoStats() {
   const spin = spinner('Loading stats...').start();
   try {
-    const resp = await fetch(`${getURL()}/api/stats`);
-    const data = await resp.json();
+    const data = await fetchJSON(`${getURL()}/api/stats`);
     spin.succeed('Stats loaded');
 
     showSection('CASINO STATS');
@@ -81,8 +79,7 @@ export async function casinoStats() {
 export async function casinoReceipt(id) {
   const spin = spinner(`Loading receipt ${id}...`).start();
   try {
-    const resp = await fetch(`${getURL()}/api/receipt/${id}`);
-    const data = await resp.json();
+    const data = await fetchJSON(`${getURL()}/api/receipt/${id}`);
     spin.succeed('Receipt loaded');
 
     showSection(`CASINO RECEIPT — ${id}`);
@@ -92,3 +89,4 @@ export async function casinoReceipt(id) {
     error(err.message);
   }
 }
+

@@ -1,4 +1,4 @@
-import fetch from 'node-fetch';
+import { fetchJSON } from '../utils/fetch.js';
 import { getServiceURL } from '../config/store.js';
 import { theme } from '../ui/theme.js';
 import { spinner, kvDisplay, error } from '../ui/components.js';
@@ -9,8 +9,7 @@ const getURL = () => getServiceURL('facilitator') || 'https://facilitator.darkso
 export async function facilitatorHealth() {
   const spin = spinner('Checking facilitator...').start();
   try {
-    const resp = await fetch(`${getURL()}/api/health`);
-    const data = await resp.json();
+    const data = await fetchJSON(`${getURL()}/api/health`);
     spin.succeed('Facilitator online');
 
     showSection('FACILITATOR STATUS');
@@ -24,12 +23,11 @@ export async function facilitatorHealth() {
 export async function facilitatorVerify(payment) {
   const spin = spinner('Verifying payment...').start();
   try {
-    const resp = await fetch(`${getURL()}/api/verify`, {
+    const data = await fetchJSON(`${getURL()}/api/verify`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(typeof payment === 'string' ? JSON.parse(payment) : payment),
     });
-    const data = await resp.json();
     spin.succeed(data.valid ? 'Payment valid' : 'Payment invalid');
 
     showSection('PAYMENT VERIFICATION');
@@ -43,12 +41,11 @@ export async function facilitatorVerify(payment) {
 export async function facilitatorSettle(payment) {
   const spin = spinner('Settling on-chain...').start();
   try {
-    const resp = await fetch(`${getURL()}/api/settle`, {
+    const data = await fetchJSON(`${getURL()}/api/settle`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(typeof payment === 'string' ? JSON.parse(payment) : payment),
     });
-    const data = await resp.json();
     spin.succeed('Settlement complete');
 
     showSection('SETTLEMENT');

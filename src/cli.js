@@ -787,6 +787,42 @@ export function cli(argv) {
       }
     });
 
+  // ═══════════════════════════════════════
+  // FUZZY / NATURAL LANGUAGE FALLBACK
+  // ═══════════════════════════════════════
+  // If someone types something Commander doesn't recognize,
+  // try routing it through AI before saying "unknown command"
+  program.on('command:*', async (operands) => {
+    const input = operands.join(' ');
+    const { hasAnyLLM } = await import('./config/keys.js');
+
+    if (hasAnyLLM()) {
+      const { parseIntent } = await import('./llm/intent.js');
+      const { info, error: showError } = await import('./ui/components.js');
+
+      console.log('');
+      info(`"${input}" isn't a command — asking AI...`);
+      console.log('');
+
+      try {
+        const result = await parseIntent(input);
+        if (result && result.action !== 'error' && result.action !== 'unknown') {
+          const { executeIntent } = await import('./llm/intent.js');
+          await executeIntent(result);
+          return;
+        }
+      } catch {}
+
+      showError(`Unknown command: ${input}`);
+      info('Try: darksol help');
+    } else {
+      const { error: showError, info } = await import('./ui/components.js');
+      showError(`Unknown command: ${input}`);
+      info('Tip: Set up AI (darksol setup) for natural language commands');
+      info('Run: darksol help');
+    }
+  });
+
   program.parse(argv);
 }
 
