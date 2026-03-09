@@ -34,6 +34,13 @@ let menuIndex = 0;
 let menuId = '';
 let menuTitle = '';
 
+// ── PROMPT STATE (text input) ─────────────────
+let promptActive = false;
+let promptId = '';
+let promptMeta = {};
+let promptInput = '';
+let promptMask = false;
+
 async function init() {
   term = new Terminal({
     theme: {
@@ -84,6 +91,48 @@ async function init() {
   term.onKey(({ key, domEvent }) => {
     const code = domEvent.keyCode;
     const ctrl = domEvent.ctrlKey;
+
+    // ── PROMPT MODE (text input) ──
+    if (promptActive) {
+      if (code === 13) { // Enter — submit
+        promptActive = false;
+        term.write('\r\n');
+        if (promptInput) {
+          ws.send(JSON.stringify({
+            type: 'prompt_response',
+            id: promptId,
+            value: promptInput,
+            meta: promptMeta,
+          }));
+        } else {
+          term.write(`  ${A.dim}Cancelled${A.r}\r\n\r\n`);
+          writePrompt();
+        }
+        promptInput = '';
+        return;
+      }
+      if (code === 27 || (ctrl && code === 67)) { // Esc/Ctrl+C — cancel
+        promptActive = false;
+        promptInput = '';
+        term.write('\r\n');
+        term.write(`  ${A.dim}Cancelled${A.r}\r\n\r\n`);
+        writePrompt();
+        return;
+      }
+      if (code === 8) { // Backspace
+        if (promptInput.length > 0) {
+          promptInput = promptInput.slice(0, -1);
+          term.write('\b \b');
+        }
+        return;
+      }
+      // Printable chars
+      if (key.length === 1 && !ctrl) {
+        promptInput += key;
+        term.write(promptMask ? '●' : key);
+      }
+      return;
+    }
 
     // ── MENU MODE ──
     if (menuActive) {
@@ -188,8 +237,13 @@ async function init() {
     if (menuActive) return;
     if (data.length > 1 && !data.startsWith('\x1b')) {
       const clean = data.replace(/[\r\n]/g, '');
-      currentLine += clean;
-      term.write(clean);
+      if (promptActive) {
+        promptInput += clean;
+        term.write(promptMask ? '●'.repeat(clean.length) : clean);
+      } else {
+        currentLine += clean;
+        term.write(clean);
+      }
     }
   });
 
@@ -277,8 +331,15 @@ function connectWS() {
         term.clear();
         writePrompt();
       } else if (msg.type === 'menu') {
-        // Server is requesting user to pick from a menu
         showMenu(msg.id, msg.title, msg.items);
+      } else if (msg.type === 'prompt') {
+        // Server wants text input (e.g. API key)
+        promptActive = true;
+        promptId = msg.id;
+        promptMeta = { service: msg.service, ...msg };
+        promptInput = '';
+        promptMask = msg.mask || false;
+        term.write(`  ${A.gold}${msg.label || 'Input:'}${A.r} `);
       }
     } catch {
       term.write(event.data);

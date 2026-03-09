@@ -100,6 +100,27 @@ export async function startWebShell(opts = {}) {
       try {
         const msg = JSON.parse(raw.toString());
 
+        if (msg.type === 'prompt_response') {
+          // User typed a response to a prompt (e.g. API key input)
+          try {
+            const { handlePromptResponse } = await import('./commands.js');
+            const result = await handlePromptResponse(msg.id, msg.value, msg.meta || {}, {
+              send: (text) => ws.send(JSON.stringify({ type: 'output', data: text })),
+              sendLine: (text) => ws.send(JSON.stringify({ type: 'output', data: text + '\r\n' })),
+              sendMenu: (id, title, items) => ws.send(JSON.stringify({ type: 'menu', id, title, items })),
+            });
+            if (result?.output) {
+              ws.send(JSON.stringify({ type: 'output', data: result.output }));
+            }
+          } catch (err) {
+            ws.send(JSON.stringify({
+              type: 'output',
+              data: `\r\n  \x1b[31m✗ Error: ${err.message}\x1b[0m\r\n`,
+            }));
+          }
+          return;
+        }
+
         if (msg.type === 'menu_select') {
           // User selected something from an interactive menu
           try {

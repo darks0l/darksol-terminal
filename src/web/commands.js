@@ -135,6 +135,33 @@ export async function handleMenuSelect(id, value, item, ws) {
       ws.sendLine('');
       return {};
 
+    case 'keys_provider':
+      if (value === 'back') {
+        ws.sendLine('');
+        return {};
+      }
+      // Ask for the key via a prompt
+      const svc = SERVICES[value];
+      if (!svc) return {};
+      ws.sendLine('');
+      ws.sendLine(`  ${ANSI.gold}◆ ${svc.name}${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.dim}Docs: ${svc.docsUrl}${ANSI.reset}`);
+      if (value === 'ollama') {
+        ws.sendLine(`  ${ANSI.dim}Enter your Ollama host URL (e.g. http://localhost:11434)${ANSI.reset}`);
+      } else {
+        ws.sendLine(`  ${ANSI.dim}Paste your API key below:${ANSI.reset}`);
+      }
+      ws.sendLine('');
+      // Send a prompt request to the client
+      ws.send(JSON.stringify({
+        type: 'prompt',
+        id: 'keys_input',
+        label: `${svc.name} key:`,
+        service: value,
+        mask: value !== 'ollama', // mask API keys, not URLs
+      }));
+      return {};
+
     case 'config_action':
       if (value === 'chain') {
         const chains = ['base', 'ethereum', 'arbitrum', 'optimism', 'polygon'];
@@ -154,6 +181,52 @@ export async function handleMenuSelect(id, value, item, ws) {
 
     case 'main_menu':
       return await handleCommand(value, ws);
+  }
+
+  return {};
+}
+
+/**
+ * Handle text prompt responses from the client
+ */
+export async function handlePromptResponse(id, value, meta, ws) {
+  if (id === 'keys_input') {
+    const service = meta.service;
+    const svc = SERVICES[service];
+    if (!svc || !value) {
+      ws.sendLine(`  ${ANSI.red}✗ Cancelled${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+
+    // Validate
+    if (svc.validate && !svc.validate(value)) {
+      ws.sendLine(`  ${ANSI.red}✗ Invalid format for ${svc.name}${ANSI.reset}`);
+      if (service === 'openai') ws.sendLine(`  ${ANSI.dim}Key should start with sk-${ANSI.reset}`);
+      if (service === 'anthropic') ws.sendLine(`  ${ANSI.dim}Key should start with sk-ant-${ANSI.reset}`);
+      if (service === 'openrouter') ws.sendLine(`  ${ANSI.dim}Key should start with sk-or-${ANSI.reset}`);
+      if (service === 'ollama') ws.sendLine(`  ${ANSI.dim}Should be a URL like http://localhost:11434${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+
+    // Store it
+    try {
+      addKeyDirect(service, value);
+      ws.sendLine(`  ${ANSI.green}✓ ${svc.name} key stored securely${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.dim}Encrypted at ~/.darksol/keys/vault.json${ANSI.reset}`);
+      ws.sendLine('');
+
+      // Clear cached AI engine
+      // (chatEngines is WeakMap keyed by ws, but we can't access the real ws here — 
+      //  the engine will reinit on next ai command since keys changed)
+      ws.sendLine(`  ${ANSI.green}● AI ready!${ANSI.reset} ${ANSI.dim}Type ${ANSI.gold}ai <question>${ANSI.dim} to start chatting.${ANSI.reset}`);
+      ws.sendLine('');
+    } catch (err) {
+      ws.sendLine(`  ${ANSI.red}✗ Failed: ${err.message}${ANSI.reset}`);
+      ws.sendLine('');
+    }
+    return {};
   }
 
   return {};
@@ -180,13 +253,11 @@ export function getAIStatus() {
   return [
     `  ${red}○ AI not configured${reset} ${dim}— no LLM provider connected${reset}`,
     '',
-    `  ${gold}Quick setup — pick one:${reset}`,
+    `  ${dim}Type ${gold}keys${dim} to set up an LLM provider, or paste directly:${reset}`,
     `  ${green}keys add openai sk-...${reset}         ${dim}OpenAI (GPT-4o)${reset}`,
     `  ${green}keys add anthropic sk-ant-...${reset}   ${dim}Anthropic (Claude)${reset}`,
     `  ${green}keys add openrouter sk-or-...${reset}   ${dim}OpenRouter (any model)${reset}`,
     `  ${green}keys add ollama http://...${reset}      ${dim}Ollama (free, local)${reset}`,
-    '',
-    `  ${dim}Or run the full setup wizard: ${gold}darksol setup${reset}`,
     '',
   ].join('\r\n');
 }
@@ -1013,6 +1084,19 @@ async function cmdKeys(args, ws) {
   ws.sendLine(`  ${ANSI.green}keys add openrouter sk-or-...${ANSI.reset} ${ANSI.dim}Add OpenRouter key${ANSI.reset}`);
   ws.sendLine(`  ${ANSI.green}keys add ollama http://...${ANSI.reset}   ${ANSI.dim}Add Ollama host${ANSI.reset}`);
   ws.sendLine('');
+
+  // Interactive menu to add keys
+  const llmItems = llmProviders.map(p => {
+    const svc = SERVICES[p];
+    const has = hasKey(p);
+    return {
+      value: p,
+      label: `${has ? '✓' : '+'} ${svc.name}`,
+      desc: has ? 'Connected — replace key' : `Add key (${svc.docsUrl})`,
+    };
+  });
+  llmItems.push({ value: 'back', label: '← Back', desc: '' });
+  ws.sendMenu('keys_provider', '◆ Add / Update API Key', llmItems);
 
   const dataProviders = ['coingecko', 'dexscreener', 'alchemy', 'agentmail'];
   ws.sendLine(`  ${ANSI.gold}Other Services:${ANSI.reset}`);
