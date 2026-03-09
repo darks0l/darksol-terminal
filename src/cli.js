@@ -3,7 +3,7 @@ import { showBanner, showMiniBanner, showSection } from './ui/banner.js';
 import { theme } from './ui/theme.js';
 import { kvDisplay, success, error, warn, info } from './ui/components.js';
 import { getConfig, setConfig, getAllConfig, getRPC, setRPC, configPath } from './config/store.js';
-import { createWallet, importWallet, showWallets, getBalance, useWallet, exportWallet } from './wallet/manager.js';
+import { createWallet, importWallet, showWallets, getBalance, useWallet, exportWallet, sendFunds, receiveAddress } from './wallet/manager.js';
 import { showPortfolio } from './wallet/portfolio.js';
 import { showHistory } from './wallet/history.js';
 import { showGas } from './services/gas.js';
@@ -72,6 +72,20 @@ export function cli(argv) {
     .command('use <name>')
     .description('Set active wallet')
     .action((name) => useWallet(name));
+
+  wallet
+    .command('send')
+    .description('Send ETH or tokens')
+    .option('--to <address>', 'Recipient address')
+    .option('-a, --amount <amount>', 'Amount to send')
+    .option('-t, --token <token>', 'Token (ETH, USDC, or 0x address)', 'ETH')
+    .option('-w, --wallet <name>', 'Wallet to send from')
+    .action((opts) => sendFunds(opts));
+
+  wallet
+    .command('receive [name]')
+    .description('Show your address for receiving funds')
+    .action((name) => receiveAddress(name));
 
   wallet
     .command('export [name]')
@@ -419,6 +433,25 @@ export function cli(argv) {
     .command('portfolio [name]')
     .description('Multi-chain balance view (shortcut for: wallet portfolio)')
     .action((name) => showPortfolio(name));
+
+  // ═══════════════════════════════════════
+  // SEND SHORTCUT
+  // ═══════════════════════════════════════
+  program
+    .command('send')
+    .description('Send ETH or tokens (shortcut for: wallet send)')
+    .option('--to <address>', 'Recipient address')
+    .option('-a, --amount <amount>', 'Amount')
+    .option('-t, --token <token>', 'Token (ETH, USDC, or 0x address)', 'ETH')
+    .action((opts) => sendFunds(opts));
+
+  // ═══════════════════════════════════════
+  // RECEIVE SHORTCUT
+  // ═══════════════════════════════════════
+  program
+    .command('receive')
+    .description('Show your address for receiving (shortcut for: wallet receive)')
+    .action(() => receiveAddress());
 
   // ═══════════════════════════════════════
   // GAS COMMAND
@@ -965,6 +998,8 @@ function showCommandList() {
   showSection('COMMANDS');
   const commands = [
     ['wallet', 'Create, import, manage wallets'],
+    ['send', 'Send ETH or tokens'],
+    ['receive', 'Show address to receive funds'],
     ['portfolio', 'Multi-chain balance view'],
     ['price', 'Quick token price check'],
     ['watch', 'Live price monitoring + alerts'],

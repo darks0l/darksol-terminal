@@ -248,6 +248,270 @@ export function useWallet(name) {
   success(`Active wallet set to "${name}"`);
 }
 
+// ═══════════════════════════════════════
+// SEND — ETH and ERC-20 transfers
+// ═══════════════════════════════════════
+
+const COMMON_TOKENS = {
+  base:     { USDC: { addr: '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913', decimals: 6 } },
+  ethereum: { USDC: { addr: '0xA0b86991c6218b36c1d19D4a2e9Eb0cE3606eB48', decimals: 6 }, USDT: { addr: '0xdAC17F958D2ee523a2206206994597C13D831ec7', decimals: 6 } },
+  arbitrum: { USDC: { addr: '0xaf88d065e77c8cC2239327C5EDb3A432268e5831', decimals: 6 } },
+  optimism: { USDC: { addr: '0x0b2C639c533813f4Aa9D7837CAf62653d097Ff85', decimals: 6 } },
+  polygon:  { USDC: { addr: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359', decimals: 6 } },
+};
+
+const ERC20_SEND_ABI = [
+  'function transfer(address to, uint256 amount) returns (bool)',
+  'function balanceOf(address) view returns (uint256)',
+  'function decimals() view returns (uint8)',
+  'function symbol() view returns (string)',
+];
+
+export async function sendFunds(opts = {}) {
+  const name = opts.wallet || getConfig('activeWallet');
+  if (!name) {
+    error('No active wallet. Set one: darksol wallet use <name>');
+    return;
+  }
+
+  const chain = getConfig('chain') || 'base';
+  const walletData = loadWallet(name);
+
+  // Interactive prompt if flags not provided
+  let to = opts.to;
+  let amount = opts.amount;
+  let token = opts.token || 'ETH';
+
+  console.log('');
+  showSection(`SEND — ${name}`);
+  console.log(theme.dim(`  ${walletData.address}`));
+  console.log(theme.dim(`  Chain: ${chain}`));
+  console.log('');
+
+  if (!to) {
+    ({ to } = await inquirer.prompt([{
+      type: 'input',
+      name: 'to',
+      message: theme.gold('Recipient address (0x...):'),
+      validate: (v) => {
+        if (!v.startsWith('0x') || v.length !== 42) return 'Enter a valid 0x address (42 chars)';
+        return true;
+      },
+    }]));
+  }
+
+  if (!amount) {
+    // Show available tokens
+    const tokenChoices = ['ETH'];
+    const chainTokens = COMMON_TOKENS[chain] || {};
+    Object.keys(chainTokens).forEach(t => tokenChoices.push(t));
+    tokenChoices.push('Custom token (paste address)');
+
+    ({ token } = await inquirer.prompt([{
+      type: 'list',
+      name: 'token',
+      message: theme.gold('What to send?'),
+      choices: tokenChoices,
+    }]));
+
+    if (token === 'Custom token (paste address)') {
+      ({ token } = await inquirer.prompt([{
+        type: 'input',
+        name: 'token',
+        message: theme.gold('Token contract address (0x...):'),
+        validate: (v) => v.startsWith('0x') && v.length === 42 || 'Invalid address',
+      }]));
+    }
+
+    ({ amount } = await inquirer.prompt([{
+      type: 'input',
+      name: 'amount',
+      message: theme.gold(`Amount to send (${token}):`),
+      validate: (v) => parseFloat(v) > 0 || 'Enter a positive amount',
+    }]));
+  }
+
+  // Password
+  const { password } = await inquirer.prompt([{
+    type: 'password',
+    name: 'password',
+    message: theme.gold('Wallet password:'),
+    mask: '●',
+  }]);
+
+  const spin = spinner('Preparing transaction...').start();
+
+  try {
+    const { signer, provider, address } = await getSigner(name, password);
+
+    const isETH = token.toUpperCase() === 'ETH';
+    const isSymbol = !token.startsWith('0x');
+    let tokenAddr = null;
+    let tokenDecimals = 18;
+    let tokenSymbol = token.toUpperCase();
+
+    if (!isETH) {
+      // Resolve token
+      const chainTokens = COMMON_TOKENS[chain] || {};
+      if (isSymbol && chainTokens[token.toUpperCase()]) {
+        const info = chainTokens[token.toUpperCase()];
+        tokenAddr = info.addr;
+        tokenDecimals = info.decimals;
+        tokenSymbol = token.toUpperCase();
+      } else if (token.startsWith('0x')) {
+        tokenAddr = token;
+        const contract = new ethers.Contract(tokenAddr, ERC20_SEND_ABI, provider);
+        tokenDecimals = Number(await contract.decimals());
+        tokenSymbol = await contract.symbol();
+      } else {
+        spin.fail('Unknown token');
+        error(`Token "${token}" not recognized. Use a symbol (USDC) or contract address.`);
+        return;
+      }
+    }
+
+    // Check balance
+    let balanceStr;
+    if (isETH) {
+      const balance = await provider.getBalance(address);
+      const amountWei = ethers.parseEther(amount);
+      balanceStr = `${parseFloat(ethers.formatEther(balance)).toFixed(6)} ETH`;
+      if (balance < amountWei) {
+        spin.fail('Insufficient balance');
+        error(`Need ${amount} ETH, have ${balanceStr}`);
+        return;
+      }
+    } else {
+      const contract = new ethers.Contract(tokenAddr, ERC20_SEND_ABI, provider);
+      const balance = await contract.balanceOf(address);
+      const amountParsed = ethers.parseUnits(amount, tokenDecimals);
+      balanceStr = `${parseFloat(ethers.formatUnits(balance, tokenDecimals)).toFixed(tokenDecimals > 6 ? 6 : 2)} ${tokenSymbol}`;
+      if (balance < amountParsed) {
+        spin.fail('Insufficient balance');
+        error(`Need ${amount} ${tokenSymbol}, have ${balanceStr}`);
+        return;
+      }
+    }
+
+    // Estimate gas
+    let gasEstimate;
+    const feeData = await provider.getFeeData();
+    if (isETH) {
+      gasEstimate = 21000n;
+    } else {
+      const contract = new ethers.Contract(tokenAddr, ERC20_SEND_ABI, signer);
+      gasEstimate = await contract.transfer.estimateGas(to, ethers.parseUnits(amount, tokenDecimals));
+    }
+    const gasCostWei = gasEstimate * (feeData.gasPrice || 0n);
+    const gasCostEth = parseFloat(ethers.formatEther(gasCostWei));
+
+    spin.succeed('Transaction ready');
+
+    // Confirmation
+    console.log('');
+    showSection('SEND PREVIEW');
+    kvDisplay([
+      ['From', `${name} (${address.slice(0, 6)}...${address.slice(-4)})`],
+      ['To', to],
+      ['Amount', `${amount} ${tokenSymbol}`],
+      ['Balance', balanceStr],
+      ['Est. Gas', `${gasCostEth.toFixed(6)} ETH`],
+      ['Chain', chain],
+    ]);
+    console.log('');
+
+    const { confirm } = await inquirer.prompt([{
+      type: 'confirm',
+      name: 'confirm',
+      message: theme.accent('Send this transaction?'),
+      default: false,
+    }]);
+
+    if (!confirm) {
+      warn('Transaction cancelled');
+      return;
+    }
+
+    const txSpin = spinner('Sending...').start();
+
+    let tx;
+    if (isETH) {
+      tx = await signer.sendTransaction({
+        to,
+        value: ethers.parseEther(amount),
+      });
+    } else {
+      const contract = new ethers.Contract(tokenAddr, ERC20_SEND_ABI, signer);
+      tx = await contract.transfer(to, ethers.parseUnits(amount, tokenDecimals));
+    }
+
+    txSpin.text = 'Waiting for confirmation...';
+    const receipt = await tx.wait();
+
+    txSpin.succeed(theme.success('Transaction confirmed!'));
+
+    console.log('');
+    showSection('TRANSACTION RECEIPT');
+    kvDisplay([
+      ['TX Hash', receipt.hash],
+      ['Block', receipt.blockNumber.toString()],
+      ['Gas Used', receipt.gasUsed.toString()],
+      ['Status', receipt.status === 1 ? theme.success('✓ Success') : theme.error('✗ Failed')],
+    ]);
+    console.log('');
+
+  } catch (err) {
+    spin.fail('Send failed');
+    if (err.message.includes('incorrect password') || err.message.includes('bad decrypt')) {
+      error('Wrong password');
+    } else {
+      error(err.message);
+    }
+  }
+}
+
+// ═══════════════════════════════════════
+// RECEIVE — Show address + QR-friendly display
+// ═══════════════════════════════════════
+
+export async function receiveAddress(walletName) {
+  const name = walletName || getConfig('activeWallet');
+  if (!name) {
+    error('No active wallet. Set one: darksol wallet use <name>');
+    return;
+  }
+
+  const walletData = loadWallet(name);
+  const chain = getConfig('chain') || 'base';
+
+  console.log('');
+  showSection(`RECEIVE — ${name}`);
+  console.log('');
+  console.log(theme.gold('  Your address:'));
+  console.log('');
+  console.log(theme.gold.bold(`  ${walletData.address}`));
+  console.log('');
+
+  // Visual box around address for easy copy
+  const addr = walletData.address;
+  const boxWidth = addr.length + 4;
+  console.log(theme.dim(`  ┌${'─'.repeat(boxWidth)}┐`));
+  console.log(theme.dim(`  │  `) + theme.gold(addr) + theme.dim(`  │`));
+  console.log(theme.dim(`  └${'─'.repeat(boxWidth)}┘`));
+  console.log('');
+
+  console.log(theme.dim('  This address works on ALL EVM chains:'));
+  console.log(theme.dim('  Base • Ethereum • Arbitrum • Optimism • Polygon'));
+  console.log('');
+  console.log(theme.dim(`  Active chain: ${theme.gold(chain)}`));
+  console.log(theme.dim('  Make sure the sender is on the same chain!'));
+  console.log('');
+
+  warn('Double-check the address before sharing.');
+  warn('Only send EVM-compatible tokens to this address.');
+  console.log('');
+}
+
 // Export wallet (show address only, never PK without password)
 export async function exportWallet(name) {
   if (!name) {
