@@ -108,6 +108,7 @@ export async function startWebShell(opts = {}) {
               send: (text) => ws.send(JSON.stringify({ type: 'output', data: text })),
               sendLine: (text) => ws.send(JSON.stringify({ type: 'output', data: text + '\r\n' })),
               sendMenu: (id, title, items) => ws.send(JSON.stringify({ type: 'menu', id, title, items })),
+              sendPrompt: (id, label, meta = {}) => ws.send(JSON.stringify({ type: 'prompt', id, label, ...meta })),
             });
             if (result?.output) {
               ws.send(JSON.stringify({ type: 'output', data: result.output }));
@@ -129,6 +130,7 @@ export async function startWebShell(opts = {}) {
               send: (text) => ws.send(JSON.stringify({ type: 'output', data: text })),
               sendLine: (text) => ws.send(JSON.stringify({ type: 'output', data: text + '\r\n' })),
               sendMenu: (id, title, items) => ws.send(JSON.stringify({ type: 'menu', id, title, items })),
+              sendPrompt: (id, label, meta = {}) => ws.send(JSON.stringify({ type: 'prompt', id, label, ...meta })),
             });
             if (result?.output) {
               ws.send(JSON.stringify({ type: 'output', data: result.output }));
@@ -154,6 +156,25 @@ export async function startWebShell(opts = {}) {
 
           if (cmd === 'help') {
             ws.send(JSON.stringify({ type: 'output', data: getHelp() }));
+            ws.send(JSON.stringify({
+              type: 'menu',
+              id: 'main_menu',
+              title: '◆ Help Menu — Select Command',
+              items: [
+                { value: 'ai', label: '🧠 AI Chat', desc: 'Natural language assistant' },
+                { value: 'wallet', label: '👛 Wallet', desc: 'Picker + balance + actions' },
+                { value: 'agent', label: '🔐 Agent Signer', desc: 'Start/stop/status controls' },
+                { value: 'keys', label: '🔑 Keys', desc: 'Add/update LLM providers' },
+                { value: 'config', label: '⚙ Config', desc: 'Chain + settings' },
+                { value: 'portfolio', label: '📊 Portfolio', desc: 'Multi-chain balances' },
+                { value: 'market', label: '📈 Market', desc: 'Price + liquidity intel' },
+                { value: 'mail', label: '📧 Mail', desc: 'AgentMail status/inbox' },
+                { value: 'oracle', label: '🎲 Oracle', desc: 'Randomness service' },
+                { value: 'casino', label: '🎰 Casino', desc: 'Service status' },
+                { value: 'facilitator', label: '💸 Facilitator', desc: 'x402 health' },
+                { value: 'back', label: '← Back', desc: '' },
+              ],
+            }));
             return;
           }
 
@@ -176,6 +197,7 @@ export async function startWebShell(opts = {}) {
               send: (text) => ws.send(JSON.stringify({ type: 'output', data: text })),
               sendLine: (text) => ws.send(JSON.stringify({ type: 'output', data: text + '\r\n' })),
               sendMenu: (id, title, items) => ws.send(JSON.stringify({ type: 'menu', id, title, items })),
+              sendPrompt: (id, label, meta = {}) => ws.send(JSON.stringify({ type: 'prompt', id, label, ...meta })),
             });
 
             if (result?.output) {
@@ -277,9 +299,12 @@ function getHelp() {
     ['portfolio', 'Multi-chain balances'],
     ['send', 'Send ETH or tokens'],
     ['receive', 'Show address to receive'],
-    ['wallet list', 'List wallets'],
+    ['wallet', 'Interactive wallet menu'],
     ['wallet balance', 'Wallet balance'],
     ['history', 'Transaction history'],
+    ['agent', 'Agent signer controls'],
+    ['keys', 'Interactive LLM/API key setup'],
+    ['logs [n]', 'Recent AI chat memory logs'],
     ['', ''],
     ['', `${gold}SERVICES${reset}`],
     ['market <token>', 'Market intel & data'],

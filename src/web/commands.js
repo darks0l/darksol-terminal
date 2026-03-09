@@ -3,13 +3,27 @@ import { getConfig, setConfig } from '../config/store.js';
 import { hasKey, hasAnyLLM, getKeyAuto, addKeyDirect, SERVICES } from '../config/keys.js';
 import { ethers } from 'ethers';
 import { existsSync, mkdirSync, appendFileSync, readFileSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
 import { homedir } from 'os';
+import { spawn } from 'child_process';
+import { fileURLToPath } from 'url';
 
 // ══════════════════════════════════════════════════
 // CHAT LOG PERSISTENCE
 // ══════════════════════════════════════════════════
 const CHAT_LOG_DIR = join(homedir(), '.darksol', 'chat-logs');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const PROJECT_ROOT = join(__dirname, '..', '..');
+
+// Agent signer runtime state (for web serve session)
+const signerState = {
+  proc: null,
+  wallet: null,
+  port: 18790,
+  startedAt: null,
+  lastOutput: [],
+};
 
 function ensureChatLogDir() {
   if (!existsSync(CHAT_LOG_DIR)) mkdirSync(CHAT_LOG_DIR, { recursive: true });
@@ -153,13 +167,45 @@ export async function handleMenuSelect(id, value, item, ws) {
       }
       ws.sendLine('');
       // Send a prompt request to the client
-      ws.send(JSON.stringify({
-        type: 'prompt',
-        id: 'keys_input',
-        label: `${svc.name} key:`,
+      ws.sendPrompt('keys_input', `${svc.name} key:`, {
         service: value,
         mask: value !== 'ollama', // mask API keys, not URLs
-      }));
+      });
+      return {};
+
+    case 'agent_action':
+      if (value === 'start') {
+        const { listWallets } = await import('../wallet/keystore.js');
+        const wallets = listWallets();
+        if (!wallets.length) {
+          ws.sendLine(`  ${ANSI.red}No wallets found. Create one in CLI first: darksol wallet create <name>${ANSI.reset}`);
+          ws.sendLine('');
+          return {};
+        }
+        ws.sendMenu('agent_wallet_select', '◆ Select Wallet for Signer', wallets.map(w => ({
+          value: w.name,
+          label: w.name,
+          desc: `${w.address.slice(0, 6)}...${w.address.slice(-4)}`,
+        })));
+        return {};
+      }
+      if (value === 'status') return await showSignerStatus(ws);
+      if (value === 'stop') return await cmdAgent(['stop'], ws);
+      if (value === 'docs') {
+        ws.sendLine('');
+        ws.sendLine(`${ANSI.gold}  ◆ OPENCLAW INTEGRATION${ANSI.reset}`);
+        ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+        ws.sendLine(`  ${ANSI.dim}Endpoint: http://127.0.0.1:${signerState.port}${ANSI.reset}`);
+        ws.sendLine(`  ${ANSI.dim}Health:   GET /health${ANSI.reset}`);
+        ws.sendLine(`  ${ANSI.dim}Send TX:  POST /send${ANSI.reset}`);
+        ws.sendLine(`  ${ANSI.dim}Policy:   GET /policy${ANSI.reset}`);
+        ws.sendLine('');
+        return {};
+      }
+      return {};
+
+    case 'agent_wallet_select':
+      ws.sendPrompt('agent_signer_password', `Password for wallet \"${value}\":`, { service: 'agent', wallet: value, mask: true });
       return {};
 
     case 'config_action':
@@ -180,6 +226,10 @@ export async function handleMenuSelect(id, value, item, ws) {
       return {};
 
     case 'main_menu':
+      if (value === 'back') {
+        ws.sendLine('');
+        return {};
+      }
       return await handleCommand(value, ws);
   }
 
@@ -216,16 +266,34 @@ export async function handlePromptResponse(id, value, meta, ws) {
       ws.sendLine(`  ${ANSI.green}✓ ${svc.name} key stored securely${ANSI.reset}`);
       ws.sendLine(`  ${ANSI.dim}Encrypted at ~/.darksol/keys/vault.json${ANSI.reset}`);
       ws.sendLine('');
-
-      // Clear cached AI engine
-      // (chatEngines is WeakMap keyed by ws, but we can't access the real ws here — 
-      //  the engine will reinit on next ai command since keys changed)
       ws.sendLine(`  ${ANSI.green}● AI ready!${ANSI.reset} ${ANSI.dim}Type ${ANSI.gold}ai <question>${ANSI.dim} to start chatting.${ANSI.reset}`);
       ws.sendLine('');
     } catch (err) {
       ws.sendLine(`  ${ANSI.red}✗ Failed: ${err.message}${ANSI.reset}`);
       ws.sendLine('');
     }
+    return {};
+  }
+
+  if (id === 'agent_signer_password') {
+    const wallet = meta.wallet;
+    if (!wallet || !value) {
+      ws.sendLine(`  ${ANSI.red}✗ Cancelled${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+
+    ws.sendLine(`  ${ANSI.dim}Starting signer for ${wallet}...${ANSI.reset}`);
+    ws.sendLine('');
+    startSignerProcess({ wallet, password: value, port: 18790, maxValue: '1.0', dailyLimit: '5.0' }, ws);
+
+    // Give it a second then show status
+    setTimeout(() => {
+      showSignerStatus(ws);
+      ws.sendLine(`  ${ANSI.dim}Use ${ANSI.gold}agent${ANSI.dim} for controls (status/stop/docs).${ANSI.reset}`);
+      ws.sendLine('');
+    }, 1200);
+
     return {};
   }
 
@@ -299,6 +367,9 @@ export async function handleCommand(cmd, ws) {
       return await cmdSend(args, ws);
     case 'receive':
       return await cmdReceive(ws);
+    case 'agent':
+    case 'signer':
+      return await cmdAgent(args, ws);
     case 'ai':
     case 'ask':
     case 'chat':
@@ -678,6 +749,93 @@ async function showWalletDetail(name, ws) {
   ]);
 
   return {};
+}
+
+// ══════════════════════════════════════════════════
+// AGENT SIGNER (web controls)
+// ══════════════════════════════════════════════════
+async function cmdAgent(args, ws) {
+  const sub = (args[0] || 'menu').toLowerCase();
+
+  if (sub === 'status') {
+    return await showSignerStatus(ws);
+  }
+
+  if (sub === 'stop') {
+    if (!signerState.proc) {
+      ws.sendLine(`  ${ANSI.dim}Signer is not running${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+    signerState.proc.kill('SIGTERM');
+    signerState.proc = null;
+    ws.sendLine(`  ${ANSI.green}✓ Signer stopped${ANSI.reset}`);
+    ws.sendLine('');
+    return {};
+  }
+
+  // default menu
+  await showSignerStatus(ws);
+  ws.sendMenu('agent_action', '◆ Agent Signer Controls', [
+    { value: 'start', label: signerState.proc ? '🔁 Restart signer' : '▶ Start signer', desc: signerState.proc ? `Running on :${signerState.port}` : 'Guided setup' },
+    { value: 'status', label: '📊 Status', desc: 'Health, wallet, endpoint' },
+    { value: 'stop', label: '⏹ Stop signer', desc: signerState.proc ? 'Stop current signer session' : 'Not running' },
+    { value: 'docs', label: '📘 Integration', desc: 'OpenClaw endpoint + usage tips' },
+    { value: 'back', label: '← Back', desc: '' },
+  ]);
+  return {};
+}
+
+async function showSignerStatus(ws) {
+  ws.sendLine(`${ANSI.gold}  ◆ AGENT SIGNER${ANSI.reset}`);
+  ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.darkGold}Status${ANSI.reset}       ${signerState.proc ? `${ANSI.green}● Running${ANSI.reset}` : `${ANSI.dim}○ Stopped${ANSI.reset}`}`);
+  ws.sendLine(`  ${ANSI.darkGold}Wallet${ANSI.reset}       ${ANSI.white}${signerState.wallet || '(none)'}${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.darkGold}Endpoint${ANSI.reset}     ${ANSI.white}http://127.0.0.1:${signerState.port}${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.darkGold}Started${ANSI.reset}      ${signerState.startedAt ? ANSI.dim + new Date(signerState.startedAt).toLocaleTimeString() + ANSI.reset : ANSI.dim + '(n/a)' + ANSI.reset}`);
+  ws.sendLine('');
+}
+
+function startSignerProcess({ wallet, password, port = 18790, maxValue = '1.0', dailyLimit = '5.0' }, ws) {
+  if (signerState.proc) {
+    try { signerState.proc.kill('SIGTERM'); } catch {}
+  }
+
+  const args = [
+    'bin/darksol.js',
+    'agent', 'start', wallet,
+    '--port', String(port),
+    '--max-value', String(maxValue),
+    '--daily-limit', String(dailyLimit),
+  ];
+
+  // Pass password non-interactively via env to avoid terminal prompt complexity
+  const child = spawn(process.execPath, args, {
+    cwd: PROJECT_ROOT,
+    env: { ...process.env, DARKSOL_WALLET_PASSWORD: password },
+    stdio: ['ignore', 'pipe', 'pipe'],
+  });
+
+  signerState.proc = child;
+  signerState.wallet = wallet;
+  signerState.port = Number(port);
+  signerState.startedAt = Date.now();
+  signerState.lastOutput = [];
+
+  const onOut = (buf) => {
+    const text = buf.toString();
+    signerState.lastOutput.push(text);
+    if (signerState.lastOutput.length > 30) signerState.lastOutput.shift();
+    // Show a compact boot stream
+    const lines = text.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 2);
+    for (const l of lines) ws.sendLine(`  ${ANSI.dim}${l}${ANSI.reset}`);
+  };
+  child.stdout.on('data', onOut);
+  child.stderr.on('data', onOut);
+
+  child.on('exit', () => {
+    signerState.proc = null;
+  });
 }
 
 // ══════════════════════════════════════════════════

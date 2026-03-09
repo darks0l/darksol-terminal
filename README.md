@@ -70,6 +70,8 @@ darksol agent start main
 
 - Arrow-key menus (`↑/↓` + `Enter`) for wallet/config flows
 - Interactive wallet picker + wallet action menu (receive/send/portfolio/history/switch chain)
+- Agent signer control center (`agent`) with guided wallet selection + start/stop/status
+- Click-through help menu (`help`) with arrow-key command selection
 - AI connection check at startup (shows ready/not configured)
 - Interactive key setup from web terminal:
   - `keys` → select provider → paste key/host directly
@@ -80,8 +82,10 @@ darksol agent start main
 Useful web-shell commands:
 
 ```bash
+help          # clickable command menu (arrow keys + Enter)
 keys          # provider status + interactive add/update
 wallet        # interactive wallet picker and actions
+agent         # signer start/stop/status controls
 config        # interactive config menu
 logs 20       # show recent AI chat log lines
 ai <prompt>   # chat with trading assistant

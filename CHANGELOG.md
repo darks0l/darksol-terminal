@@ -7,6 +7,17 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.4.11] - 2026-03-09
+### Added
+- `serve` agent signer control center (`agent`) with interactive menus:
+  - Start signer (wallet select + masked password prompt)
+  - Status/stop/docs menu
+- Click-through `help` menu in web shell (arrow keys + Enter)
+- Main command autocomplete now includes `agent`
+
+### Fixed
+- Prompt transport reliability in web shell (`sendPrompt` pathway) for interactive key/password prompts
+
 ## [0.4.9] - 2026-03-09
 ### Added
 - Interactive LLM key setup inside `darksol serve`:

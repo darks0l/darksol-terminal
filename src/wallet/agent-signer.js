@@ -402,12 +402,16 @@ export async function startAgentSigner(walletName, opts = {}) {
     return;
   }
 
-  const { password } = await inquirer.prompt([{
-    type: 'password',
-    name: 'password',
-    message: theme.gold('Wallet password:'),
-    mask: '●',
-  }]);
+  let password = process.env.DARKSOL_WALLET_PASSWORD;
+  if (!password) {
+    const promptRes = await inquirer.prompt([{
+      type: 'password',
+      name: 'password',
+      message: theme.gold('Wallet password:'),
+      mask: '●',
+    }]);
+    password = promptRes.password;
+  }
 
   const spin = spinner('Starting agent signer...').start();
 
