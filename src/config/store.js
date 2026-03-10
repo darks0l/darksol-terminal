@@ -19,6 +19,15 @@ const config = new Conf({
     },
     slippage: { type: 'number', default: 0.5 },
     gasMultiplier: { type: 'number', default: 1.1 },
+    soul: {
+      type: 'object',
+      default: {
+        userName: '',
+        agentName: 'Darksol',
+        tone: '',
+        createdAt: '',
+      },
+    },
     dca: {
       type: 'object',
       default: {
@@ -46,6 +55,10 @@ export function getConfig(key) {
 
 export function setConfig(key, value) {
   config.set(key, value);
+}
+
+export function deleteConfig(key) {
+  config.delete(key);
 }
 
 export function getAllConfig() {

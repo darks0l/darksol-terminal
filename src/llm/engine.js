@@ -1,19 +1,14 @@
 import fetch from 'node-fetch';
-import { getKeyFromEnv, getKey, SERVICES } from '../config/keys.js';
+import { getKeyFromEnv, getKey } from '../config/keys.js';
 import { getConfig } from '../config/store.js';
-import { theme } from '../ui/theme.js';
-import { spinner, kvDisplay, success, error, warn, info } from '../ui/components.js';
-import { showSection } from '../ui/banner.js';
-
-// ──────────────────────────────────────────────────
-// LLM PROVIDER ADAPTERS
-// ──────────────────────────────────────────────────
+import { SessionMemory, extractMemories, searchMemories } from '../memory/index.js';
+import { formatSystemPrompt as formatSoulSystemPrompt } from '../soul/index.js';
 
 const PROVIDERS = {
   openai: {
     url: 'https://api.openai.com/v1/chat/completions',
     defaultModel: 'gpt-4o',
-    authHeader: (key) => ({ 'Authorization': `Bearer ${key}` }),
+    authHeader: (key) => ({ Authorization: `Bearer ${key}` }),
     parseResponse: (data) => data.choices?.[0]?.message?.content,
     parseUsage: (data) => data.usage,
   },
@@ -25,9 +20,9 @@ const PROVIDERS = {
       model,
       max_tokens: 4096,
       system: systemPrompt,
-      messages: messages.map(m => ({
-        role: m.role === 'system' ? 'user' : m.role,
-        content: m.content,
+      messages: messages.map((message) => ({
+        role: message.role === 'system' ? 'user' : message.role,
+        content: message.content,
       })),
     }),
     parseResponse: (data) => data.content?.[0]?.text,
@@ -37,7 +32,7 @@ const PROVIDERS = {
     url: 'https://openrouter.ai/api/v1/chat/completions',
     defaultModel: 'anthropic/claude-sonnet-4-20250514',
     authHeader: (key) => ({
-      'Authorization': `Bearer ${key}`,
+      Authorization: `Bearer ${key}`,
       'HTTP-Referer': 'https://darksol.net',
       'X-Title': 'DARKSOL Terminal',
     }),
@@ -45,7 +40,7 @@ const PROVIDERS = {
     parseUsage: (data) => data.usage,
   },
   ollama: {
-    url: null, // Set from config
+    url: null,
     defaultModel: 'llama3.1',
     authHeader: () => ({}),
     parseResponse: (data) => data.choices?.[0]?.message?.content || data.message?.content,
@@ -60,32 +55,23 @@ const PROVIDERS = {
   },
 };
 
-// ──────────────────────────────────────────────────
-// LLM ENGINE
-// ──────────────────────────────────────────────────
-
 export class LLMEngine {
   constructor(opts = {}) {
     this.provider = opts.provider || getConfig('llm.provider') || 'openai';
     this.model = opts.model || getConfig('llm.model') || null;
     this.apiKey = opts.apiKey || null;
-    this.conversationHistory = [];
     this.systemPrompt = '';
-    this.maxHistoryTokens = opts.maxHistory || 8000;
     this.temperature = opts.temperature ?? 0.7;
+    this.sessionMemory = opts.sessionMemory || new SessionMemory({ maxTurns: opts.maxTurns || 20 });
+    this.maxRelevantMemories = opts.maxRelevantMemories || 5;
 
-    // Usage tracking
     this.totalInputTokens = 0;
     this.totalOutputTokens = 0;
     this.totalCalls = 0;
   }
 
-  /**
-   * Initialize the engine — resolve API key
-   */
   async init(vaultPassword) {
     if (!this.apiKey) {
-      // Try env first, then vault
       this.apiKey = getKeyFromEnv(this.provider);
       if (!this.apiKey && vaultPassword) {
         this.apiKey = await getKey(this.provider, vaultPassword);
@@ -93,7 +79,6 @@ export class LLMEngine {
     }
 
     if (!this.apiKey && this.provider !== 'ollama') {
-      // Try auto-stored keys as last resort
       const { getKeyAuto } = await import('../config/keys.js');
       this.apiKey = getKeyAuto(this.provider);
     }
@@ -111,47 +96,42 @@ export class LLMEngine {
       this.model = providerConfig.defaultModel;
     }
 
-    // Ollama URL from config
     if (this.provider === 'ollama') {
       const host = this.apiKey || getConfig('llm.ollamaHost') || 'http://localhost:11434';
       PROVIDERS.ollama.url = `${host}/v1/chat/completions`;
-      this.apiKey = 'ollama'; // placeholder
+      this.apiKey = 'ollama';
     }
 
     return this;
   }
 
-  /**
-   * Set the system prompt (persona/context for the LLM)
-   */
   setSystemPrompt(prompt) {
     this.systemPrompt = prompt;
     return this;
   }
 
-  /**
-   * Send a message and get a response
-   */
   async chat(userMessage, opts = {}) {
     const providerConfig = PROVIDERS[this.provider];
-
-    // Build messages array
+    const systemPrompt = opts.skipContext
+      ? (opts.systemPrompt || this.systemPrompt || '')
+      : await this._buildSystemPrompt(userMessage, opts.systemPrompt);
     const messages = [];
-    if (this.systemPrompt && this.provider !== 'anthropic') {
-      messages.push({ role: 'system', content: this.systemPrompt });
+
+    if (systemPrompt && this.provider !== 'anthropic') {
+      messages.push({ role: 'system', content: systemPrompt });
     }
 
-    // Add conversation history
-    for (const msg of this.conversationHistory) {
-      messages.push(msg);
+    if (!opts.skipContext) {
+      for (const message of this.sessionMemory.getContext()) {
+        messages.push(message);
+      }
     }
 
     messages.push({ role: 'user', content: userMessage });
 
-    // Build request body
     let body;
     if (providerConfig.buildBody) {
-      body = providerConfig.buildBody(this.model, messages, this.systemPrompt);
+      body = providerConfig.buildBody(this.model, messages, systemPrompt);
     } else {
       body = {
         model: this.model,
@@ -160,21 +140,17 @@ export class LLMEngine {
         max_tokens: opts.maxTokens || 4096,
       };
 
-      // JSON mode if requested
       if (opts.json) {
         body.response_format = { type: 'json_object' };
       }
     }
 
-    const url = providerConfig.url;
-    const headers = {
-      'Content-Type': 'application/json',
-      ...providerConfig.authHeader(this.apiKey),
-    };
-
-    const response = await fetch(url, {
+    const response = await fetch(providerConfig.url, {
       method: 'POST',
-      headers,
+      headers: {
+        'Content-Type': 'application/json',
+        ...providerConfig.authHeader(this.apiKey),
+      },
       body: JSON.stringify(body),
     });
 
@@ -187,18 +163,21 @@ export class LLMEngine {
     const content = providerConfig.parseResponse(data);
     const usage = providerConfig.parseUsage(data);
 
-    // Track usage
     this.totalCalls++;
     if (usage) {
       this.totalInputTokens += usage.input_tokens || usage.prompt_tokens || usage.input || 0;
       this.totalOutputTokens += usage.output_tokens || usage.completion_tokens || usage.output || 0;
     }
 
-    // Store in history
     if (!opts.ephemeral) {
-      this.conversationHistory.push({ role: 'user', content: userMessage });
-      this.conversationHistory.push({ role: 'assistant', content });
-      this._trimHistory();
+      this.sessionMemory.addTurn('user', userMessage);
+      this.sessionMemory.addTurn('assistant', content);
+      await this.sessionMemory.compact(this);
+
+      if (!opts.skipMemoryExtraction) {
+        await extractMemories(userMessage, 'user');
+        await extractMemories(content, 'assistant');
+      }
     }
 
     return {
@@ -209,24 +188,17 @@ export class LLMEngine {
     };
   }
 
-  /**
-   * One-shot completion (no history)
-   */
   async complete(prompt, opts = {}) {
     return this.chat(prompt, { ...opts, ephemeral: true });
   }
 
-  /**
-   * Get structured JSON response
-   */
   async json(prompt, opts = {}) {
     const result = await this.chat(
-      prompt + '\n\nRespond with valid JSON only. No markdown, no explanation.',
+      `${prompt}\n\nRespond with valid JSON only. No markdown, no explanation.`,
       { ...opts, ephemeral: true }
     );
 
     try {
-      // Extract JSON from response (handle markdown code blocks)
       let jsonStr = result.content;
       const match = jsonStr.match(/```(?:json)?\s*([\s\S]*?)\s*```/);
       if (match) jsonStr = match[1];
@@ -239,17 +211,11 @@ export class LLMEngine {
     return result;
   }
 
-  /**
-   * Clear conversation history
-   */
   clearHistory() {
-    this.conversationHistory = [];
+    this.sessionMemory.clear();
     return this;
   }
 
-  /**
-   * Get usage stats
-   */
   getUsage() {
     return {
       calls: this.totalCalls,
@@ -261,36 +227,37 @@ export class LLMEngine {
     };
   }
 
-  /**
-   * Trim history to stay within token budget (rough estimate)
-   */
-  _trimHistory() {
-    // Rough: 1 token ≈ 4 chars
-    const estimateTokens = (msgs) => msgs.reduce((sum, m) => sum + Math.ceil(m.content.length / 4), 0);
+  async _buildSystemPrompt(userMessage, overridePrompt) {
+    const parts = [];
+    const soulPrompt = formatSoulSystemPrompt();
+    if (soulPrompt) parts.push(soulPrompt);
+    if (overridePrompt || this.systemPrompt) parts.push(overridePrompt || this.systemPrompt);
 
-    while (this.conversationHistory.length > 2 && estimateTokens(this.conversationHistory) > this.maxHistoryTokens) {
-      // Remove oldest pair (user + assistant)
-      this.conversationHistory.splice(0, 2);
+    const summary = this.sessionMemory.getSummary();
+    if (summary) {
+      parts.push(`Session summary:\n${summary}`);
     }
+
+    const relevantMemories = await searchMemories(userMessage);
+    if (relevantMemories.length > 0) {
+      parts.push(
+        `Relevant persistent memories:\n${relevantMemories
+          .slice(0, this.maxRelevantMemories)
+          .map((memory) => `- [${memory.category}] ${memory.content}`)
+          .join('\n')}`
+      );
+    }
+
+    return parts.filter(Boolean).join('\n\n');
   }
 }
 
-// ──────────────────────────────────────────────────
-// FACTORY
-// ──────────────────────────────────────────────────
-
-/**
- * Create and initialize an LLM engine
- */
 export async function createLLM(opts = {}) {
   const engine = new LLMEngine(opts);
   await engine.init(opts.vaultPassword);
   return engine;
 }
 
-/**
- * Quick one-shot LLM call (auto-resolves provider/key)
- */
 export async function ask(prompt, opts = {}) {
   const engine = await createLLM(opts);
   return engine.complete(prompt, opts);

@@ -1,6 +1,8 @@
 import fetch from 'node-fetch';
 import { getConfig, setConfig } from '../config/store.js';
 import { hasKey, hasAnyLLM, getKeyAuto, addKeyDirect, SERVICES } from '../config/keys.js';
+import { getRecentMemories } from '../memory/index.js';
+import { getSoul, hasSoul } from '../soul/index.js';
 import { ethers } from 'ethers';
 import { existsSync, mkdirSync, appendFileSync, readFileSync } from 'fs';
 import { join, dirname } from 'path';
@@ -782,6 +784,7 @@ export function getAIStatus() {
 
   const providers = ['openai', 'anthropic', 'openrouter', 'ollama', 'bankr'];
   const connected = providers.filter(p => hasKey(p));
+  const soul = hasSoul() ? getSoul() : null;
 
   if (connected.length > 0) {
     const names = connected.map(p => SERVICES[p]?.name || p).join(', ');
@@ -1802,6 +1805,8 @@ async function cmdAI(args, ws) {
       const chain = getConfig('chain') || 'base';
       const wallet = getConfig('activeWallet') || '(not set)';
       const slippage = getConfig('slippage') || 0.5;
+      const soul = hasSoul() ? getSoul() : null;
+      const recentMemories = await getRecentMemories(3);
 
       engine.setSystemPrompt(`You are DARKSOL Terminal's AI trading assistant running in a web terminal.
 
@@ -1818,6 +1823,10 @@ USER CONTEXT:
 - Active wallet: ${wallet}
 - Slippage: ${slippage}%
 - Supported chains: Base (default), Ethereum, Polygon, Arbitrum, Optimism
+- Soul user: ${soul?.userName || '(unknown)'}
+- Soul agent: ${soul?.agentName || 'Darksol'}
+- Soul tone: ${soul?.tone || 'practical'}
+- Recent persistent memories loaded: ${recentMemories.length}
 
 RULES:
 - Be concise — this is a terminal, not a blog
@@ -1839,6 +1848,9 @@ COMMAND REFERENCE:
 
       chatEngines.set(ws, engine);
       ws.sendLine(`  ${ANSI.green}● AI connected${ANSI.reset} ${ANSI.dim}(${engine.provider}/${engine.model})${ANSI.reset}`);
+      if (soul) {
+        ws.sendLine(`  ${ANSI.dim}${soul.agentName} is live for ${soul.userName} with ${soul.tone} tone.${ANSI.reset}`);
+      }
       ws.sendLine('');
     } catch (err) {
       ws.sendLine(`  ${ANSI.red}✗ AI initialization failed: ${err.message}${ANSI.reset}`);

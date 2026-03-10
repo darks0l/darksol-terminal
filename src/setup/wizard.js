@@ -4,6 +4,7 @@ import { showSection, showDivider } from '../ui/banner.js';
 import { success, error, warn, info, kvDisplay } from '../ui/components.js';
 import { getConfig, setConfig } from '../config/store.js';
 import { addKeyDirect, hasKey, hasAnyLLM, SERVICES } from '../config/keys.js';
+import { hasSoul, runSoulSetup } from '../soul/index.js';
 import { createServer } from 'http';
 import open from 'open';
 import crypto from 'crypto';
@@ -18,7 +19,7 @@ import crypto from 'crypto';
 export function isFirstRun() {
   const llmReady = hasAnyLLM();
   const setupDone = getConfig('setupComplete');
-  return !llmReady && !setupDone;
+  return (!llmReady && !setupDone) || !hasSoul();
 }
 
 /**
@@ -42,7 +43,10 @@ export async function runSetupWizard(opts = {}) {
 
   showDivider();
 
-  // Step 1: Choose LLM provider
+  // Step 1: Soul / identity
+  await runSoulSetup({ showBanner: false, reset: force });
+
+  // Step 2: Choose LLM provider
   const { provider } = await inquirer.prompt([{
     type: 'list',
     name: 'provider',
@@ -69,7 +73,7 @@ export async function runSetupWizard(opts = {}) {
     await setupCloudProvider(provider);
   }
 
-  // Step 2: Chain selection
+  // Step 3: Chain selection
   console.log('');
   const { chain } = await inquirer.prompt([{
     type: 'list',
@@ -87,7 +91,7 @@ export async function runSetupWizard(opts = {}) {
   setConfig('chain', chain);
   success(`Chain set to ${chain}`);
 
-  // Step 3: Wallet
+  // Step 4: Wallet
   console.log('');
   const { wantWallet } = await inquirer.prompt([{
     type: 'confirm',

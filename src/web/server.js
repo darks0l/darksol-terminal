@@ -5,6 +5,8 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import open from 'open';
 import { theme } from '../ui/theme.js';
+import { getRecentMemories } from '../memory/index.js';
+import { getSoul, hasSoul } from '../soul/index.js';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { version: PKG_VERSION } = require('../../package.json');
@@ -88,6 +90,19 @@ export async function startWebShell(opts = {}) {
       type: 'output',
       data: getBanner(),
     }));
+
+    if (hasSoul()) {
+      const soul = getSoul();
+      getRecentMemories(3).then((memories) => {
+        const memoryHint = memories.length > 0
+          ? `\r\n  \x1b[38;2;102;102;102m${soul.agentName} loaded ${memories.length} recent memories.\x1b[0m`
+          : '';
+        ws.send(JSON.stringify({
+          type: 'output',
+          data: `  \x1b[38;2;255;215;0mWelcome back, ${soul.userName}.\x1b[0m\r\n  \x1b[38;2;102;102;102m${soul.agentName} is online with a ${soul.tone} tone.\x1b[0m${memoryHint}\r\n\r\n`,
+        }));
+      }).catch(() => {});
+    }
 
     // AI connection check right after banner
     const aiStatus = getAIStatus();

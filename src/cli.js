@@ -26,8 +26,11 @@ import { addKey, removeKey, listKeys } from './config/keys.js';
 import { parseIntent, startChat, adviseStrategy, analyzeToken, executeIntent } from './llm/intent.js';
 import { startAgentSigner, showAgentDocs } from './wallet/agent-signer.js';
 import { listSkills, installSkill, skillInfo, uninstallSkill } from './services/skills.js';
-import { runSetupWizard, checkFirstRun } from './setup/wizard.js';
+import { runSetupWizard } from './setup/wizard.js';
+import { displaySoul, hasSoul, resetSoul, runSoulSetup } from './soul/index.js';
+import { clearMemories, exportMemories, getRecentMemories, searchMemories } from './memory/index.js';
 import { createRequire } from 'module';
+import { resolve } from 'path';
 const require = createRequire(import.meta.url);
 const { version: PKG_VERSION } = require('../package.json');
 
@@ -647,6 +650,101 @@ export function cli(argv) {
     .option('-m, --model <model>', 'Model name')
     .action((opts) => startChat(opts));
 
+  const soul = program
+    .command('soul')
+    .description('Identity and agent personality')
+    .action(async () => {
+      await runSoulSetup({ reset: !hasSoul() });
+    });
+
+  soul
+    .command('show')
+    .description('Show current soul configuration')
+    .action(() => displaySoul());
+
+  soul
+    .command('reset')
+    .description('Clear soul configuration and re-run setup')
+    .action(async () => {
+      resetSoul();
+      await runSoulSetup({ reset: true });
+    });
+
+  const memory = program
+    .command('memory')
+    .description('Persistent memory store');
+
+  memory
+    .command('show')
+    .description('Show recent persistent memories')
+    .option('-n, --limit <n>', 'Number of memories', '10')
+    .action(async (opts) => {
+      showMiniBanner();
+      showSection('MEMORY');
+      const memories = await getRecentMemories(parseInt(opts.limit, 10) || 10);
+      if (memories.length === 0) {
+        info('No persistent memories stored.');
+        console.log('');
+        return;
+      }
+
+      memories.forEach((memoryItem) => {
+        kvDisplay([
+          ['ID', memoryItem.id],
+          ['Category', memoryItem.category],
+          ['Source', memoryItem.source],
+          ['When', memoryItem.timestamp],
+          ['Content', memoryItem.content],
+        ]);
+        console.log('');
+      });
+    });
+
+  memory
+    .command('search <query...>')
+    .description('Search persistent memories')
+    .action(async (queryParts) => {
+      const query = queryParts.join(' ');
+      showMiniBanner();
+      showSection('MEMORY SEARCH');
+      info(`Query: ${query}`);
+      console.log('');
+
+      const matches = await searchMemories(query);
+      if (matches.length === 0) {
+        warn('No matching memories.');
+        console.log('');
+        return;
+      }
+
+      matches.slice(0, 10).forEach((memoryItem) => {
+        kvDisplay([
+          ['Category', memoryItem.category],
+          ['Source', memoryItem.source],
+          ['When', memoryItem.timestamp],
+          ['Content', memoryItem.content],
+        ]);
+        console.log('');
+      });
+    });
+
+  memory
+    .command('clear')
+    .description('Clear all persistent memories')
+    .action(async () => {
+      await clearMemories();
+      success('Persistent memory cleared.');
+    });
+
+  memory
+    .command('export [file]')
+    .description('Export persistent memories to JSON')
+    .action(async (file) => {
+      const target = resolve(file || `darksol-memory-export-${Date.now()}.json`);
+      await exportMemories(target);
+      success(`Memory exported to ${target}`);
+    });
+
   // ═══════════════════════════════════════
   // SETUP COMMAND
   // ═══════════════════════════════════════
@@ -951,6 +1049,9 @@ export function cli(argv) {
         ['Output', cfg.output],
         ['Slippage', `${cfg.slippage}%`],
         ['Gas Multiplier', `${cfg.gasMultiplier}x`],
+        ['Soul User', cfg.soul?.userName || theme.dim('(not set)')],
+        ['Agent Name', cfg.soul?.agentName || 'Darksol'],
+        ['Tone', cfg.soul?.tone || theme.dim('(not set)')],
         ['Mail', cfg.mailEmail || theme.dim('(not set)')],
         ['Version', PKG_VERSION],
         ['Config File', configPath()],
@@ -1205,6 +1306,8 @@ function showCommandList() {
     ['ai execute', 'Parse + execute a trade via AI'],
     ['agent start', 'Start secure agent signer'],
     ['keys', 'API key vault'],
+    ['soul', 'Identity and agent personality'],
+    ['memory', 'Persistent cross-session memory'],
     ['script', 'Execution scripts & strategies'],
     ['market', 'Market intel & token data'],
     ['oracle', 'On-chain random oracle'],

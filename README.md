@@ -15,7 +15,7 @@ A unified CLI for market intel, trading, AI-powered analysis, on-chain oracle, c
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-gold.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
 
-- Current release: **0.8.1**
+- Current release: **0.9.0**
 - Changelog: `CHANGELOG.md`
 
 ## Install
@@ -56,8 +56,15 @@ darksol bridge send --from base --to arbitrum --token ETH -a 0.1
 darksol bridge status 0xTxHash...
 darksol bridge chains
 
-# AI trading assistant
+# Set up your agent identity
+darksol soul
+
+# AI trading assistant (now with personality + memory)
 darksol ai chat
+
+# View/search persistent memories
+darksol memory show
+darksol memory search "preferred chain"
 
 # Agent email
 darksol mail setup
@@ -114,6 +121,8 @@ ai <prompt>   # chat with trading assistant
 | `trade` | Swap via LI.FI (31 DEXs) + Uniswap V3 fallback, snipe | Gas only |
 | `bridge` | Cross-chain bridge via LI.FI (60 chains, 27 bridges) | Gas only |
 | `dca` | Dollar-cost averaging engine | Gas only |
+| `soul` | Agent identity & personality configuration | Free |
+| `memory` | Persistent cross-session memory store | Free |
 | `ai` | LLM-powered trading assistant & intent execution | Provider dependent |
 | `agent` | Secure agent signer (PK-isolated proxy) | Free |
 | `keys` | Encrypted API key vault (LLMs/data/RPCs) | Free |
@@ -190,9 +199,49 @@ darksol agent docs
 
 ---
 
+## 👤 Agent Soul System
+
+Give your terminal agent a name, personality, and persistent memory.
+
+```bash
+# First-run setup (or run anytime)
+darksol soul
+
+# View current identity
+darksol soul show
+
+# Reset and reconfigure
+darksol soul reset
+```
+
+**What it does:**
+- **Your name** — the agent addresses you personally
+- **Agent name** — name your AI (default: Darksol)
+- **Tone** — professional, casual, hacker, friendly, sarcastic, or custom freeform
+- Persists across sessions — your agent remembers who it is
+- Auto-injected into every LLM call as a system prompt
+
+**Session memory:** Conversations maintain context (up to 20 turns). When the limit is hit, older turns are summarized by the LLM — no hard context cliff.
+
+**Persistent memory:** Important facts, preferences, and decisions are auto-extracted and stored to disk (`~/.darksol/memory/`). Your agent learns over time.
+
+```bash
+# View recent memories
+darksol memory show --limit 20
+
+# Search memories
+darksol memory search "slippage preference"
+
+# Export / clear
+darksol memory export my-memories.json
+darksol memory clear
+```
+
+---
+
 ## 🧠 AI Trading Assistant
 
-Natural language trading powered by multi-provider LLM support.
+Natural language trading powered by multi-provider LLM support — now with soul personality and memory context.
 
 ```bash
 # Interactive chat with live market data

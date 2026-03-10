@@ -7,6 +7,37 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.9.0] - 2026-03-10
+### Added
+- **Agent Soul System** — persistent identity and personality for your terminal agent:
+  - `darksol soul` — interactive setup: set your name, agent name, and agent tone
+  - `darksol soul show` — display current soul configuration
+  - `darksol soul reset` — clear and reconfigure identity
+  - 6 tone presets (professional, casual, hacker, friendly, sarcastic) + custom freeform
+  - Soul system prompt auto-injected into all LLM calls — agent stays in character
+  - Persists across sessions via Conf store (`~/.config/darksol-terminal/`)
+- **Session Memory** — rolling conversation context with LLM-powered compaction:
+  - `SessionMemory` class maintains up to 20 conversation turns per session
+  - When limit exceeded, older turns are summarized by the LLM and compacted
+  - Summary + recent messages preserved — no context cliff
+- **Persistent Memory** — cross-session memory stored on disk (`~/.darksol/memory/`):
+  - `darksol memory show` — list recent memories (with `--limit`)
+  - `darksol memory search <query>` — keyword search across all memories
+  - `darksol memory clear` — wipe persistent memory
+  - `darksol memory export [file]` — dump to JSON
+  - Auto-extraction: detects preferences, facts, decisions, and lessons from conversation
+  - Deduplication prevents repeated memories
+  - Categories: preference, fact, decision, lesson
+- **First-run soul setup** — new installs now prompt for identity before LLM provider selection
+  - Existing users without a soul profile get prompted on next launch
+- **Web shell personalization** — `darksol serve` greets user by name, shows agent tone, loads recent memories on connect
+- **AI context enrichment** — every LLM call now includes soul prompt + session summary + relevant persistent memories
+
+### Changed
+- **LLM engine refactored** — replaced raw conversation history array with `SessionMemory` class for smarter context management
+- **`isFirstRun()` now checks soul** — ensures identity is configured alongside LLM keys
+- **`darksol config show`** now displays soul user, agent name, and tone
+
 ## [0.8.1] - 2026-03-10
 ### Changed
 - **Casino now uses standard x402 payment flow** — `darksol casino bet` uses `fetchWithX402()` (EIP-3009 via agent signer) instead of legacy direct USDC transfer
