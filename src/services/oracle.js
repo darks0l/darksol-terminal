@@ -1,71 +1,43 @@
 import { fetchJSON } from '../utils/fetch.js';
-import fetch from 'node-fetch';
+import { fetchWithX402, isSignerRunning } from '../utils/x402.js';
 import { getServiceURL, getConfig } from '../config/store.js';
 import { theme } from '../ui/theme.js';
 import { spinner, kvDisplay, success, error, warn, info } from '../ui/components.js';
 import { showSection } from '../ui/banner.js';
 
-// Oracle lives under acp.darksol.net/api/oracle/
-// Endpoints: health (free), coin/dice/number/shuffle (x402 — $0.05 USDC on Base)
-const getURL = () => {
-  const custom = getServiceURL('oracle');
-  if (custom) return custom;
-  return 'https://acp.darksol.net/api/oracle';
-};
+// Oracle lives at acp.darksol.net/api/oracle/
+// Health is free; game endpoints are x402-gated ($0.05 USDC on Base)
+const getURL = () => getServiceURL('oracle') || 'https://acp.darksol.net/api/oracle';
 
-function handleX402(response) {
-  if (response === 402 || (response && response.status === 402)) {
-    warn('Oracle requires x402 payment ($0.05 USDC on Base)');
-    info('Use with agent signer: darksol signer start → requests auto-pay');
-    info('Or pay manually via facilitator: darksol facilitator');
-    return true;
-  }
-  return false;
-}
-
-async function oracleRequest(path, opts = {}) {
-  const url = `${getURL()}${path}`;
-  const resp = await fetch(url, opts);
-
-  if (resp.status === 402) {
-    // Return x402 info so caller can handle
-    const paymentHeader = resp.headers.get('payment-required');
-    let paymentInfo = null;
-    if (paymentHeader) {
-      try {
-        paymentInfo = JSON.parse(Buffer.from(paymentHeader, 'base64').toString());
-      } catch {}
-    }
-    return { x402: true, paymentInfo, status: 402 };
-  }
-
-  const ct = resp.headers.get('content-type') || '';
-  if (!ct.includes('json')) {
-    throw new Error(`Oracle returned non-JSON response (${resp.status})`);
-  }
-  return await resp.json();
+function getSignerToken() {
+  return process.env.DARKSOL_SIGNER_TOKEN || getConfig('signerToken') || null;
 }
 
 export async function oracleHealth() {
   const spin = spinner('Checking oracle...').start();
   try {
-    const data = await oracleRequest('/health');
-    if (data.x402) {
-      spin.succeed('Oracle online (health should be free)');
-      return;
-    }
+    const data = await fetchJSON(`${getURL()}/health`);
     spin.succeed('Oracle online');
 
-    showSection('ORACLE STATUS');
+    showSection('RANDOM ORACLE 🎲');
     kvDisplay([
       ['Status', data.status === 'ok' ? theme.success('● Online') : theme.error('○ ' + data.status)],
       ['Contract', data.contract || '-'],
       ['Chain', data.chain || 'base'],
       ['Block', String(data.blockNumber || '-')],
     ]);
+
+    // Check signer status
+    const signerUp = await isSignerRunning(getSignerToken());
     console.log('');
-    info('Endpoints require x402 payment ($0.05 USDC on Base)');
-    info('Games: coin flip, dice, random number, shuffle');
+    if (signerUp) {
+      console.log(`  ${theme.success('●')} Agent signer running — x402 auto-pay enabled`);
+    } else {
+      console.log(`  ${theme.dim('○')} Agent signer not running — start for auto-pay: ${theme.gold('darksol signer start')}`);
+    }
+
+    console.log('');
+    info('Games: coin flip, dice, random number, shuffle ($0.05 USDC each)');
     info('Docs: https://acp.darksol.net/oracle');
   } catch (err) {
     spin.fail('Oracle unreachable');
@@ -73,99 +45,82 @@ export async function oracleHealth() {
   }
 }
 
-export async function oracleFlip() {
-  const spin = spinner('Flipping coin...').start();
+async function oraclePlay(endpoint, label, displayFn) {
+  const spin = spinner(`${label}...`).start();
+  const token = getSignerToken();
+
   try {
-    const data = await oracleRequest('/coin');
-    if (data.x402) {
-      spin.info('Payment required');
-      handleX402(data);
-      if (data.paymentInfo) {
-        const accepts = data.paymentInfo.accepts?.[0];
-        if (accepts) {
-          kvDisplay([
-            ['Amount', `$${(parseInt(accepts.amount) / 1e6).toFixed(2)} USDC`],
-            ['Network', 'Base'],
-            ['Pay To', accepts.payTo || '-'],
-          ]);
-        }
+    const result = await fetchWithX402(`${getURL()}${endpoint}`, {}, { signerToken: token });
+
+    if (result.x402 && !result.paid) {
+      // Payment required but couldn't auto-pay
+      spin.info('x402 payment required');
+      const accepts = result.paymentInfo?.accepts?.[0];
+      if (accepts) {
+        warn(`Cost: $${(parseInt(accepts.amount) / 1e6).toFixed(2)} USDC on Base`);
       }
-      return;
+      if (result.error) {
+        info(result.error);
+      } else {
+        info('Start agent signer for auto-pay: darksol signer start');
+      }
+      return null;
     }
-    spin.succeed('Coin flipped');
-    showSection('ORACLE — COIN FLIP');
-    kvDisplay([
-      ['Result', theme.gold.bold(data.result || data.value)],
-      ['Proof', data.proof || data.txHash || 'N/A'],
-    ]);
+
+    if (result.paid) {
+      spin.succeed(`${label} ✓ (paid $0.05 USDC)`);
+    } else {
+      spin.succeed(label);
+    }
+
+    displayFn(result.data);
+    return result.data;
   } catch (err) {
-    spin.fail('Oracle failed');
+    spin.fail(`${label} failed`);
     error(err.message);
+    return null;
   }
+}
+
+export async function oracleFlip() {
+  return oraclePlay('/coin', 'Coin flip', (data) => {
+    showSection('ORACLE — COIN FLIP 🪙');
+    kvDisplay([
+      ['Result', theme.gold.bold(data.result || data.value || '-')],
+      ['Proof', data.proof || data.txHash || '-'],
+    ]);
+  });
 }
 
 export async function oracleDice(sides = 6) {
-  const spin = spinner(`Rolling d${sides}...`).start();
-  try {
-    const data = await oracleRequest(`/dice?sides=${sides}`);
-    if (data.x402) {
-      spin.info('Payment required');
-      handleX402(data);
-      return;
-    }
-    spin.succeed('Dice rolled');
-    showSection(`ORACLE — D${sides}`);
+  return oraclePlay(`/dice?sides=${sides}`, `Rolling d${sides}`, (data) => {
+    showSection(`ORACLE — D${sides} 🎲`);
     kvDisplay([
-      ['Result', theme.gold.bold(data.result || data.value)],
+      ['Result', theme.gold.bold(data.result || data.value || '-')],
       ['Sides', sides.toString()],
-      ['Proof', data.proof || data.txHash || 'N/A'],
+      ['Proof', data.proof || data.txHash || '-'],
     ]);
-  } catch (err) {
-    spin.fail('Oracle failed');
-    error(err.message);
-  }
+  });
 }
 
 export async function oracleNumber(min = 1, max = 100) {
-  const spin = spinner(`Generating number ${min}-${max}...`).start();
-  try {
-    const data = await oracleRequest(`/number?min=${min}&max=${max}`);
-    if (data.x402) {
-      spin.info('Payment required');
-      handleX402(data);
-      return;
-    }
-    spin.succeed('Number generated');
-    showSection('ORACLE — RANDOM NUMBER');
+  return oraclePlay(`/number?min=${min}&max=${max}`, `Number ${min}-${max}`, (data) => {
+    showSection('ORACLE — RANDOM NUMBER 🔢');
     kvDisplay([
-      ['Result', theme.gold.bold(data.result || data.value)],
+      ['Result', theme.gold.bold(data.result || data.value || '-')],
       ['Range', `${min} — ${max}`],
-      ['Proof', data.proof || data.txHash || 'N/A'],
+      ['Proof', data.proof || data.txHash || '-'],
     ]);
-  } catch (err) {
-    spin.fail('Oracle failed');
-    error(err.message);
-  }
+  });
 }
 
 export async function oracleShuffle(items) {
-  const spin = spinner('Shuffling...').start();
-  try {
-    const data = await oracleRequest('/shuffle', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ items }),
-    });
-    if (data.x402) {
-      spin.info('Payment required');
-      handleX402(data);
-      return;
+  return oraclePlay('/shuffle', 'Shuffling', (data) => {
+    showSection('ORACLE — SHUFFLE 🔀');
+    const result = data.result || data.value || [];
+    console.log(theme.gold('  Result: ') + (Array.isArray(result) ? result.join(', ') : result));
+    if (data.proof || data.txHash) {
+      console.log(theme.dim(`  Proof: ${data.proof || data.txHash}`));
     }
-    spin.succeed('Shuffled');
-    showSection('ORACLE — SHUFFLE');
-    console.log(theme.gold('  Result: ') + (data.result || data.value || []).join(', '));
-  } catch (err) {
-    spin.fail('Oracle failed');
-    error(err.message);
-  }
+  });
 }
