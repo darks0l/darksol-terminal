@@ -331,15 +331,15 @@ export async function handlePromptResponse(id, value, meta, ws) {
     const amount = meta.amount || '100';
     const email = value.trim();
 
-    // Ask for crypto selection
+    // Ask for crypto selection — only verified working combos
     ws.sendMenu('cards_crypto', `◆ Pay With (${provider} $${amount} → ${email})`, [
       { value: 'usdc_base', label: 'USDC on Base', desc: 'Default · fast & cheap', meta: { provider, amount, email, ticker: 'usdc', network: 'base' } },
-      { value: 'usdc_eth', label: 'USDC on Ethereum', desc: 'Higher fees', meta: { provider, amount, email, ticker: 'usdc', network: 'eth' } },
+      { value: 'usdc_erc20', label: 'USDC on Ethereum', desc: 'ERC-20', meta: { provider, amount, email, ticker: 'usdc', network: 'ERC20' } },
       { value: 'usdt_trc20', label: 'USDT on Tron', desc: 'TRC-20', meta: { provider, amount, email, ticker: 'usdt', network: 'trc20' } },
-      { value: 'btc', label: 'Bitcoin', desc: 'BTC mainnet', meta: { provider, amount, email, ticker: 'btc', network: 'mainnet' } },
-      { value: 'eth', label: 'Ethereum', desc: 'ETH mainnet', meta: { provider, amount, email, ticker: 'eth', network: 'eth' } },
-      { value: 'sol', label: 'Solana', desc: 'SOL', meta: { provider, amount, email, ticker: 'sol', network: 'sol' } },
-      { value: 'xmr', label: 'Monero', desc: 'XMR', meta: { provider, amount, email, ticker: 'xmr', network: 'xmr' } },
+      { value: 'btc', label: 'Bitcoin', desc: 'BTC', meta: { provider, amount, email, ticker: 'btc', network: 'Mainnet' } },
+      { value: 'eth', label: 'Ethereum', desc: 'ETH ERC-20', meta: { provider, amount, email, ticker: 'eth', network: 'ERC20' } },
+      { value: 'sol', label: 'Solana', desc: 'SOL', meta: { provider, amount, email, ticker: 'sol', network: 'Mainnet' } },
+      { value: 'xmr', label: 'Monero', desc: 'XMR', meta: { provider, amount, email, ticker: 'xmr', network: 'Mainnet' } },
       { value: 'default', label: 'Default (USDC/Base)', desc: 'Let API choose', meta: { provider, amount, email } },
     ]);
     return {};
