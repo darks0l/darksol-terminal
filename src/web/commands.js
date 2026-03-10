@@ -1121,17 +1121,31 @@ async function executeCardOrder(orderMeta, ws) {
 // ORACLE
 // ══════════════════════════════════════════════════
 async function cmdOracle(args, ws) {
+  ws.sendLine(`${ANSI.gold}  ◆ RANDOM ORACLE 🎲${ANSI.reset}`);
+  ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
   try {
-    const resp = await fetch('https://acp.darksol.net/oracle');
+    const resp = await fetch('https://acp.darksol.net/api/oracle/health');
+    const ct = resp.headers.get('content-type') || '';
+    if (!ct.includes('json')) throw new Error('not json');
     const data = await resp.json();
 
-    ws.sendLine(`${ANSI.gold}  ◆ ORACLE${ANSI.reset}`);
-    ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
-    ws.sendLine(`  ${ANSI.darkGold}Status${ANSI.reset}     ${data.status || 'unknown'}`);
-    ws.sendLine(`  ${ANSI.darkGold}Endpoint${ANSI.reset}   ${ANSI.blue}acp.darksol.net/oracle${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Status${ANSI.reset}       ${data.status === 'ok' ? `${ANSI.green}● Online${ANSI.reset}` : `${ANSI.red}○ ${data.status}${ANSI.reset}`}`);
+    ws.sendLine(`  ${ANSI.darkGold}Contract${ANSI.reset}     ${ANSI.dim}${data.contract || '-'}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Chain${ANSI.reset}        ${ANSI.white}${data.chain || 'base'}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Block${ANSI.reset}        ${ANSI.white}${data.blockNumber || '-'}${ANSI.reset}`);
+    ws.sendLine('');
+    ws.sendLine(`  ${ANSI.gold}ENDPOINTS${ANSI.reset}  ${ANSI.dim}x402-gated ($0.05 USDC on Base)${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.white}🪙 /coin${ANSI.reset}      ${ANSI.dim}Fair coin flip${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.white}🎲 /dice${ANSI.reset}      ${ANSI.dim}Roll with N sides${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.white}🔢 /number${ANSI.reset}    ${ANSI.dim}Random in range${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.white}🔀 /shuffle${ANSI.reset}   ${ANSI.dim}Shuffle a list${ANSI.reset}`);
+    ws.sendLine('');
+    ws.sendLine(`  ${ANSI.dim}CLI: darksol oracle flip / dice / number / shuffle${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.dim}Docs: https://acp.darksol.net/oracle${ANSI.reset}`);
     ws.sendLine('');
   } catch {
-    ws.sendLine(`  ${ANSI.dim}Oracle unreachable${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.red}○ Oracle unreachable${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.dim}Check: https://acp.darksol.net/oracle${ANSI.reset}`);
     ws.sendLine('');
   }
   return {};

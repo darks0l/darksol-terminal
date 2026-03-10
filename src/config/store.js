@@ -29,7 +29,7 @@ const config = new Conf({
     services: {
       type: 'object',
       default: {
-        oracle: 'https://acp.darksol.net/oracle',
+        oracle: 'https://acp.darksol.net/api/oracle',
         casino: 'https://casino.darksol.net',
         cards: 'https://acp.darksol.net',
         facilitator: 'https://facilitator.darksol.net',
