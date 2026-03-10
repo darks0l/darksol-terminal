@@ -6,6 +6,42 @@ import { showSection } from '../ui/banner.js';
 
 const BASE = () => getServiceURL('cards') || 'https://acp.darksol.net';
 
+// Verified working ticker/network combos (tested against Trocador API)
+const VALID_CRYPTO = {
+  'usdc':  { network: 'base', display: 'USDC on Base' },
+  'usdc_base': { ticker: 'usdc', network: 'base', display: 'USDC on Base' },
+  'usdc_erc20': { ticker: 'usdc', network: 'ERC20', display: 'USDC on Ethereum' },
+  'usdt':  { network: 'trc20', display: 'USDT on Tron' },
+  'usdt_trc20': { ticker: 'usdt', network: 'trc20', display: 'USDT on Tron' },
+  'btc':   { network: 'Mainnet', display: 'Bitcoin' },
+  'eth':   { network: 'ERC20', display: 'ETH on Ethereum' },
+  'sol':   { network: 'Mainnet', display: 'Solana' },
+  'xmr':   { network: 'Mainnet', display: 'Monero' },
+};
+
+// Map user-friendly network names to Trocador-compatible ones
+const NETWORK_MAP = {
+  'base': 'base',
+  'ethereum': 'ERC20', 'eth': 'ERC20', 'erc20': 'ERC20',
+  'tron': 'trc20', 'trc20': 'trc20',
+  'mainnet': 'Mainnet', 'btc': 'Mainnet', 'sol': 'Mainnet', 'xmr': 'Mainnet',
+};
+
+function resolveTickerNetwork(ticker, network) {
+  const t = (ticker || '').toLowerCase();
+  const n = (network || '').toLowerCase();
+
+  // If just ticker provided, use known defaults
+  if (t && !n) {
+    const known = VALID_CRYPTO[t];
+    if (known) return { ticker: known.ticker || t, network: known.network };
+  }
+
+  // Map network to Trocador format
+  const mappedNetwork = NETWORK_MAP[n] || network;
+  return { ticker: t, network: mappedNetwork };
+}
+
 export async function cardsCatalog() {
   const spin = spinner('Loading card catalog...').start();
   try {
@@ -58,9 +94,13 @@ export async function cardsOrder(provider, amount, opts = {}) {
       amount: Number(amount),
       email: opts.email,
     };
-    // Optional: custom crypto + network
-    if (opts.ticker) body.tickerFrom = opts.ticker;
-    if (opts.network) body.networkFrom = opts.network;
+    // Resolve ticker/network to Trocador-compatible values
+    if (opts.ticker) {
+      const resolved = resolveTickerNetwork(opts.ticker, opts.network);
+      body.tickerFrom = resolved.ticker;
+      body.networkFrom = resolved.network;
+      info(`Payment: ${resolved.ticker.toUpperCase()} on ${resolved.network}`);
+    }
 
     const data = await fetchJSON(`${BASE()}/api/cards/order`, {
       method: 'POST',
