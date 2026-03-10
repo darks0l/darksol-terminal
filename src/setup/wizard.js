@@ -8,6 +8,7 @@ import { hasSoul, runSoulSetup } from '../soul/index.js';
 import { createServer } from 'http';
 import open from 'open';
 import crypto from 'crypto';
+import { getModelSelectionMeta } from '../llm/models.js';
 
 // ══════════════════════════════════════════════════
 // FIRST-RUN SETUP WIZARD
@@ -116,6 +117,8 @@ export async function runSetupWizard(opts = {}) {
  * Setup a cloud provider (OpenAI, Anthropic, OpenRouter, MiniMax)
  */
 async function setupCloudProvider(provider) {
+  await selectAndSaveModel(provider);
+
   const supportsOAuth = ['openai', 'anthropic'].includes(provider);
   const providerName = {
     openai: 'OpenAI',
@@ -204,16 +207,71 @@ async function setupOllama() {
     type: 'input',
     name: 'model',
     message: theme.gold('Default model:'),
-    default: 'llama3',
+    default: getModelSelectionMeta('ollama').defaultModel,
+    validate: (v) => v.trim().length > 0 || 'Model is required',
   }]);
 
-  setConfig('llm.model', model);
-  setConfig('ollamaModel', model);
+  saveModelConfig(model.trim(), 'ollama');
   setConfig('llm.provider', 'ollama');
   setConfig('llmProvider', 'ollama');
 
   success(`Ollama configured: ${host} / ${model}`);
   info('Make sure Ollama is running: ollama serve');
+}
+
+async function selectAndSaveModel(provider) {
+  const meta = getModelSelectionMeta(provider);
+  if (!meta || meta.managed) return null;
+
+  if (meta.textInput) {
+    const { model } = await inquirer.prompt([{
+      type: 'input',
+      name: 'model',
+      message: theme.gold('Model:'),
+      default: meta.defaultModel,
+      validate: (v) => v.trim().length > 0 || 'Model is required',
+    }]);
+    saveModelConfig(model.trim(), provider);
+    return model.trim();
+  }
+
+  const choices = (meta.choices || []).map((choice) => ({
+    name: `${choice.value} - ${choice.desc}`,
+    value: choice.value,
+  }));
+
+  if (meta.allowCustom) {
+    choices.push({ name: 'Custom model string', value: '__custom__' });
+  }
+
+  const { selectedModel } = await inquirer.prompt([{
+    type: 'list',
+    name: 'selectedModel',
+    message: theme.gold('Choose model:'),
+    choices,
+    default: meta.defaultModel,
+  }]);
+
+  if (selectedModel === '__custom__') {
+    const { customModel } = await inquirer.prompt([{
+      type: 'input',
+      name: 'customModel',
+      message: theme.gold('Custom model string:'),
+      validate: (v) => v.trim().length > 0 || 'Model is required',
+    }]);
+    saveModelConfig(customModel.trim(), provider);
+    return customModel.trim();
+  }
+
+  saveModelConfig(selectedModel, provider);
+  return selectedModel;
+}
+
+function saveModelConfig(model, provider) {
+  setConfig('llm.model', model);
+  if (provider === 'ollama') {
+    setConfig('ollamaModel', model);
+  }
 }
 
 /**

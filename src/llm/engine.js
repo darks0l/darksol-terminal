@@ -3,18 +3,19 @@ import { getKeyFromEnv, getKey } from '../config/keys.js';
 import { getConfig } from '../config/store.js';
 import { SessionMemory, extractMemories, searchMemories } from '../memory/index.js';
 import { formatSystemPrompt as formatSoulSystemPrompt } from '../soul/index.js';
+import { getProviderDefaultModel } from './models.js';
 
 const PROVIDERS = {
   openai: {
     url: 'https://api.openai.com/v1/chat/completions',
-    defaultModel: 'gpt-4o',
+    defaultModel: getProviderDefaultModel('openai'),
     authHeader: (key) => ({ Authorization: `Bearer ${key}` }),
     parseResponse: (data) => data.choices?.[0]?.message?.content,
     parseUsage: (data) => data.usage,
   },
   anthropic: {
     url: 'https://api.anthropic.com/v1/messages',
-    defaultModel: 'claude-sonnet-4-20250514',
+    defaultModel: getProviderDefaultModel('anthropic'),
     authHeader: (key) => ({ 'x-api-key': key, 'anthropic-version': '2023-06-01' }),
     buildBody: (model, messages, systemPrompt) => ({
       model,
@@ -30,7 +31,7 @@ const PROVIDERS = {
   },
   openrouter: {
     url: 'https://openrouter.ai/api/v1/chat/completions',
-    defaultModel: 'anthropic/claude-sonnet-4-20250514',
+    defaultModel: getProviderDefaultModel('openrouter'),
     authHeader: (key) => ({
       Authorization: `Bearer ${key}`,
       'HTTP-Referer': 'https://darksol.net',
@@ -41,21 +42,21 @@ const PROVIDERS = {
   },
   minimax: {
     url: 'https://api.minimax.io/v1/chat/completions',
-    defaultModel: 'MiniMax-M2.5',
+    defaultModel: getProviderDefaultModel('minimax'),
     authHeader: (key) => ({ Authorization: `Bearer ${key}` }),
     parseResponse: (data) => data.choices?.[0]?.message?.content,
     parseUsage: (data) => data.usage,
   },
   ollama: {
     url: null,
-    defaultModel: 'llama3.1',
+    defaultModel: getProviderDefaultModel('ollama'),
     authHeader: () => ({}),
     parseResponse: (data) => data.choices?.[0]?.message?.content || data.message?.content,
     parseUsage: () => ({ input: 0, output: 0 }),
   },
   bankr: {
     url: 'https://llm.bankr.bot/v1/chat/completions',
-    defaultModel: 'claude-sonnet-4.6',
+    defaultModel: getProviderDefaultModel('bankr'),
     authHeader: (key) => ({ 'X-API-Key': key }),
     parseResponse: (data) => data.choices?.[0]?.message?.content,
     parseUsage: (data) => data.usage,
@@ -99,9 +100,7 @@ export class LLMEngine {
       throw new Error(`Unknown LLM provider: ${this.provider}. Supported: ${Object.keys(PROVIDERS).join(', ')}`);
     }
 
-    if (!this.model) {
-      this.model = providerConfig.defaultModel;
-    }
+    this.model = this.model || providerConfig.defaultModel || getProviderDefaultModel(this.provider);
 
     if (this.provider === 'ollama') {
       const host = this.apiKey || getConfig('llm.ollamaHost') || 'http://localhost:11434';

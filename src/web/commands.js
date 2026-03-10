@@ -9,6 +9,7 @@ import { join, dirname } from 'path';
 import { homedir } from 'os';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
+import { getConfiguredModel, getModelSelectionMeta, getProviderDefaultModel } from '../llm/models.js';
 
 // ══════════════════════════════════════════════════
 // CHAT LOG PERSISTENCE
@@ -416,9 +417,29 @@ export async function handleMenuSelect(id, value, item, ws) {
         })));
         return {};
       }
+      if (value === 'model') {
+        return showModelSelectionMenu(ws);
+      }
       if (value === 'keys') {
         return await handleCommand('keys', ws);
       }
+      ws.sendLine('');
+      return {};
+
+    case 'config_model':
+      if (value === 'back') {
+        ws.sendLine('');
+        return {};
+      }
+      if (value === '__custom__') {
+        ws.sendPrompt('config_model_input', 'Model:', { provider: getConfig('llm.provider') || 'openai' });
+        return {};
+      }
+      saveSelectedModel(value);
+      chatEngines.delete(ws);
+      ws.sendLine('');
+      ws.sendLine(`  ${ANSI.green}âœ“ Model set to ${value}${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.dim}AI session refreshed.${ANSI.reset}`);
       ws.sendLine('');
       return {};
 
@@ -429,7 +450,6 @@ export async function handleMenuSelect(id, value, item, ws) {
       }
       return await handleCommand(value, ws);
   }
-
   return {};
 }
 
@@ -470,6 +490,23 @@ export async function handlePromptResponse(id, value, meta, ws) {
       ws.sendLine(`  ${ANSI.red}✗ Failed: ${err.message}${ANSI.reset}`);
       ws.sendLine('');
     }
+    return {};
+  }
+
+  if (id === 'config_model_input') {
+    const provider = meta?.provider || getConfig('llm.provider') || 'openai';
+    const model = String(value || '').trim();
+    if (!model) {
+      ws.sendLine(`  ${ANSI.red}âœ— Model is required${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+
+    saveSelectedModel(model, provider);
+    chatEngines.delete(ws);
+    ws.sendLine(`  ${ANSI.green}âœ“ Model set to ${model}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.dim}AI session refreshed.${ANSI.reset}`);
+    ws.sendLine('');
     return {};
   }
 
@@ -789,7 +826,9 @@ export function getAIStatus() {
 
   if (connected.length > 0) {
     const names = connected.map(p => SERVICES[p]?.name || p).join(', ');
-    return `  ${green}● AI ready${reset} ${dim}(${names})${reset}\r\n  ${dim}Type ${gold}ai <question>${dim} to start chatting. Chat logs saved to ~/.darksol/chat-logs/${reset}\r\n\r\n`;
+    const provider = getConfig('llm.provider') || connected[0];
+    const model = provider === 'bankr' ? 'gateway managed' : (getConfiguredModel(provider) || getProviderDefaultModel(provider) || 'default');
+    return `  ${green}● AI ready${reset} ${dim}(${names} | ${provider}/${model})${reset}\r\n  ${dim}Type ${gold}ai <question>${dim} to start chatting. Chat logs saved to ~/.darksol/chat-logs/${reset}\r\n\r\n`;
   }
 
   return [
@@ -836,7 +875,7 @@ export async function handleCommand(cmd, ws) {
     case 'mail':
       return await cmdMail(args, ws);
     case 'config':
-      return await cmdConfig(ws);
+      return await cmdConfig(args, ws);
     case 'oracle':
       return await cmdOracle(args, ws);
     case 'cards':
@@ -1794,11 +1833,20 @@ async function cmdFacilitator(args, ws) {
   return {};
 }
 
-async function cmdConfig(ws) {
+async function cmdConfig(args, ws) {
+  const sub = args[0]?.toLowerCase();
+  if (sub === 'model') {
+    return showModelSelectionMenu(ws);
+  }
+
   const chain = getConfig('chain') || 'base';
   const wallet = getConfig('activeWallet') || '(none)';
   const slippage = getConfig('slippage') || '0.5';
   const email = getConfig('mailEmail') || '(none)';
+  const provider = getConfig('llm.provider') || '(not set)';
+  const model = provider === 'bankr'
+    ? 'gateway managed'
+    : getConfiguredModel(provider === '(not set)' ? 'openai' : provider) || '(default)';
 
   ws.sendLine(`${ANSI.gold}  ◆ CONFIG${ANSI.reset}`);
   ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
@@ -1806,17 +1854,63 @@ async function cmdConfig(ws) {
   ws.sendLine(`  ${ANSI.darkGold}Wallet${ANSI.reset}        ${ANSI.white}${wallet}${ANSI.reset}`);
   ws.sendLine(`  ${ANSI.darkGold}Slippage${ANSI.reset}      ${ANSI.white}${slippage}%${ANSI.reset}`);
   ws.sendLine(`  ${ANSI.darkGold}Mail${ANSI.reset}          ${ANSI.white}${email}${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.darkGold}LLM Provider${ANSI.reset}  ${ANSI.white}${provider}${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.darkGold}LLM Model${ANSI.reset}     ${ANSI.white}${model}${ANSI.reset}`);
   ws.sendLine(`  ${ANSI.darkGold}AI${ANSI.reset}            ${hasAnyLLM() ? `${ANSI.green}● Ready${ANSI.reset}` : `${ANSI.dim}○ Not configured${ANSI.reset}`}`);
   ws.sendLine('');
 
   // Offer interactive config
   ws.sendMenu('config_action', '◆ Configure', [
     { value: 'chain', label: '🔗 Change chain', desc: `Currently: ${chain}` },
+    { value: 'model', label: '🧠 Change model', desc: `Currently: ${model}` },
     { value: 'keys', label: '🔑 LLM / API keys', desc: '' },
     { value: 'back', label: '← Back', desc: '' },
   ]);
 
   return {};
+}
+
+/**
+ * Show model selection menu for current provider
+ */
+function showModelSelectionMenu(ws) {
+  const provider = getConfig('llm.provider') || 'openai';
+  const meta = getModelSelectionMeta(provider);
+
+  if (meta.managed) {
+    ws.sendLine(`  ${ANSI.dim}Bankr selects the backing model automatically.${ANSI.reset}`);
+    ws.sendLine('');
+    return {};
+  }
+
+  if (meta.textInput) {
+    ws.sendPrompt('config_model_input', 'Model:', { provider });
+    return {};
+  }
+
+  const items = (meta.choices || []).map(choice => ({
+    value: choice.value,
+    label: choice.value,
+    desc: choice.desc,
+  }));
+
+  if (meta.allowCustom) {
+    items.push({ value: '__custom__', label: 'Custom model', desc: 'Type any model string' });
+  }
+
+  items.push({ value: 'back', label: '← Back', desc: '' });
+  ws.sendMenu('config_model', '🧠 Select Model', items);
+  return {};
+}
+
+/**
+ * Save selected model to config
+ */
+function saveSelectedModel(model, provider = getConfig('llm.provider') || 'openai') {
+  setConfig('llm.model', model);
+  if (provider === 'ollama') {
+    setConfig('ollamaModel', model);
+  }
 }
 
 // ══════════════════════════════════════════════════

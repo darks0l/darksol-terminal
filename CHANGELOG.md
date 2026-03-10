@@ -7,6 +7,27 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.9.2] - 2026-03-10
+### Added
+- **Model Selection** — users can now pick their LLM model during setup and anytime after:
+  - Setup wizard: model picker shown after provider selection (list for cloud, text input for Ollama)
+  - Web shell: `config model` command with interactive menu
+  - CLI: `darksol config model [model]` — view or set model
+  - `darksol config show` now displays LLM Provider and Model
+  - OpenRouter: popular picks + custom model string option
+  - Bankr: gateway-managed (no model picker shown)
+- **Model Catalog** (`src/llm/models.js`) — centralized, up-to-date model lists:
+  - OpenAI: gpt-5.4, gpt-5-mini, gpt-4o, o3
+  - Anthropic: claude-opus-4-6, claude-sonnet-4-6, claude-haiku-4-5
+  - MiniMax: M2.5, M2.5-highspeed, M2.1, M2.1-highspeed, M2
+  - OpenRouter: 5 popular picks + custom input
+  - Ollama: free-text model name
+
+### Changed
+- **AI status** in web shell now shows active provider and model: `AI ready (OpenAI | openai/gpt-5.4)`
+- **Engine defaults updated** — OpenAI defaults to gpt-5.4, Anthropic to claude-sonnet-4-6 (was gpt-4o / claude-sonnet-4-20250514)
+- **Config display** — both CLI and web shell show LLM Provider + Model in config output
+
 ## [0.9.1] - 2026-03-10
 ### Added
 - **Agentic Task Loop** — ReAct-style autonomous agent with bounded execution:

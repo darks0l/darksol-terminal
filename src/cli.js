@@ -32,6 +32,7 @@ import { clearMemories, exportMemories, getRecentMemories, searchMemories } from
 import { getAgentStatus, planAgentGoal, runAgentTask } from './agent/index.js';
 import { createRequire } from 'module';
 import { resolve } from 'path';
+import { getConfiguredModel, getProviderDefaultModel } from './llm/models.js';
 const require = createRequire(import.meta.url);
 const { version: PKG_VERSION } = require('../package.json');
 
@@ -1137,6 +1138,8 @@ export function cli(argv) {
         ['Output', cfg.output],
         ['Slippage', `${cfg.slippage}%`],
         ['Gas Multiplier', `${cfg.gasMultiplier}x`],
+        ['LLM Provider', cfg.llm?.provider || theme.dim('(not set)')],
+        ['LLM Model', getConfiguredModel(cfg.llm?.provider || 'openai') || theme.dim('(default)')],
         ['Soul User', cfg.soul?.userName || theme.dim('(not set)')],
         ['Agent Name', cfg.soul?.agentName || 'Darksol'],
         ['Tone', cfg.soul?.tone || theme.dim('(not set)')],
@@ -1151,6 +1154,33 @@ export function cli(argv) {
       showSection('SERVICE URLS');
       kvDisplay(Object.entries(cfg.services).map(([k, v]) => [k, v]));
       console.log('');
+    });
+
+  config
+    .command('model [model]')
+    .description('Set the LLM model')
+    .option('-p, --provider <provider>', 'LLM provider (defaults to current provider)')
+    .action((model, opts) => {
+      const provider = opts.provider || getConfig('llm.provider') || 'openai';
+      if (!model) {
+        const current = getConfiguredModel(provider);
+        const fallback = getProviderDefaultModel(provider);
+        info(`Current model for ${provider}: ${current || '(not set)'}`);
+        if (fallback) {
+          info(`Provider default: ${fallback}`);
+        }
+        return;
+      }
+
+      if (opts.provider) {
+        setConfig('llm.provider', provider);
+        setConfig('llmProvider', provider);
+      }
+      setConfig('llm.model', model);
+      if (provider === 'ollama') {
+        setConfig('ollamaModel', model);
+      }
+      success(`LLM model for ${provider}: ${model}`);
     });
 
   config
