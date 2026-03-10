@@ -51,6 +51,13 @@ const PROVIDERS = {
     parseResponse: (data) => data.choices?.[0]?.message?.content || data.message?.content,
     parseUsage: () => ({ input: 0, output: 0 }),
   },
+  bankr: {
+    url: 'https://llm.bankr.bot/v1/chat/completions',
+    defaultModel: 'claude-sonnet-4.6',
+    authHeader: (key) => ({ 'X-API-Key': key }),
+    parseResponse: (data) => data.choices?.[0]?.message?.content,
+    parseUsage: (data) => data.usage,
+  },
 };
 
 // ──────────────────────────────────────────────────
@@ -83,6 +90,12 @@ export class LLMEngine {
       if (!this.apiKey && vaultPassword) {
         this.apiKey = await getKey(this.provider, vaultPassword);
       }
+    }
+
+    if (!this.apiKey && this.provider !== 'ollama') {
+      // Try auto-stored keys as last resort
+      const { getKeyAuto } = await import('../config/keys.js');
+      this.apiKey = getKeyAuto(this.provider);
     }
 
     if (!this.apiKey && this.provider !== 'ollama') {

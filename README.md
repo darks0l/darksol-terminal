@@ -15,7 +15,7 @@ A unified CLI for market intel, trading, AI-powered analysis, on-chain oracle, c
 [![License: MIT](https://img.shields.io/badge/License-MIT-gold.svg)](https://opensource.org/licenses/MIT)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
 
-- Current release: **0.7.0**
+- Current release: **0.7.1**
 - Changelog: `CHANGELOG.md`
 
 ## Install
@@ -206,7 +206,7 @@ darksol ai analyze AERO
 darksol ai chat --provider ollama --model llama3
 ```
 
-**Supported providers:** OpenAI, Anthropic, OpenRouter, Ollama (local = free)
+**Supported providers:** OpenAI, Anthropic, OpenRouter, Bankr LLM Gateway, Ollama (local = free)
 
 The AI gets live market context (prices from DexScreener), knows your config (chain, slippage, wallet), and returns structured intents with confidence scores and risk warnings.
 
@@ -232,7 +232,7 @@ darksol keys remove openai
 **Supported services:**
 | Category | Services |
 |----------|----------|
-| LLM | OpenAI, Anthropic, OpenRouter, Ollama |
+| LLM | OpenAI, Anthropic, OpenRouter, Bankr LLM Gateway, Ollama |
 | Data | CoinGecko Pro, DexScreener, DefiLlama |
 | RPC | Alchemy, Infura, QuickNode |
 | Trading | 1inch, ParaSwap |

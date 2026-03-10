@@ -7,6 +7,17 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.7.1] - 2026-03-10
+### Added
+- **Bankr LLM Gateway** as optional AI chat provider:
+  - OpenAI-compatible API at `https://llm.bankr.bot/v1/chat/completions`
+  - Auth via `X-API-Key: bk_...` or env `BANKR_LLM_KEY`
+  - Default model: `claude-sonnet-4.6`
+  - Access Claude, Gemini, GPT models — pay with crypto credits (USDC/ETH/BNKR)
+  - Docs: https://docs.bankr.bot/llm-gateway/overview
+- Bankr added to web shell `keys` menu and AI status check
+- Engine auto-resolves auto-stored keys as fallback
+
 ## [0.7.0] - 2026-03-10
 ### Added
 - **Web GUI: Interactive send flow** — full click-through token transfer in `darksol serve`:

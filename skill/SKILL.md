@@ -7,7 +7,7 @@ description: "DARKSOL Terminal — unified CLI + x402 platform for trading, wall
 
 **All DARKSOL services. One terminal. Zero trust required. 🌑**
 
-`@darksol/terminal` v0.7.x | npm: `npm install -g @darksol/terminal`
+`@darksol/terminal` v0.7.1 | npm: `npm install -g @darksol/terminal`
 
 ---
 
@@ -90,12 +90,16 @@ darksol dca cancel <id>                # Cancel
 ### 🤖 AI Trading Assistant
 ```bash
 darksol ai chat                        # Interactive AI chat (supports swap/send/price/casino/cards)
+darksol ai chat --provider bankr       # Use Bankr LLM Gateway (crypto credits)
+darksol ai chat --provider bankr --model claude-opus-4.6  # Specific Bankr model
 darksol ai ask "buy 0.5 ETH of AERO"  # Parse natural language → trade intent
 darksol ai ask "flip a coin" -x        # Auto-execute if confidence ≥ 60%
 darksol ai strategy VIRTUAL -b 500     # DCA strategy recommendation
 darksol ai analyze AERO                # Token analysis
 ```
 
+**AI Providers:** OpenAI, Anthropic, OpenRouter, Bankr LLM Gateway (`bk_...`), Ollama (local/free)
+**Bankr Models:** claude-opus-4.6, claude-sonnet-4.6, gemini-3-pro, gpt-5.2, kimi-k2.5, qwen3-coder
 **AI Intent Actions:** swap, send, snipe, dca, price, balance, info, analyze, gas, cards, casino, unknown
 
 The AI understands natural language and maps it to executable commands:
@@ -243,7 +247,7 @@ darksol config rpc base https://...    # Custom RPC
 ```bash
 darksol keys list                      # All services + status
 darksol keys add openai                # Add key (encrypted AES-256-GCM)
-darksol keys add anthropic             # Supported: openai, anthropic, openrouter, ollama,
+darksol keys add anthropic             # Supported: openai, anthropic, openrouter, bankr, ollama,
 darksol keys add email                 #   coingecko, dexscreener, alchemy, infura, email
 darksol keys remove <service>          # Remove key
 ```

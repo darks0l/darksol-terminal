@@ -92,6 +92,14 @@ export const SERVICES = {
     docsUrl: 'https://ollama.ai',
     validate: (key) => key.startsWith('http'),
   },
+  bankr: {
+    name: 'Bankr LLM Gateway',
+    category: 'llm',
+    description: 'Multi-model gateway — Claude, Gemini, GPT via crypto credits',
+    envVar: 'BANKR_LLM_KEY',
+    docsUrl: 'https://docs.bankr.bot/llm-gateway/overview',
+    validate: (key) => key.startsWith('bk_'),
+  },
 
   // Data Providers
   coingecko: {
@@ -404,7 +412,7 @@ export function hasKey(service) {
  */
 export function hasAnyLLM() {
   // Cloud providers — need real validated API keys
-  if (['openai', 'anthropic', 'openrouter'].some(s => hasKey(s))) return true;
+  if (['openai', 'anthropic', 'openrouter', 'bankr'].some(s => hasKey(s))) return true;
   // Ollama — check if explicitly configured via hasKey (validates URL format)
   if (hasKey('ollama')) return true;
   return false;
