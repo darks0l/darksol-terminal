@@ -121,24 +121,65 @@ export async function cardsCatalog() {
 }
 
 export async function cardsOrder(provider, amount, opts = {}) {
-  if (!opts.email) {
-    error('Email is required for card delivery. Use --email <address>');
-    info('Example: darksol cards order -p swype -a 100 --email you@example.com');
-    return;
-  }
-
-  // Validate amount
-  const numAmount = Number(amount);
-  if (!VALID_AMOUNTS.includes(numAmount)) {
-    error(`Invalid card amount: $${amount}. Valid amounts: ${VALID_AMOUNTS.map(a => '$' + a).join(', ')}`);
-    return;
-  }
-
-  // Validate provider
+  const inquirer = (await import('inquirer')).default;
   const validProviders = ['swype', 'mpc', 'reward'];
+
+  // ── Email: ask if missing ──
+  if (!opts.email) {
+    const { email } = await inquirer.prompt([{
+      type: 'input',
+      name: 'email',
+      message: theme.gold('Delivery email (card activation link):'),
+      validate: v => v.includes('@') ? true : 'Enter a valid email address',
+    }]);
+    opts.email = email;
+  }
+
+  // ── Amount: re-prompt if invalid ──
+  let numAmount = Number(amount);
+  while (!VALID_AMOUNTS.includes(numAmount)) {
+    if (amount) warn(`$${amount} is not a valid denomination.`);
+    const { picked } = await inquirer.prompt([{
+      type: 'list',
+      name: 'picked',
+      message: theme.gold('Card amount:'),
+      choices: VALID_AMOUNTS.map(a => ({ name: `$${a}`, value: a })),
+    }]);
+    numAmount = picked;
+  }
+
+  // ── Provider: re-prompt if invalid ──
   if (!validProviders.includes((provider || '').toLowerCase())) {
-    error(`Invalid provider: ${provider}. Options: swype (Global MC), mpc (US MC), reward (US Visa)`);
-    return;
+    if (provider) warn(`"${provider}" is not a valid provider.`);
+    const { picked } = await inquirer.prompt([{
+      type: 'list',
+      name: 'picked',
+      message: theme.gold('Card provider:'),
+      choices: [
+        { name: 'Swype — Mastercard (Global)', value: 'swype' },
+        { name: 'MPC — Mastercard (US only)', value: 'mpc' },
+        { name: 'Reward — Visa (US only)', value: 'reward' },
+      ],
+    }]);
+    provider = picked;
+  }
+
+  // ── Crypto: resolve or re-prompt if invalid ──
+  let resolvedCrypto = null;
+  if (opts.ticker) {
+    resolvedCrypto = resolveTickerNetwork(opts.ticker, opts.network);
+    if (!resolvedCrypto) {
+      warn(`"${opts.ticker}${opts.network ? '/' + opts.network : ''}" is not supported.`);
+    }
+  }
+  if (!resolvedCrypto) {
+    const { picked } = await inquirer.prompt([{
+      type: 'list',
+      name: 'picked',
+      message: theme.gold('Pay with:'),
+      choices: VERIFIED_COMBOS.map(c => ({ name: c.display, value: c })),
+    }]);
+    resolvedCrypto = picked;
   }
 
   const spin = spinner('Processing card order...').start();
@@ -147,21 +188,10 @@ export async function cardsOrder(provider, amount, opts = {}) {
       provider: provider.toLowerCase(),
       amount: numAmount,
       email: opts.email,
+      tickerFrom: resolvedCrypto.ticker,
+      networkFrom: resolvedCrypto.network,
     };
-
-    // Resolve and validate crypto
-    if (opts.ticker) {
-      const resolved = resolveTickerNetwork(opts.ticker, opts.network);
-      if (!resolved) {
-        spin.fail('Invalid payment method');
-        error(`"${opts.ticker}${opts.network ? '/' + opts.network : ''}" is not a supported payment option.`);
-        info('Supported: ' + VERIFIED_COMBOS.map(c => c.display).join(', '));
-        return;
-      }
-      body.tickerFrom = resolved.ticker;
-      body.networkFrom = resolved.network;
-      info(`Payment: ${resolved.display}`);
-    }
+    info(`Payment: ${resolvedCrypto.display}`);
 
     const data = await fetchJSON(`${BASE()}/api/cards/order`, {
       method: 'POST',

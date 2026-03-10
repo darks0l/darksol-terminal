@@ -273,13 +273,13 @@ export function cli(argv) {
 
   cards
     .command('order')
-    .description('Order a prepaid card')
-    .requiredOption('-p, --provider <name>', 'Card provider (swype/mpc/reward)')
-    .requiredOption('-a, --amount <usd>', 'Card amount in USD')
-    .requiredOption('-e, --email <address>', 'Delivery email for card activation link')
+    .description('Order a prepaid card (interactive if flags omitted)')
+    .option('-p, --provider <name>', 'Card provider (swype/mpc/reward)')
+    .option('-a, --amount <usd>', 'Card amount in USD')
+    .option('-e, --email <address>', 'Delivery email for card activation link')
     .option('-t, --ticker <coin>', 'Payment crypto (default: usdc)')
     .option('-n, --network <net>', 'Payment network (default: base)')
-    .action((opts) => cardsOrder(opts.provider, parseFloat(opts.amount), {
+    .action((opts) => cardsOrder(opts.provider, opts.amount ? parseFloat(opts.amount) : null, {
       email: opts.email,
       ticker: opts.ticker,
       network: opts.network,
