@@ -6,40 +6,80 @@ import { showSection } from '../ui/banner.js';
 
 const BASE = () => getServiceURL('cards') || 'https://acp.darksol.net';
 
-// Verified working ticker/network combos (tested against Trocador API)
-const VALID_CRYPTO = {
-  'usdc':  { network: 'base', display: 'USDC on Base' },
-  'usdc_base': { ticker: 'usdc', network: 'base', display: 'USDC on Base' },
-  'usdc_erc20': { ticker: 'usdc', network: 'ERC20', display: 'USDC on Ethereum' },
-  'usdt':  { network: 'trc20', display: 'USDT on Tron' },
-  'usdt_trc20': { ticker: 'usdt', network: 'trc20', display: 'USDT on Tron' },
-  'btc':   { network: 'Mainnet', display: 'Bitcoin' },
-  'eth':   { network: 'ERC20', display: 'ETH on Ethereum' },
-  'sol':   { network: 'Mainnet', display: 'Solana' },
-  'xmr':   { network: 'Mainnet', display: 'Monero' },
+// ══════════════════════════════════════════════════
+// VERIFIED CRYPTO COMBOS (tested against Trocador API 2026-03-09)
+// Only these combos are allowed — everything else is rejected before hitting the API
+// ══════════════════════════════════════════════════
+const VERIFIED_COMBOS = [
+  { ticker: 'usdc', network: 'base',    display: 'USDC on Base',     default: true },
+  { ticker: 'usdc', network: 'ERC20',   display: 'USDC on Ethereum' },
+  { ticker: 'usdt', network: 'trc20',   display: 'USDT on Tron (TRC-20)' },
+  { ticker: 'btc',  network: 'Mainnet', display: 'Bitcoin (BTC)' },
+  { ticker: 'eth',  network: 'ERC20',   display: 'Ethereum (ETH)' },
+  { ticker: 'sol',  network: 'Mainnet', display: 'Solana (SOL)' },
+  { ticker: 'xmr',  network: 'Mainnet', display: 'Monero (XMR)' },
+];
+
+// Aliases: what users might type → what Trocador expects
+const TICKER_ALIASES = {
+  'ethereum': 'eth', 'ether': 'eth',
+  'bitcoin': 'btc',
+  'solana': 'sol',
+  'monero': 'xmr',
+  'tether': 'usdt',
+  'usd coin': 'usdc', 'usd-c': 'usdc',
 };
 
-// Map user-friendly network names to Trocador-compatible ones
-const NETWORK_MAP = {
+const NETWORK_ALIASES = {
   'base': 'base',
-  'ethereum': 'ERC20', 'eth': 'ERC20', 'erc20': 'ERC20',
-  'tron': 'trc20', 'trc20': 'trc20',
-  'mainnet': 'Mainnet', 'btc': 'Mainnet', 'sol': 'Mainnet', 'xmr': 'Mainnet',
+  'ethereum': 'ERC20', 'eth': 'ERC20', 'erc20': 'ERC20', 'erc-20': 'ERC20',
+  'tron': 'trc20', 'trc20': 'trc20', 'trc-20': 'trc20',
+  'mainnet': 'Mainnet', 'main': 'Mainnet',
 };
 
-function resolveTickerNetwork(ticker, network) {
-  const t = (ticker || '').toLowerCase();
-  const n = (network || '').toLowerCase();
+const VALID_AMOUNTS = [10, 25, 50, 100, 250, 500, 1000];
 
-  // If just ticker provided, use known defaults
-  if (t && !n) {
-    const known = VALID_CRYPTO[t];
-    if (known) return { ticker: known.ticker || t, network: known.network };
+/**
+ * Resolve user input to a verified ticker/network combo.
+ * Returns { ticker, network, display } or null if invalid.
+ */
+function resolveTickerNetwork(ticker, network) {
+  const t = TICKER_ALIASES[(ticker || '').toLowerCase()] || (ticker || '').toLowerCase();
+
+  // If network specified, try to match exactly
+  if (network) {
+    const n = NETWORK_ALIASES[(network || '').toLowerCase()] || network;
+    const match = VERIFIED_COMBOS.find(c => c.ticker === t && c.network === n);
+    if (match) return match;
+    // Try just the ticker with its default network
   }
 
-  // Map network to Trocador format
-  const mappedNetwork = NETWORK_MAP[n] || network;
-  return { ticker: t, network: mappedNetwork };
+  // Just ticker — find the verified default for it
+  const match = VERIFIED_COMBOS.find(c => c.ticker === t);
+  if (match) return match;
+
+  return null; // Not a verified combo
+}
+
+/**
+ * Get all verified combos (for menus / agent listings)
+ */
+export function getVerifiedCombos() {
+  return VERIFIED_COMBOS;
+}
+
+/**
+ * Get the default combo
+ */
+export function getDefaultCombo() {
+  return VERIFIED_COMBOS.find(c => c.default) || VERIFIED_COMBOS[0];
+}
+
+/**
+ * Get valid amounts
+ */
+export function getValidAmounts() {
+  return VALID_AMOUNTS;
 }
 
 export async function cardsCatalog() {
@@ -87,19 +127,40 @@ export async function cardsOrder(provider, amount, opts = {}) {
     return;
   }
 
+  // Validate amount
+  const numAmount = Number(amount);
+  if (!VALID_AMOUNTS.includes(numAmount)) {
+    error(`Invalid card amount: $${amount}. Valid amounts: ${VALID_AMOUNTS.map(a => '$' + a).join(', ')}`);
+    return;
+  }
+
+  // Validate provider
+  const validProviders = ['swype', 'mpc', 'reward'];
+  if (!validProviders.includes((provider || '').toLowerCase())) {
+    error(`Invalid provider: ${provider}. Options: swype (Global MC), mpc (US MC), reward (US Visa)`);
+    return;
+  }
+
   const spin = spinner('Processing card order...').start();
   try {
     const body = {
-      provider,
-      amount: Number(amount),
+      provider: provider.toLowerCase(),
+      amount: numAmount,
       email: opts.email,
     };
-    // Resolve ticker/network to Trocador-compatible values
+
+    // Resolve and validate crypto
     if (opts.ticker) {
       const resolved = resolveTickerNetwork(opts.ticker, opts.network);
+      if (!resolved) {
+        spin.fail('Invalid payment method');
+        error(`"${opts.ticker}${opts.network ? '/' + opts.network : ''}" is not a supported payment option.`);
+        info('Supported: ' + VERIFIED_COMBOS.map(c => c.display).join(', '));
+        return;
+      }
       body.tickerFrom = resolved.ticker;
       body.networkFrom = resolved.network;
-      info(`Payment: ${resolved.ticker.toUpperCase()} on ${resolved.network}`);
+      info(`Payment: ${resolved.display}`);
     }
 
     const data = await fetchJSON(`${BASE()}/api/cards/order`, {

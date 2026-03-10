@@ -215,8 +215,11 @@ export async function handleMenuSelect(id, value, item, ws) {
 
     case 'cards_crypto':
       if (value === 'back') return {};
-      // Execute the order
+      // Execute the order with verified combo
       return await executeCardOrder(item?.meta || {}, ws);
+
+    case 'cards_status_check':
+      return await showCardStatus(value, ws);
 
     case 'agent_action':
       if (value === 'start') {
