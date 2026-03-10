@@ -3,8 +3,8 @@
    ══════════════════════════════════════════════════ */
 
 :root {
-  --bg: #0a0a1a;
-  --bg-surface: #111128;
+  --bg: #000000;
+  --bg-surface: #0a0a0a;
   --gold: #FFD700;
   --dark-gold: #B8860B;
   --text: #e0e0e0;
@@ -12,7 +12,7 @@
   --accent: #e94560;
   --green: #00ff88;
   --blue: #4488ff;
-  --border: #1a1a3e;
+  --border: #1a1a1a;
 }
 
 * {

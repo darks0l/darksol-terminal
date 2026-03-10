@@ -44,13 +44,13 @@ let promptMask = false;
 async function init() {
   term = new Terminal({
     theme: {
-      background: '#0a0a1a',
+      background: '#000000',
       foreground: '#e0e0e0',
       cursor: '#FFD700',
-      cursorAccent: '#0a0a1a',
+      cursorAccent: '#000000',
       selectionBackground: 'rgba(255, 215, 0, 0.2)',
       selectionForeground: '#ffffff',
-      black: '#0a0a1a',
+      black: '#000000',
       red: '#e94560',
       green: '#00ff88',
       yellow: '#FFD700',
