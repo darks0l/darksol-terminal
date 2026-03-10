@@ -1138,34 +1138,48 @@ async function cmdOracle(args, ws) {
 }
 
 async function cmdCasino(args, ws) {
+  ws.sendLine(`${ANSI.gold}  ◆ CASINO${ANSI.reset}`);
+  ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
   try {
-    const resp = await fetch('https://casino.darksol.net/health');
+    const resp = await fetch('https://casino.darksol.net/api/stats');
+    const ct = resp.headers.get('content-type') || '';
+    if (!ct.includes('json')) throw new Error('not json');
     const data = await resp.json();
 
-    ws.sendLine(`${ANSI.gold}  ◆ CASINO${ANSI.reset}`);
-    ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
-    ws.sendLine(`  ${ANSI.darkGold}Status${ANSI.reset}     ${data.status || 'unknown'}`);
+    ws.sendLine(`  ${ANSI.darkGold}Status${ANSI.reset}     ${ANSI.green}● Online${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Bankroll${ANSI.reset}   ${ANSI.white}$${data.bankrollUsdc || '0'} USDC${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Total Bets${ANSI.reset} ${ANSI.white}${data.totalBets || 0}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Win Rate${ANSI.reset}   ${ANSI.white}${data.winRate || '0'}%${ANSI.reset}`);
     ws.sendLine(`  ${ANSI.darkGold}Endpoint${ANSI.reset}   ${ANSI.blue}casino.darksol.net${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Docs${ANSI.reset}       ${ANSI.blue}casino.darksol.net/docs${ANSI.reset}`);
     ws.sendLine('');
   } catch {
-    ws.sendLine(`  ${ANSI.dim}Casino unreachable${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.red}○ Casino unreachable${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.dim}Check: https://casino.darksol.net/docs${ANSI.reset}`);
     ws.sendLine('');
   }
   return {};
 }
 
 async function cmdFacilitator(args, ws) {
+  ws.sendLine(`${ANSI.gold}  ◆ x402 FACILITATOR${ANSI.reset}`);
+  ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
   try {
-    const resp = await fetch('https://facilitator.darksol.net/health');
+    const resp = await fetch('https://facilitator.darksol.net/');
+    const ct = resp.headers.get('content-type') || '';
+    if (!ct.includes('json')) throw new Error('not json');
     const data = await resp.json();
 
-    ws.sendLine(`${ANSI.gold}  ◆ FACILITATOR${ANSI.reset}`);
-    ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
-    ws.sendLine(`  ${ANSI.darkGold}Status${ANSI.reset}     ${data.status || 'unknown'}`);
-    ws.sendLine(`  ${ANSI.darkGold}Endpoint${ANSI.reset}   ${ANSI.blue}facilitator.darksol.net${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Status${ANSI.reset}     ${ANSI.green}● Online${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Service${ANSI.reset}    ${ANSI.white}${data.service || 'DARKSOL Facilitator'}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Protocol${ANSI.reset}   ${ANSI.white}${data.protocol || 'x402'}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Fee${ANSI.reset}        ${ANSI.green}${data.fee || '0%'}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Chains${ANSI.reset}     ${ANSI.white}${Array.isArray(data.chains) ? data.chains.join(', ') : 'Base, Polygon'}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Docs${ANSI.reset}       ${ANSI.blue}acp.darksol.net/facilitator${ANSI.reset}`);
     ws.sendLine('');
   } catch {
-    ws.sendLine(`  ${ANSI.dim}Facilitator unreachable${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.red}○ Facilitator unreachable${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.dim}Check: https://acp.darksol.net/facilitator${ANSI.reset}`);
     ws.sendLine('');
   }
   return {};
