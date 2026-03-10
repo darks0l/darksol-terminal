@@ -7,7 +7,7 @@ description: "DARKSOL Terminal — unified CLI + x402 platform for trading, wall
 
 **All DARKSOL services. One terminal. Zero trust required. 🌑**
 
-`@darksol/terminal` v0.7.1 | npm: `npm install -g @darksol/terminal`
+`@darksol/terminal` v0.8.0 | npm: `npm install -g @darksol/terminal`
 
 ---
 
@@ -63,10 +63,11 @@ darksol wallet use <name>              # Set active wallet
 darksol wallet export [name]           # Export (password required for PK)
 ```
 
-### 📊 Trading (5 chains)
+### 📊 Trading (60+ chains via LI.FI)
 ```bash
-darksol trade swap                             # Interactive swap (prompts for pair + amount)
-darksol trade swap -i ETH -o USDC -a 0.1      # Uniswap V3 swap with slippage protection
+darksol trade swap                             # Interactive swap (LI.FI — best route across 31 DEXs)
+darksol trade swap -i ETH -o USDC -a 0.1      # LI.FI swap with Uniswap V3 fallback
+darksol trade swap -i ETH -o USDC -a 0.1 --direct  # Force direct Uniswap V3 (skip LI.FI)
 darksol trade swap -i ETH -o USDC -a 0.1 -p "pw" -y  # Non-interactive (automation/cron)
 darksol trade pairs                            # Show common pairs for active chain
 darksol trade snipe <token> -a 0.05            # Fast buy with gas boost
@@ -76,8 +77,20 @@ darksol send                                   # Interactive ETH/ERC-20 transfer
 darksol receive                                # Show your address for receiving
 ```
 
-**Supported chains:** Base (default), Ethereum, Polygon, Arbitrum, Optimism
-**Swap routers:** Base uses SwapRouter02 (V2), others use V1 SwapRouter. Handled automatically.
+### 🌉 Cross-Chain Bridge (LI.FI)
+```bash
+darksol bridge send                                    # Interactive bridge flow
+darksol bridge send -f base -t arbitrum --token ETH -a 0.1  # Bridge ETH from Base to Arbitrum
+darksol bridge send -f ethereum -t polygon --token USDC -a 100 -p "pw" -y  # Non-interactive
+darksol bridge status <txHash>                         # Track cross-chain transfer
+darksol bridge status <txHash> -f base -t arbitrum     # Faster status with chain hints
+darksol bridge chains                                  # Show all 60+ supported chains
+```
+
+**LI.FI routing:** Aggregates 27 bridges and 31 DEXs across 60 chains. Finds optimal route automatically.
+**Swap routing:** LI.FI primary, Uniswap V3 fallback. Use `--direct` to skip LI.FI.
+**API key:** Free tier works without key (200 req/2hr). Higher limits: `darksol keys add lifi`
+**Supported chains:** Base, Ethereum, Polygon, Arbitrum, Optimism, Avalanche, BSC, zkSync, Scroll, Linea, + 50 more
 
 ### 📈 DCA (Dollar-Cost Averaging)
 ```bash

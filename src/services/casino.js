@@ -1,7 +1,5 @@
 import { fetchJSON } from '../utils/fetch.js';
-import fetch from 'node-fetch';
-import { ethers } from 'ethers';
-import { getServiceURL, getConfig, getRPC } from '../config/store.js';
+import { getServiceURL, getConfig } from '../config/store.js';
 import { theme } from '../ui/theme.js';
 import { spinner, kvDisplay, success, error, warn, info, table } from '../ui/components.js';
 import { showSection } from '../ui/banner.js';
@@ -181,82 +179,36 @@ export async function casinoBet(gameType, betParams = {}, opts = {}) {
     return;
   }
 
-  // ── Payment: Send 1 USDC to the house ──
-  const HOUSE_WALLET = '0x7B0a6330121B26100D47BCcd5640cc6617F8adA7';
-  const USDC_BASE = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
-  const USDC_AMOUNT = '1000000'; // 1 USDC (6 decimals)
+  // ── Place bet via x402 (EIP-3009 auto-pay) ──
+  const signerToken = process.env.DARKSOL_SIGNER_TOKEN || getConfig('signerToken') || null;
+  const signerUp = await isSignerRunning(signerToken);
 
-  const paymentSpin = spinner('Sending $1 USDC to the house...').start();
-  let paymentTxHash;
-
-  try {
-    // Try agent signer first
-    const signerToken = process.env.DARKSOL_SIGNER_TOKEN || getConfig('signerToken') || null;
-    const signerUp = await isSignerRunning(signerToken);
-
-    if (signerUp) {
-      // Use agent signer to send USDC
-      const headers = { 'Content-Type': 'application/json' };
-      if (signerToken) headers.Authorization = `Bearer ${signerToken}`;
-
-      // ERC-20 transfer calldata: transfer(address,uint256)
-      const iface = new ethers.Interface(['function transfer(address to, uint256 amount) returns (bool)']);
-      const txData = iface.encodeFunctionData('transfer', [HOUSE_WALLET, USDC_AMOUNT]);
-
-      const resp = await fetch('http://127.0.0.1:18790/send', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ to: USDC_BASE, data: txData, value: '0' }),
-      });
-
-      if (!resp.ok) {
-        const errText = await resp.text();
-        throw new Error(`Signer refused: ${errText}`);
-      }
-
-      const result = await resp.json();
-      paymentTxHash = result.txHash || result.hash;
-    } else {
-      // Try wallet directly (needs password)
-      const activeWallet = getConfig('activeWallet');
-      if (!activeWallet) throw new Error('No wallet configured. Set one: darksol wallet use <name>');
-
-      const { decryptKey } = await import('../wallet/keystore.js');
-      const password = process.env.DARKSOL_WALLET_PASSWORD;
-      if (!password) {
-        paymentSpin.fail('Payment requires agent signer or DARKSOL_WALLET_PASSWORD');
-        info('Start agent signer: darksol signer start');
-        info('Or set: export DARKSOL_WALLET_PASSWORD=<password>');
-        return;
-      }
-
-      const pk = decryptKey(activeWallet, password);
-      const provider = new ethers.JsonRpcProvider(getRPC('base'));
-      const wallet = new ethers.Wallet(pk, provider);
-      const usdc = new ethers.Contract(USDC_BASE, ['function transfer(address,uint256) returns (bool)'], wallet);
-      const tx = await usdc.transfer(HOUSE_WALLET, USDC_AMOUNT);
-      const receipt = await tx.wait();
-      paymentTxHash = receipt.hash;
-    }
-
-    paymentSpin.succeed(`Payment sent: ${paymentTxHash.slice(0, 16)}...`);
-  } catch (err) {
-    paymentSpin.fail('Payment failed');
-    error(err.message);
-    if (err.message.includes('insufficient')) {
-      info('You need at least 1 USDC on Base to play');
-    }
+  if (!signerUp) {
+    error('Agent signer is required for casino bets (x402 payment).');
+    info('Start it: darksol agent start <wallet-name>');
     return;
   }
 
-  // ── Place the bet with payment proof ──
   const spin = spinner(`Playing ${gameInfo.name}...`).start();
   try {
-    const data = await fetchJSON(`${getURL()}/api/bet`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ gameType, betParams, agentWallet, paymentTxHash }),
-    });
+    const { fetchWithX402 } = await import('../utils/x402.js');
+    const result = await fetchWithX402(
+      `${getURL()}/api/bet`,
+      {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gameType, betParams, agentWallet }),
+      },
+      { signerToken, autoSign: true },
+    );
+
+    if (result.error) {
+      spin.fail('Payment failed');
+      error(result.error);
+      return;
+    }
+
+    const data = result.data;
 
     if (data.won) {
       spin.succeed(theme.success(`YOU WON! $${data.payoutAmount} USDC`));
@@ -271,7 +223,7 @@ export async function casinoBet(gameType, betParams = {}, opts = {}) {
       ['Result', data.result || '-'],
       ['Won', data.won ? theme.success('YES! 🎉') : theme.error('No')],
       ['Payout', data.won ? `$${data.payoutAmount} USDC` : '$0'],
-      ['Payment TX', paymentTxHash.slice(0, 20) + '...'],
+      ['Payment', result.paid ? theme.success('x402 ✓') : theme.dim('unpaid')],
       ['Oracle TX', data.oracleTxHash ? data.oracleTxHash.slice(0, 20) + '...' : '-'],
       ['Payout TX', data.payoutTxHash ? data.payoutTxHash.slice(0, 20) + '...' : '-'],
     ]);
@@ -286,8 +238,6 @@ export async function casinoBet(gameType, betParams = {}, opts = {}) {
     error(err.message);
     if (err.message.includes('not accepting') || err.message.includes('closed')) {
       info('The casino may be temporarily closed. Check: darksol casino status');
-    } else if (err.message.includes('payment') || err.message.includes('Payment')) {
-      info(`Your USDC was sent (${paymentTxHash.slice(0, 16)}...) — contact support if bet wasn't processed`);
     }
   }
 }

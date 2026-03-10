@@ -7,6 +7,14 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.8.1] - 2026-03-10
+### Changed
+- **Casino now uses standard x402 payment flow** — `darksol casino bet` uses `fetchWithX402()` (EIP-3009 via agent signer) instead of legacy direct USDC transfer
+  - Aligns with casino server-side update (now returns proper `Payment-Required` header)
+  - Requires agent signer running (`darksol agent start <wallet>`)
+  - Cleaner payment UX: shows "x402 ✓" in results
+  - Removed unused `ethers`, `node-fetch`, `getRPC` imports from casino module
+
 ## [0.8.0] - 2026-03-10
 ### Added
 - **LI.FI Integration** — cross-chain swaps & bridges via LI.FI aggregator:
