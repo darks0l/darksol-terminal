@@ -12,10 +12,10 @@
 A unified CLI for market intel, trading, AI-powered analysis, on-chain oracle, casino, prepaid cards, builder indexing, secure agent signing, and more. Encrypted wallet management. Agent-native. OpenClaw-controllable.
 
 [![npm](https://img.shields.io/npm/v/@darksol/terminal)](https://www.npmjs.com/package/@darksol/terminal)
-[![License: MIT](https://img.shields.io/badge/License-MIT-gold.svg)](https://opensource.org/licenses/MIT)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-gold.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
 
-- Current release: **0.7.1**
+- Current release: **0.7.2**
 - Changelog: `CHANGELOG.md`
 
 ## Install

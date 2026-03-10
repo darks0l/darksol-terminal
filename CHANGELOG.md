@@ -7,6 +7,10 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.7.2] - 2026-03-10
+### Changed
+- **License changed from MIT to GPL-3.0-or-later** — protects against proprietary forks while keeping the code fully open and free to use
+
 ## [0.7.1] - 2026-03-10
 ### Added
 - **Bankr LLM Gateway** as optional AI chat provider:

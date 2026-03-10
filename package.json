@@ -1,6 +1,6 @@
 {
   "name": "@darksol/terminal",
-  "version": "0.7.1",
+  "version": "0.7.2",
   "description": "DARKSOL Terminal — unified CLI for all DARKSOL services. Market intel, trading, oracle, casino, and more.",
   "type": "module",
   "bin": {
@@ -24,7 +24,7 @@
     "defi"
   ],
   "author": "DARKSOL <chris00claw@gmail.com>",
-  "license": "MIT",
+  "license": "GPL-3.0-or-later",
   "dependencies": {
     "agentmail": "^0.4.2",
     "blessed": "^0.1.81",
