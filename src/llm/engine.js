@@ -39,6 +39,13 @@ const PROVIDERS = {
     parseResponse: (data) => data.choices?.[0]?.message?.content,
     parseUsage: (data) => data.usage,
   },
+  minimax: {
+    url: 'https://api.minimax.io/v1/chat/completions',
+    defaultModel: 'MiniMax-M2.5',
+    authHeader: (key) => ({ Authorization: `Bearer ${key}` }),
+    parseResponse: (data) => data.choices?.[0]?.message?.content,
+    parseUsage: (data) => data.usage,
+  },
   ollama: {
     url: null,
     defaultModel: 'llama3.1',

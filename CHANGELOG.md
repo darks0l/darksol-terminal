@@ -7,6 +7,32 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.9.1] - 2026-03-10
+### Added
+- **Agentic Task Loop** — ReAct-style autonomous agent with bounded execution:
+  - `darksol agent task "monitor AERO price"` — give the agent a goal, it loops: think → act → observe → iterate
+  - `darksol agent plan "..."` — dry-run planning only (no execution)
+  - `darksol agent status` — view last task summary
+  - `--max-steps N` — configurable step limit (default 10)
+  - `--allow-actions` — unlock mutating tools (swap, send, script run); safe read-only mode by default
+  - Per-step logs with thought summary, action taken, and result
+  - Guardrails: mutating actions blocked unless explicitly allowed, clear messaging when skipped
+- **Tool Registry** — unified executor for agent tool calls:
+  - Read-only tools: `price`, `gas`, `wallet-balance`, `portfolio`, `market`, `watch`
+  - Mutating tools (behind `--allow-actions`): `swap`, `send`, `script-run`
+  - Structured success/error output, timeouts, retries
+- **MiniMax AI Provider** — full integration:
+  - OpenAI-compatible endpoint at `https://api.minimax.io/v1/chat/completions`
+  - Default model: `MiniMax-M2.5` (204K context, ~60 tps)
+  - `darksol keys add minimax` — API key vault support
+  - First-run wizard includes MiniMax as provider option
+  - Web shell AI status, `keys` menu, and provider lists updated
+- **Web shell agent commands** — `task "..."`, `agent plan/status` with live progress output
+- **10 new tests** — agent loop, tool registry, LLM provider coverage (48 total)
+
+### Fixed
+- **Setup wizard → engine config mismatch** — wizard now writes `llm.provider`, `llm.ollamaHost`, `llm.model` so the engine actually picks up the selected provider (was silently broken for all providers)
+
 ## [0.9.0] - 2026-03-10
 ### Added
 - **Agent Soul System** — persistent identity and personality for your terminal agent:

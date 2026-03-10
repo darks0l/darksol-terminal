@@ -52,11 +52,12 @@ export async function runSetupWizard(opts = {}) {
     name: 'provider',
     message: theme.gold('Choose your AI provider:'),
     choices: [
-      { name: '🤖 OpenAI (GPT-4o, GPT-5) — API key or OAuth', value: 'openai' },
-      { name: '🧠 Anthropic (Claude Opus, Sonnet) — API key or OAuth', value: 'anthropic' },
-      { name: '🔀 OpenRouter (any model, one key) — API key', value: 'openrouter' },
-      { name: '🏠 Ollama (local models, free, private) — no key needed', value: 'ollama' },
-      { name: '⏭️  Skip for now', value: 'skip' },
+      { name: 'OpenAI (GPT-4o, GPT-5) - API key or OAuth', value: 'openai' },
+      { name: 'Anthropic (Claude Opus, Sonnet) - API key or OAuth', value: 'anthropic' },
+      { name: 'OpenRouter (any model, one key) - API key', value: 'openrouter' },
+      { name: 'MiniMax (MiniMax-M2.5) - API key', value: 'minimax' },
+      { name: 'Ollama (local models, free, private) - no key needed', value: 'ollama' },
+      { name: 'Skip for now', value: 'skip' },
     ],
   }]);
 
@@ -112,7 +113,7 @@ export async function runSetupWizard(opts = {}) {
 }
 
 /**
- * Setup a cloud provider (OpenAI, Anthropic, OpenRouter)
+ * Setup a cloud provider (OpenAI, Anthropic, OpenRouter, MiniMax)
  */
 async function setupCloudProvider(provider) {
   const supportsOAuth = ['openai', 'anthropic'].includes(provider);
@@ -120,6 +121,7 @@ async function setupCloudProvider(provider) {
     openai: 'OpenAI',
     anthropic: 'Anthropic',
     openrouter: 'OpenRouter',
+    minimax: 'MiniMax',
   }[provider];
 
   if (supportsOAuth) {
@@ -156,6 +158,7 @@ async function setupAPIKey(provider) {
     openai: 'OpenAI',
     anthropic: 'Anthropic',
     openrouter: 'OpenRouter',
+    minimax: 'MiniMax',
   }[provider];
 
   const { key } = await inquirer.prompt([{
@@ -173,6 +176,7 @@ async function setupAPIKey(provider) {
   success(`${providerName} key saved (encrypted)`);
 
   // Set as default provider
+  setConfig('llm.provider', provider);
   setConfig('llmProvider', provider);
   info(`Default AI provider set to ${provider}`);
 }
@@ -193,6 +197,7 @@ async function setupOllama() {
     default: 'http://localhost:11434',
   }]);
 
+  setConfig('llm.ollamaHost', host);
   setConfig('ollamaHost', host);
 
   const { model } = await inquirer.prompt([{
@@ -202,7 +207,9 @@ async function setupOllama() {
     default: 'llama3',
   }]);
 
+  setConfig('llm.model', model);
   setConfig('ollamaModel', model);
+  setConfig('llm.provider', 'ollama');
   setConfig('llmProvider', 'ollama');
 
   success(`Ollama configured: ${host} / ${model}`);
@@ -231,8 +238,14 @@ function showKeyInstructions(provider) {
     console.log(theme.dim('  3. Copy the key (starts with sk-ant-)'));
     console.log(theme.dim('  4. Paste it below'));
     console.log('');
-    console.log(theme.dim('  💡 If you have a Claude Pro/Team subscription,'));
+    console.log(theme.dim('  If you have a Claude Pro/Team subscription,'));
     console.log(theme.dim('     you can use OAuth instead.'));
+  } else if (provider === 'minimax') {
+    showSection('GET A MINIMAX API KEY');
+    console.log(theme.dim('  1. Go to https://platform.minimax.io/docs/guides/models-intro'));
+    console.log(theme.dim('  2. Open your MiniMax developer console / API key page'));
+    console.log(theme.dim('  3. Create or copy an API key'));
+    console.log(theme.dim('  4. Paste it below'));
   }
 
   console.log('');
@@ -432,6 +445,7 @@ async function executeOAuthFlow(provider, clientId, clientSecret) {
             if (tokenData.refresh_token) {
               addKeyDirect(`${provider}_refresh`, tokenData.refresh_token);
             }
+            setConfig('llm.provider', provider);
             setConfig('llmProvider', provider);
 
             res.writeHead(200, { 'Content-Type': 'text/html' });

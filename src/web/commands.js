@@ -452,6 +452,7 @@ export async function handlePromptResponse(id, value, meta, ws) {
       if (service === 'openai') ws.sendLine(`  ${ANSI.dim}Key should start with sk-${ANSI.reset}`);
       if (service === 'anthropic') ws.sendLine(`  ${ANSI.dim}Key should start with sk-ant-${ANSI.reset}`);
       if (service === 'openrouter') ws.sendLine(`  ${ANSI.dim}Key should start with sk-or-${ANSI.reset}`);
+      if (service === 'minimax') ws.sendLine(`  ${ANSI.dim}Get a key: ${svc.docsUrl}${ANSI.reset}`);
       if (service === 'ollama') ws.sendLine(`  ${ANSI.dim}Should be a URL like http://localhost:11434${ANSI.reset}`);
       ws.sendLine('');
       return {};
@@ -782,7 +783,7 @@ export function getAIStatus() {
   const dim = '\x1b[38;2;102;102;102m';
   const reset = '\x1b[0m';
 
-  const providers = ['openai', 'anthropic', 'openrouter', 'ollama', 'bankr'];
+  const providers = ['openai', 'anthropic', 'openrouter', 'minimax', 'ollama', 'bankr'];
   const connected = providers.filter(p => hasKey(p));
   const soul = hasSoul() ? getSoul() : null;
 
@@ -798,6 +799,7 @@ export function getAIStatus() {
     `  ${green}keys add openai sk-...${reset}         ${dim}OpenAI (GPT-4o)${reset}`,
     `  ${green}keys add anthropic sk-ant-...${reset}   ${dim}Anthropic (Claude)${reset}`,
     `  ${green}keys add openrouter sk-or-...${reset}   ${dim}OpenRouter (any model)${reset}`,
+    `  ${green}keys add minimax <key>${reset}          ${dim}MiniMax (MiniMax-M2.5)${reset}`,
     `  ${green}keys add bankr bk_...${reset}           ${dim}Bankr LLM Gateway (crypto credits)${reset}`,
     `  ${green}keys add ollama http://...${reset}      ${dim}Ollama (free, local)${reset}`,
     '',
@@ -850,6 +852,8 @@ export async function handleCommand(cmd, ws) {
     case 'agent':
     case 'signer':
       return await cmdAgent(args, ws);
+    case 'task':
+      return await cmdAgent(['task', ...args], ws);
     case 'ai':
     case 'ask':
     case 'chat':
@@ -1339,7 +1343,84 @@ async function showWalletDetail(name, ws) {
 async function cmdAgent(args, ws) {
   const sub = (args[0] || 'menu').toLowerCase();
 
+  if (sub === 'task') {
+    const goal = args.slice(1).join(' ').trim();
+    if (!goal) {
+      return {
+        output: `\r\n  ${ANSI.dim}Usage: agent task <goal> [--max-steps N] [--allow-actions]${ANSI.reset}\r\n  ${ANSI.dim}Shortcut: task <goal>${ANSI.reset}\r\n\r\n`,
+      };
+    }
+
+    const allowActions = args.includes('--allow-actions');
+    const maxIndex = args.findIndex((arg) => arg === '--max-steps');
+    const maxSteps = maxIndex >= 0 ? parseInt(args[maxIndex + 1], 10) || 10 : 10;
+    const filteredGoal = args
+      .slice(1)
+      .filter((arg, index, arr) => arg !== '--allow-actions' && !(arg === '--max-steps' || arr[index - 1] === '--max-steps'))
+      .join(' ')
+      .trim();
+
+    const { runAgentTask } = await import('../agent/index.js');
+    ws.sendLine(`${ANSI.gold}  ◆ AGENT TASK${ANSI.reset}`);
+    ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.white}Goal:${ANSI.reset} ${filteredGoal}`);
+    ws.sendLine(`  ${ANSI.darkGold}Mode:${ANSI.reset} ${allowActions ? 'actions enabled' : 'safe mode'}`);
+    ws.sendLine('');
+
+    const result = await runAgentTask(filteredGoal, {
+      maxSteps,
+      allowActions,
+      onProgress: (event) => {
+        if (event.type === 'thought') {
+          ws.sendLine(`  ${ANSI.darkGold}[step ${event.step}]${ANSI.reset} ${ANSI.white}${event.action}${ANSI.reset}`);
+          if (event.thought) {
+            ws.sendLine(`  ${ANSI.dim}${event.thought}${ANSI.reset}`);
+          }
+        }
+        if (event.type === 'observation') {
+          const summary = event.observation?.summary || event.observation?.error;
+          if (summary) ws.sendLine(`  ${ANSI.dim}${summary}${ANSI.reset}`);
+          ws.sendLine('');
+        }
+      },
+    });
+
+    ws.sendLine(`  ${ANSI.green}Final:${ANSI.reset} ${result.final}`);
+    ws.sendLine(`  ${ANSI.dim}Status ${result.status} • ${result.stepsTaken}/${result.maxSteps} steps • ${result.stopReason}${ANSI.reset}`);
+    ws.sendLine('');
+    return {};
+  }
+
+  if (sub === 'plan') {
+    const goal = args.slice(1).join(' ').trim();
+    if (!goal) {
+      return { output: `  ${ANSI.dim}Usage: agent plan <goal>${ANSI.reset}\r\n` };
+    }
+    const { planAgentGoal } = await import('../agent/index.js');
+    const plan = await planAgentGoal(goal);
+    ws.sendLine(`${ANSI.gold}  ◆ AGENT PLAN${ANSI.reset}`);
+    ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.white}${plan.summary}${ANSI.reset}`);
+    ws.sendLine('');
+    plan.steps.forEach((step, index) => ws.sendLine(`  ${ANSI.darkGold}${index + 1}.${ANSI.reset} ${step}`));
+    ws.sendLine('');
+    return {};
+  }
+
   if (sub === 'status') {
+    const { getAgentStatus } = await import('../agent/index.js');
+    const status = getAgentStatus();
+    if (status?.goal || status?.summary) {
+      ws.sendLine(`${ANSI.gold}  ◆ AGENT STATUS${ANSI.reset}`);
+      ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.darkGold}Status${ANSI.reset}       ${ANSI.white}${status.status || '-'}${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.darkGold}Goal${ANSI.reset}         ${ANSI.white}${status.goal || '-'}${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.darkGold}Summary${ANSI.reset}      ${ANSI.white}${status.summary || '-'}${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.darkGold}Steps${ANSI.reset}        ${ANSI.white}${status.stepsTaken || 0}${status.maxSteps ? `/${status.maxSteps}` : ''}${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.darkGold}Actions${ANSI.reset}      ${ANSI.white}${status.allowActions ? 'enabled' : 'safe mode'}${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
     return await showSignerStatus(ws);
   }
 
@@ -1938,7 +2019,7 @@ async function cmdKeys(args, ws) {
 
     if (!svc) {
       ws.sendLine(`  ${ANSI.red}✗ Unknown service: ${service}${ANSI.reset}`);
-      ws.sendLine(`  ${ANSI.dim}Available: openai, anthropic, openrouter, ollama${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.dim}Available: openai, anthropic, openrouter, minimax, ollama, bankr${ANSI.reset}`);
       ws.sendLine('');
       return {};
     }
@@ -1986,7 +2067,7 @@ async function cmdKeys(args, ws) {
   ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
   ws.sendLine('');
 
-  const llmProviders = ['openai', 'anthropic', 'openrouter', 'ollama', 'bankr'];
+  const llmProviders = ['openai', 'anthropic', 'openrouter', 'minimax', 'ollama', 'bankr'];
   ws.sendLine(`  ${ANSI.gold}LLM Providers:${ANSI.reset}`);
   for (const p of llmProviders) {
     const svc = SERVICES[p];
@@ -2000,6 +2081,7 @@ async function cmdKeys(args, ws) {
   ws.sendLine(`  ${ANSI.green}keys add openai sk-...${ANSI.reset}       ${ANSI.dim}Add OpenAI key${ANSI.reset}`);
   ws.sendLine(`  ${ANSI.green}keys add anthropic sk-ant-...${ANSI.reset} ${ANSI.dim}Add Anthropic key${ANSI.reset}`);
   ws.sendLine(`  ${ANSI.green}keys add openrouter sk-or-...${ANSI.reset} ${ANSI.dim}Add OpenRouter key${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.green}keys add minimax <key>${ANSI.reset}      ${ANSI.dim}Add MiniMax key${ANSI.reset}`);
   ws.sendLine(`  ${ANSI.green}keys add ollama http://...${ANSI.reset}   ${ANSI.dim}Add Ollama host${ANSI.reset}`);
   ws.sendLine('');
 

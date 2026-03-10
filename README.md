@@ -15,7 +15,7 @@ A unified CLI for market intel, trading, AI-powered analysis, on-chain oracle, c
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-gold.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
 
-- Current release: **0.9.0**
+- Current release: **0.9.1**
 - Changelog: `CHANGELOG.md`
 
 ## Install
@@ -65,6 +65,12 @@ darksol ai chat
 # View/search persistent memories
 darksol memory show
 darksol memory search "preferred chain"
+
+# Autonomous agent task (ReAct loop)
+darksol agent task "check AERO price and tell me if it's above $2"
+darksol agent task "analyze my portfolio" --max-steps 5
+darksol agent task "swap 0.1 ETH for USDC" --allow-actions
+darksol agent plan "DCA strategy for AERO"
 
 # Agent email
 darksol mail setup
@@ -123,6 +129,7 @@ ai <prompt>   # chat with trading assistant
 | `dca` | Dollar-cost averaging engine | Gas only |
 | `soul` | Agent identity & personality configuration | Free |
 | `memory` | Persistent cross-session memory store | Free |
+| `agent task` | Autonomous ReAct agent loop with tool use | Provider dependent |
 | `ai` | LLM-powered trading assistant & intent execution | Provider dependent |
 | `agent` | Secure agent signer (PK-isolated proxy) | Free |
 | `keys` | Encrypted API key vault (LLMs/data/RPCs) | Free |

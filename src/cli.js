@@ -29,6 +29,7 @@ import { listSkills, installSkill, skillInfo, uninstallSkill } from './services/
 import { runSetupWizard } from './setup/wizard.js';
 import { displaySoul, hasSoul, resetSoul, runSoulSetup } from './soul/index.js';
 import { clearMemories, exportMemories, getRecentMemories, searchMemories } from './memory/index.js';
+import { getAgentStatus, planAgentGoal, runAgentTask } from './agent/index.js';
 import { createRequire } from 'module';
 import { resolve } from 'path';
 const require = createRequire(import.meta.url);
@@ -764,7 +765,7 @@ export function cli(argv) {
   ai
     .command('chat')
     .description('Start interactive AI trading chat')
-    .option('-p, --provider <name>', 'LLM provider (openai, anthropic, openrouter, ollama)')
+    .option('-p, --provider <name>', 'LLM provider (openai, anthropic, openrouter, minimax, ollama)')
     .option('-m, --model <model>', 'Model name')
     .action((opts) => startChat(opts));
 
@@ -882,6 +883,93 @@ export function cli(argv) {
   const agent = program
     .command('agent')
     .description('Secure agent signer — PK-isolated wallet for AI agents');
+
+  agent
+    .command('task <goal...>')
+    .description('Run the agent loop against a goal')
+    .option('--max-steps <n>', 'Maximum loop steps', '10')
+    .option('--allow-actions', 'Allow mutating tools such as swap/send/script-run')
+    .action(async (goalParts, opts) => {
+      showMiniBanner();
+      showSection('AGENT TASK');
+      const goal = goalParts.join(' ').trim();
+      info(`Goal: ${goal}`);
+      info(`Mode: ${opts.allowActions ? 'actions enabled' : 'safe mode'}`);
+      console.log('');
+
+      const result = await runAgentTask(goal, {
+        maxSteps: parseInt(opts.maxSteps, 10),
+        allowActions: opts.allowActions,
+        onProgress: (event) => {
+          if (event.type === 'thought') {
+            info(`Step ${event.step}: ${event.action}`);
+            if (event.thought) console.log(`  ${theme.dim(event.thought)}`);
+          }
+          if (event.type === 'observation') {
+            const summary = event.observation?.summary || event.observation?.error || '';
+            if (summary) console.log(`  ${theme.dim(summary)}`);
+            console.log('');
+          }
+        },
+      });
+
+      showSection('AGENT RESULT');
+      kvDisplay([
+        ['Status', result.status],
+        ['Steps', `${result.stepsTaken}/${result.maxSteps}`],
+        ['Stop Reason', result.stopReason],
+      ]);
+      console.log('');
+      if (result.final) {
+        success(result.final);
+        console.log('');
+      }
+    });
+
+  agent
+    .command('plan <goal...>')
+    .description('Generate a concise agent plan for a goal')
+    .action(async (goalParts) => {
+      showMiniBanner();
+      showSection('AGENT PLAN');
+      const goal = goalParts.join(' ').trim();
+      const plan = await planAgentGoal(goal);
+      info(plan.summary);
+      console.log('');
+      plan.steps.forEach((step, index) => console.log(`  ${theme.gold(String(index + 1).padStart(2, ' '))}. ${step}`));
+      console.log('');
+    });
+
+  agent
+    .command('status')
+    .description('Show the latest agent task or plan status')
+    .action(() => {
+      showMiniBanner();
+      showSection('AGENT STATUS');
+      const status = getAgentStatus();
+      if (!status || !status.status) {
+        warn('No agent runs recorded yet.');
+        console.log('');
+        return;
+      }
+
+      kvDisplay([
+        ['Status', status.status || '-'],
+        ['Goal', status.goal || '-'],
+        ['Summary', status.summary || '-'],
+        ['Steps', status.maxSteps ? `${status.stepsTaken || 0}/${status.maxSteps}` : String(status.stepsTaken || 0)],
+        ['Actions', status.allowActions ? 'enabled' : 'safe mode'],
+        ['Started', status.startedAt || '-'],
+        ['Completed', status.completedAt || '-'],
+        ['Updated', status.updatedAt || '-'],
+      ]);
+      if (Array.isArray(status.plan) && status.plan.length > 0) {
+        console.log('');
+        showSection('LAST PLAN');
+        status.plan.forEach((step) => console.log(`  ${theme.dim(step)}`));
+      }
+      console.log('');
+    });
 
   agent
     .command('start [wallet]')
@@ -1304,7 +1392,7 @@ function showCommandList() {
     ['dca', 'Dollar-cost averaging orders'],
     ['ai chat', 'Standalone AI chat session'],
     ['ai execute', 'Parse + execute a trade via AI'],
-    ['agent start', 'Start secure agent signer'],
+    ['agent task', 'Run bounded agent loop for a goal'],
     ['keys', 'API key vault'],
     ['soul', 'Identity and agent personality'],
     ['memory', 'Persistent cross-session memory'],

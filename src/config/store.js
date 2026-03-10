@@ -28,6 +28,22 @@ const config = new Conf({
         createdAt: '',
       },
     },
+    agentState: {
+      type: 'object',
+      default: {
+        status: '',
+        goal: '',
+        summary: '',
+        plan: [],
+        stepsTaken: 0,
+        maxSteps: 0,
+        allowActions: false,
+        startedAt: null,
+        completedAt: null,
+        stopReason: '',
+        updatedAt: null,
+      },
+    },
     dca: {
       type: 'object',
       default: {
