@@ -45,24 +45,48 @@ ACTIONS (use the most specific one):
 - "info" — general question about a token or protocol
 - "analyze" — deep analysis of a token
 - "gas" — gas price check
+- "cards" — order a prepaid Visa/Mastercard with crypto (e.g. "order a $50 card", "get me a prepaid card")
 - "unknown" — can't determine what the user wants
+
+CARDS ORDERING:
+When the user wants to order a prepaid card, you MUST collect:
+1. amount (USD denomination: 10, 25, 50, 100, 250, 500, 1000)
+2. email (delivery address for the card activation link)
+3. provider (default: "swype" for global, "mpc" or "reward" for US-only)
+4. ticker (payment crypto, default: "usdc")
+
+If the user says "order me a $50 card" but doesn't provide an email, set "needsInfo": ["email"] and ask naturally.
+If they have AgentMail configured, suggest using their agent email as an option.
+Providers: swype (Mastercard, Global), mpc (Mastercard, US), reward (Visa, US).
+Accepted crypto: usdc (default), usdt, btc, eth, sol, xmr.
 
 When parsing, respond with ONLY valid JSON:
 {
-  "action": "swap|send|snipe|dca|price|balance|info|analyze|gas|unknown",
+  "action": "swap|send|snipe|dca|price|balance|info|analyze|gas|cards|unknown",
   "tokenIn": "symbol or address (for swaps)",
   "tokenOut": "symbol or address (for swaps)",
   "token": "symbol (for send/price/analyze)",
   "amount": "number as string",
   "to": "recipient address (for send)",
+  "email": "delivery email (for cards)",
+  "provider": "card provider (for cards, default: swype)",
+  "ticker": "payment crypto (for cards, default: usdc)",
   "chain": "chain name if specified, null if not",
   "interval": "for DCA: 1h, 4h, 1d, etc.",
   "orders": "for DCA: number of orders",
   "confidence": 0.0-1.0,
   "reasoning": "brief explanation of interpretation",
   "warnings": ["array of risk warnings"],
+  "needsInfo": ["array of missing fields the AI should ask about"],
+  "followUp": "natural language question to ask the user if info is missing",
   "command": "the exact darksol CLI command to run"
 }
+
+CONVERSATIONAL RULES:
+- If the user's request is missing required info (email for cards, address for send, amount for swap), DON'T set action to "unknown". Set the correct action, list what's missing in "needsInfo", and write a natural "followUp" question.
+- Be conversational — "What email should I send the card to?" not "Error: email required"
+- If they mention AgentMail or "my email", suggest using their configured agent email
+- For cards without a specified provider, default to "swype" (global Mastercard)
 
 COMMAND MAPPING:
 - swap → darksol trade swap -i <tokenIn> -o <tokenOut> -a <amount>
@@ -72,6 +96,7 @@ COMMAND MAPPING:
 - price → darksol price <token>
 - balance → darksol wallet balance
 - gas → darksol gas <chain>
+- cards → darksol cards order -p <provider> -a <amount> -e <email> --ticker <crypto>
 - analyze → darksol ai analyze <token>`;
 
 // ──────────────────────────────────────────────────
@@ -217,7 +242,7 @@ export async function startChat(opts = {}) {
       }
 
       // Try to detect actionable intent
-      const actionKeywords = /\b(swap|send|transfer|buy|sell|snipe|dca|price|balance|gas)\b/i;
+      const actionKeywords = /\b(swap|send|transfer|buy|sell|snipe|dca|price|balance|gas|card|cards|order|prepaid|visa|mastercard)\b/i;
       const isActionable = actionKeywords.test(input);
 
       let result;
@@ -456,8 +481,27 @@ export async function executeIntent(intent, opts = {}) {
   }
 
   try {
+    // Check if the AI needs more info before executing
+    if (intent.needsInfo?.length > 0) {
+      if (intent.followUp) {
+        console.log('');
+        console.log(theme.gold('  DARKSOL AI:'));
+        console.log(theme.dim('  ') + intent.followUp);
+        console.log('');
+      }
+      return { success: false, reason: 'needs_info', needsInfo: intent.needsInfo, followUp: intent.followUp };
+    }
+
     switch (intent.action) {
       case 'swap': {
+        if (!intent.tokenIn || !intent.tokenOut) {
+          info('I need to know what tokens to swap. Example: "swap 0.1 ETH to USDC"');
+          return { success: false, reason: 'Missing token pair — tell me what to swap from and to.' };
+        }
+        if (!intent.amount) {
+          info('How much do you want to swap? Example: "swap 0.1 ETH to USDC"');
+          return { success: false, reason: 'Missing amount — how much do you want to swap?' };
+        }
         const { executeSwap } = await import('../trading/swap.js');
         return await executeSwap({
           tokenIn: intent.tokenIn,
@@ -469,29 +513,40 @@ export async function executeIntent(intent, opts = {}) {
       }
 
       case 'snipe': {
-        const { executeSnipe } = await import('../trading/snipe.js');
-        return await executeSnipe({
-          token: intent.tokenOut || intent.tokenIn,
-          amount: intent.amount,
+        const snipeToken = intent.tokenOut || intent.tokenIn;
+        if (!snipeToken || !snipeToken.startsWith('0x')) {
+          info('Snipe needs a contract address. Example: "snipe 0x1234... with 0.1 ETH"');
+          return { success: false, reason: 'I need a token contract address to snipe.' };
+        }
+        const { snipeToken: doSnipe } = await import('../trading/snipe.js');
+        return await doSnipe(snipeToken, intent.amount || '0.01', {
           chain: intent.chain,
-          gasMultiplier: intent.gasMultiplier,
-          password: opts.password,
+          slippage: intent.slippage,
+          gas: intent.gasMultiplier,
         });
       }
 
       case 'dca': {
-        const { createDCAOrder } = await import('../trading/dca.js');
-        return await createDCAOrder({
-          token: intent.tokenOut || intent.tokenIn,
+        const { createDCA } = await import('../trading/dca.js');
+        return await createDCA({
+          tokenOut: intent.tokenOut || intent.tokenIn,
           amount: intent.amount,
           interval: intent.interval || '1h',
-          orders: intent.orders || 10,
+          totalOrders: intent.orders || 10,
           chain: intent.chain,
         });
       }
 
       case 'send':
       case 'transfer': {
+        if (!intent.to) {
+          info('Where should I send it? Give me a wallet address (0x...)');
+          return { success: false, reason: 'Missing recipient address — who are you sending to?' };
+        }
+        if (!intent.amount) {
+          info('How much? Example: "send 10 USDC to 0x..."');
+          return { success: false, reason: 'Missing amount — how much do you want to send?' };
+        }
         const { sendFunds } = await import('../wallet/manager.js');
         return await sendFunds({
           to: intent.to,
@@ -507,8 +562,8 @@ export async function executeIntent(intent, opts = {}) {
           await checkPrices([token]);
           return { success: true, action: 'price' };
         }
-        info('No token specified');
-        return { success: false, reason: 'no token specified' };
+        info('Which token? Example: "price ETH" or "how much is AERO"');
+        return { success: false, reason: 'Which token do you want the price for?' };
       }
 
       case 'balance': {
@@ -523,6 +578,23 @@ export async function executeIntent(intent, opts = {}) {
         return { success: true, action: 'gas' };
       }
 
+      case 'cards': {
+        if (!intent.amount) {
+          info('What denomination? We have $10, $25, $50, $100, $250, $500, $1000');
+          return { success: false, reason: 'What card amount do you want?' };
+        }
+        if (!intent.email) {
+          info('I need an email to deliver the card activation link to.');
+          return { success: false, reason: 'What email should I send the card to?' };
+        }
+        const { cardsOrder } = await import('../services/cards.js');
+        return await cardsOrder(intent.provider || 'swype', intent.amount, {
+          email: intent.email,
+          ticker: intent.ticker || 'usdc',
+          network: intent.network,
+        });
+      }
+
       case 'info':
       case 'analyze': {
         const token = intent.tokenOut || intent.tokenIn || intent.token;
@@ -530,20 +602,37 @@ export async function executeIntent(intent, opts = {}) {
           await analyzeToken(token, opts);
           return { success: true, action: 'analyze' };
         }
-        info('No token specified for analysis');
-        return { success: false, reason: 'no token specified' };
+        info('Which token do you want me to analyze?');
+        return { success: false, reason: 'Tell me which token to look at.' };
       }
 
       default:
-        warn(`Action "${intent.action}" not yet wired for execution`);
+        warn(`I don't know how to do "${intent.action}" yet.`);
         if (intent.command) {
-          info(`Suggested command: ${theme.gold(intent.command)}`);
+          info(`Try running: ${theme.gold(intent.command)}`);
         }
-        return { success: false, reason: `unhandled action: ${intent.action}` };
+        return { success: false, reason: `Action "${intent.action}" isn't wired up yet.` };
     }
   } catch (err) {
-    error(`Execution failed: ${err.message}`);
-    return { success: false, error: err.message };
+    // Human-readable error messages
+    const msg = err.message || String(err);
+    if (msg.includes('CALL_EXCEPTION')) {
+      error('The on-chain call failed. This usually means the RPC is having issues or the contract call reverted.');
+      info('Try again in a moment, or switch to a different RPC with: darksol config set rpcs.base <url>');
+    } else if (msg.includes('insufficient funds') || msg.includes('Insufficient')) {
+      error('Not enough funds in your wallet for this transaction (including gas fees).');
+    } else if (msg.includes('nonce')) {
+      error('Transaction nonce conflict. You may have a pending transaction — wait for it to confirm or try again.');
+    } else if (msg.includes('timeout') || msg.includes('ETIMEDOUT')) {
+      error('Network timeout — the RPC server didn\'t respond in time. Try again or switch RPCs.');
+    } else if (msg.includes('could not detect network')) {
+      error('Can\'t connect to the blockchain. Check your internet connection and RPC settings.');
+    } else if (msg.includes('password') || msg.includes('decrypt')) {
+      error('Wrong wallet password. The private key couldn\'t be decrypted.');
+    } else {
+      error(`Failed: ${msg}`);
+    }
+    return { success: false, error: msg };
   }
 }
 

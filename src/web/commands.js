@@ -454,7 +454,7 @@ export async function handleCommand(cmd, ws) {
       return await cmdChatLogs(args, ws);
     default: {
       // Fuzzy: if it looks like natural language, route to AI
-      const nlKeywords = /\b(swap|buy|sell|send|transfer|price|what|how|should|analyze|check|balance|gas|dca)\b/i;
+      const nlKeywords = /\b(swap|buy|sell|send|transfer|price|what|how|should|analyze|check|balance|gas|dca|order|card|prepaid|visa|mastercard)\b/i;
       if (nlKeywords.test(cmd)) {
         return await cmdAI(cmd.split(/\s+/), ws);
       }
