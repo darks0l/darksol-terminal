@@ -15,7 +15,7 @@ A unified CLI for market intel, trading, AI-powered analysis, on-chain oracle, c
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-gold.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
 
-- Current release: **0.7.2**
+- Current release: **0.8.0**
 - Changelog: `CHANGELOG.md`
 
 ## Install
@@ -48,8 +48,13 @@ darksol watch AERO --above 2.0
 # Gas estimates
 darksol gas base
 
-# Swap tokens (Uniswap V3 with slippage protection)
+# Swap tokens (LI.FI — best route across 31 DEXs, Uniswap V3 fallback)
 darksol trade swap -i ETH -o USDC -a 0.1
+
+# Cross-chain bridge (60+ chains via LI.FI)
+darksol bridge send --from base --to arbitrum --token ETH -a 0.1
+darksol bridge status 0xTxHash...
+darksol bridge chains
 
 # AI trading assistant
 darksol ai chat
@@ -71,7 +76,8 @@ darksol agent start main
 
 - Arrow-key menus (`↑/↓` + `Enter`) for wallet/config/trade flows
 - **Interactive send** — token → recipient → amount → password → on-chain transfer
-- **Interactive swap** — pair picker (presets + custom) → amount → password → Uniswap V3 execution
+- **Interactive swap** — pair picker (presets + custom) → amount → password → LI.FI execution (Uniswap V3 fallback)
+- **Interactive bridge** — source chain → dest chain → token → amount → password → cross-chain via LI.FI
 - **Interactive snipe** — contract input → amount → password → fast buy
 - Wallet picker + wallet action menu (receive/send/portfolio/history/switch chain)
 - Agent signer control center (`agent`) with guided wallet selection + start/stop/status
@@ -87,7 +93,8 @@ Useful web-shell commands:
 
 ```bash
 help          # clickable command menu (arrow keys + Enter)
-trade         # interactive swap / snipe menu
+trade         # interactive swap / snipe / bridge menu
+bridge        # cross-chain bridge (LI.FI)
 send          # interactive token transfer
 wallet        # interactive wallet picker and actions
 keys          # provider status + interactive add/update
@@ -104,7 +111,8 @@ ai <prompt>   # chat with trading assistant
 | `wallet` | Create/import/manage encrypted EVM wallets | Free |
 | `send` | Send ETH or ERC-20 tokens | Gas only |
 | `receive` | Show receive address + chain safety hints | Free |
-| `trade` | Swap (Uniswap V3), snipe (V2), token trading | Gas only |
+| `trade` | Swap via LI.FI (31 DEXs) + Uniswap V3 fallback, snipe | Gas only |
+| `bridge` | Cross-chain bridge via LI.FI (60 chains, 27 bridges) | Gas only |
 | `dca` | Dollar-cost averaging engine | Gas only |
 | `ai` | LLM-powered trading assistant & intent execution | Provider dependent |
 | `agent` | Secure agent signer (PK-isolated proxy) | Free |

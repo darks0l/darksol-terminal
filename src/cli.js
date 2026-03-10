@@ -13,6 +13,7 @@ import { startWebShell } from './web/server.js';
 import { executeSwap } from './trading/swap.js';
 import { snipeToken, watchSnipe } from './trading/snipe.js';
 import { createDCA, listDCA, cancelDCA, runDCA } from './trading/dca.js';
+import { executeLifiSwap, executeLifiBridge, checkBridgeStatus, showSupportedChains } from './services/lifi.js';
 import { topMovers, tokenDetail, compareTokens } from './services/market.js';
 import { oracleFlip, oracleDice, oracleNumber, oracleShuffle, oracleHealth } from './services/oracle.js';
 import { casinoBet, casinoTables, casinoStats, casinoReceipt, casinoHealth, casinoVerify } from './services/casino.js';
@@ -113,7 +114,7 @@ export function cli(argv) {
 
   trade
     .command('swap')
-    .description('Swap tokens via DEX (interactive if flags omitted)')
+    .description('Swap tokens via LI.FI (58 chains, 31 DEXs) with Uniswap fallback')
     .option('-i, --in <token>', 'Token to sell (symbol or address)')
     .option('-o, --out <token>', 'Token to buy (symbol or address)')
     .option('-a, --amount <amount>', 'Amount to swap')
@@ -121,6 +122,7 @@ export function cli(argv) {
     .option('-w, --wallet <name>', 'Wallet to use')
     .option('-p, --password <pw>', 'Wallet password (non-interactive)')
     .option('-y, --yes', 'Skip confirmation')
+    .option('--direct', 'Force direct Uniswap V3 (skip LI.FI)')
     .action(async (opts) => {
       let tokenIn = opts.in;
       let tokenOut = opts.out;
@@ -138,7 +140,7 @@ export function cli(argv) {
         amount = answers.amount;
       }
 
-      return executeSwap({
+      const swapOpts = {
         tokenIn,
         tokenOut,
         amount,
@@ -146,7 +148,30 @@ export function cli(argv) {
         wallet: opts.wallet,
         password: opts.password,
         confirm: opts.yes ? true : undefined,
-      });
+      };
+
+      // Try LI.FI first (unless --direct flag)
+      if (!opts.direct) {
+        try {
+          const result = await executeLifiSwap(swapOpts);
+          if (result?.success) return;
+          // If LI.FI failed (not cancelled), fall back to direct
+          if (result?.error !== 'cancelled') {
+            const { warn: showWarn, info: showInfo } = await import('./ui/components.js');
+            showWarn('LI.FI route failed — falling back to direct Uniswap V3...');
+            console.log('');
+          } else {
+            return; // User cancelled, don't fallback
+          }
+        } catch {
+          const { warn: showWarn } = await import('./ui/components.js');
+          showWarn('LI.FI unavailable — falling back to direct Uniswap V3...');
+          console.log('');
+        }
+      }
+
+      // Direct Uniswap V3 fallback
+      return executeSwap(swapOpts);
     });
 
   trade
@@ -192,6 +217,71 @@ export function cli(argv) {
       info('Swap command: darksol trade swap -i <tokenIn> -o <tokenOut> -a <amount>');
       console.log('');
     });
+
+  // ═══════════════════════════════════════
+  // BRIDGE COMMANDS (LI.FI)
+  // ═══════════════════════════════════════
+  const bridge = program
+    .command('bridge')
+    .description('Cross-chain bridge — move tokens between chains via LI.FI');
+
+  bridge
+    .command('send')
+    .description('Bridge tokens to another chain')
+    .option('-f, --from <chain>', 'Source chain (e.g. base, ethereum)')
+    .option('-t, --to <chain>', 'Destination chain (e.g. arbitrum, optimism)')
+    .option('--token <symbol>', 'Token to bridge (e.g. ETH, USDC)', 'ETH')
+    .option('-a, --amount <amount>', 'Amount to bridge')
+    .option('-s, --slippage <percent>', 'Max slippage %', '0.5')
+    .option('-w, --wallet <name>', 'Wallet to use')
+    .option('-p, --password <pw>', 'Wallet password (non-interactive)')
+    .option('-y, --yes', 'Skip confirmation')
+    .action(async (opts) => {
+      let fromChain = opts.from;
+      let toChain = opts.to;
+      let token = opts.token;
+      let amount = opts.amount;
+
+      if (!fromChain || !toChain || !amount) {
+        const inquirer = (await import('inquirer')).default;
+        const answers = await inquirer.prompt([
+          { type: 'input', name: 'fromChain', message: 'Source chain:', default: fromChain || getConfig('chain') || 'base' },
+          { type: 'input', name: 'toChain', message: 'Destination chain:', default: toChain || 'arbitrum' },
+          { type: 'input', name: 'token', message: 'Token to bridge:', default: token || 'ETH' },
+          { type: 'input', name: 'amount', message: 'Amount:', default: amount || '0.1' },
+        ]);
+        fromChain = answers.fromChain;
+        toChain = answers.toChain;
+        token = answers.token;
+        amount = answers.amount;
+      }
+
+      return executeLifiBridge({
+        fromChain,
+        toChain,
+        token,
+        amount,
+        slippage: parseFloat(opts.slippage),
+        wallet: opts.wallet,
+        password: opts.password,
+        confirm: opts.yes ? true : undefined,
+      });
+    });
+
+  bridge
+    .command('status <txHash>')
+    .description('Check bridge transfer status')
+    .option('-f, --from <chain>', 'Source chain')
+    .option('-t, --to <chain>', 'Destination chain')
+    .action((txHash, opts) => checkBridgeStatus(txHash, {
+      fromChain: opts.from,
+      toChain: opts.to,
+    }));
+
+  bridge
+    .command('chains')
+    .description('Show all supported chains')
+    .action(() => showSupportedChains());
 
   // ═══════════════════════════════════════
   // DCA COMMANDS
@@ -1109,6 +1199,7 @@ function showCommandList() {
     ['watch', 'Live price monitoring + alerts'],
     ['gas', 'Gas prices & cost estimates'],
     ['trade', 'Swap tokens, snipe, trading'],
+    ['bridge', 'Cross-chain bridge (LI.FI)'],
     ['dca', 'Dollar-cost averaging orders'],
     ['ai chat', 'Standalone AI chat session'],
     ['ai execute', 'Parse + execute a trade via AI'],

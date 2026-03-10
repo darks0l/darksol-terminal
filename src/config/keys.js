@@ -178,6 +178,14 @@ export const SERVICES = {
     docsUrl: 'https://developers.paraswap.network',
     validate: (key) => key.length > 5,
   },
+  lifi: {
+    name: 'LI.FI',
+    category: 'trading',
+    description: 'Cross-chain swaps & bridges — 58 chains, 27 bridges, 31 DEXs',
+    envVar: 'LIFI_API_KEY',
+    docsUrl: 'https://docs.li.fi/api-reference/rate-limits',
+    validate: (key) => key.length > 20,
+  },
 };
 
 // ──────────────────────────────────────────────────

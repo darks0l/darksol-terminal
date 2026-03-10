@@ -223,7 +223,7 @@ export async function handleMenuSelect(id, value, item, ws) {
 
     case 'trade_action':
       if (value === 'swap') {
-        ws.sendMenu('trade_swap_pair', '◆ Swap Pair', [
+        ws.sendMenu('trade_swap_pair', '◆ Swap Pair (via LI.FI — best route across 31 DEXs)', [
           { value: 'ETH->USDC', label: 'ETH → USDC', desc: 'Most common' },
           { value: 'USDC->ETH', label: 'USDC → ETH', desc: 'Reverse' },
           { value: 'ETH->AERO', label: 'ETH → AERO', desc: 'Base ecosystem' },
@@ -231,6 +231,16 @@ export async function handleMenuSelect(id, value, item, ws) {
           { value: 'custom', label: 'Custom pair', desc: 'Any symbol or 0x token' },
           { value: 'back', label: '← Back', desc: '' },
         ]);
+        return {};
+      }
+      if (value === 'bridge') {
+        const currentChain = getConfig('chain') || 'base';
+        const chains = ['base', 'ethereum', 'arbitrum', 'optimism', 'polygon', 'avalanche', 'bsc', 'zksync', 'scroll', 'linea'];
+        ws.sendMenu('bridge_from_chain', '◆ Bridge From Chain', chains.map(c => ({
+          value: c,
+          label: c === currentChain ? `★ ${c}` : c,
+          desc: c === currentChain ? 'current' : '',
+        })));
         return {};
       }
       if (value === 'snipe') {
@@ -279,6 +289,63 @@ export async function handleMenuSelect(id, value, item, ws) {
         mask: true,
       });
       return {};
+
+    case 'bridge_from_chain': {
+      if (value === 'back') return {};
+      const chains = ['base', 'ethereum', 'arbitrum', 'optimism', 'polygon', 'avalanche', 'bsc', 'zksync', 'scroll', 'linea'];
+      const destChains = chains.filter(c => c !== value);
+      ws.sendMenu('bridge_to_chain', `◆ Bridge To Chain (from ${value})`, destChains.map(c => ({
+        value: c,
+        label: c,
+        desc: '',
+        meta: { fromChain: value },
+      })));
+      return {};
+    }
+
+    case 'bridge_to_chain': {
+      if (value === 'back') return {};
+      const fromChain = item?.meta?.fromChain || 'base';
+      ws.sendMenu('bridge_token', `◆ Token to Bridge (${fromChain} → ${value})`, [
+        { value: 'ETH', label: 'ETH', desc: 'Native token', meta: { fromChain, toChain: value } },
+        { value: 'USDC', label: 'USDC', desc: 'Stablecoin', meta: { fromChain, toChain: value } },
+        { value: 'USDT', label: 'USDT', desc: 'Tether', meta: { fromChain, toChain: value } },
+        { value: 'custom', label: 'Custom token', desc: 'Enter symbol', meta: { fromChain, toChain: value } },
+        { value: 'back', label: '← Back', desc: '' },
+      ]);
+      return {};
+    }
+
+    case 'bridge_token': {
+      if (value === 'back') return {};
+      if (value === 'custom') {
+        ws.sendPrompt('bridge_custom_token', 'Token symbol or address:', item?.meta || {});
+        return {};
+      }
+      const m = item?.meta || {};
+      ws.sendMenu('bridge_amount', `◆ Amount (${value} · ${m.fromChain} → ${m.toChain})`, [
+        { value: '0.01', label: `0.01 ${value}`, desc: 'small', meta: { ...m, token: value } },
+        { value: '0.05', label: `0.05 ${value}`, desc: 'standard', meta: { ...m, token: value } },
+        { value: '0.1', label: `0.1 ${value}`, desc: 'medium', meta: { ...m, token: value } },
+        { value: '0.5', label: `0.5 ${value}`, desc: 'large', meta: { ...m, token: value } },
+        { value: '1', label: `1 ${value}`, desc: 'large', meta: { ...m, token: value } },
+        { value: 'custom', label: 'Custom amount', desc: '', meta: { ...m, token: value } },
+      ]);
+      return {};
+    }
+
+    case 'bridge_amount': {
+      if (value === 'custom') {
+        ws.sendPrompt('bridge_custom_amount', `Amount (${item?.meta?.token || 'token'}):`, item?.meta || {});
+        return {};
+      }
+      ws.sendPrompt('bridge_password', `Wallet password (bridge ${value} ${item?.meta?.token || ''} · ${item?.meta?.fromChain || ''} → ${item?.meta?.toChain || ''}):`, {
+        ...(item?.meta || {}),
+        amount: value,
+        mask: true,
+      });
+      return {};
+    }
 
     case 'send_token':
       if (value === 'back') return {};
@@ -536,6 +603,66 @@ export async function handlePromptResponse(id, value, meta, ws) {
     return {};
   }
 
+  if (id === 'bridge_custom_token') {
+    if (!value) { ws.sendLine(`  ${ANSI.red}✗ Cancelled${ANSI.reset}`); ws.sendLine(''); return {}; }
+    const m = meta || {};
+    ws.sendMenu('bridge_amount', `◆ Amount (${value} · ${m.fromChain} → ${m.toChain})`, [
+      { value: '0.01', label: `0.01 ${value}`, desc: 'small', meta: { ...m, token: value.trim() } },
+      { value: '0.05', label: `0.05 ${value}`, desc: 'standard', meta: { ...m, token: value.trim() } },
+      { value: '0.1', label: `0.1 ${value}`, desc: 'medium', meta: { ...m, token: value.trim() } },
+      { value: '0.5', label: `0.5 ${value}`, desc: 'large', meta: { ...m, token: value.trim() } },
+      { value: '1', label: `1 ${value}`, desc: 'large', meta: { ...m, token: value.trim() } },
+      { value: 'custom', label: 'Custom amount', desc: '', meta: { ...m, token: value.trim() } },
+    ]);
+    return {};
+  }
+
+  if (id === 'bridge_custom_amount') {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) {
+      ws.sendLine(`  ${ANSI.red}✗ Invalid amount${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+    ws.sendPrompt('bridge_password', `Wallet password (bridge ${value} ${meta?.token || ''} · ${meta?.fromChain || ''} → ${meta?.toChain || ''}):`, {
+      ...meta,
+      amount: String(value),
+      mask: true,
+    });
+    return {};
+  }
+
+  if (id === 'bridge_password') {
+    if (!meta?.fromChain || !meta?.toChain || !meta?.token || !meta?.amount || !value) {
+      ws.sendLine(`  ${ANSI.red}✗ Missing bridge details${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+
+    ws.sendLine('');
+    ws.sendLine(`  ${ANSI.dim}Bridging ${meta.amount} ${meta.token} from ${meta.fromChain} → ${meta.toChain} via LI.FI...${ANSI.reset}`);
+    ws.sendLine('');
+
+    try {
+      const { executeLifiBridge } = await import('../services/lifi.js');
+      await executeLifiBridge({
+        fromChain: meta.fromChain,
+        toChain: meta.toChain,
+        token: meta.token,
+        amount: meta.amount,
+        slippage: parseFloat(getConfig('slippage') || 0.5),
+        wallet: getConfig('activeWallet'),
+        password: value,
+        confirm: true,
+      });
+      ws.sendLine(`  ${ANSI.green}✓ Bridge flow completed (check terminal output for receipt)${ANSI.reset}`);
+    } catch (err) {
+      ws.sendLine(`  ${ANSI.red}✗ Bridge failed: ${err.message}${ANSI.reset}`);
+    }
+    ws.sendLine('');
+    return {};
+  }
+
   if (id === 'trade_swap_password') {
     if (!meta?.tokenIn || !meta?.tokenOut || !meta?.amount || !value) {
       ws.sendLine(`  ${ANSI.red}✗ Missing swap details${ANSI.reset}`);
@@ -543,12 +670,13 @@ export async function handlePromptResponse(id, value, meta, ws) {
       return {};
     }
 
-    ws.sendLine(`  ${ANSI.dim}Executing swap ${meta.amount} ${meta.tokenIn} → ${meta.tokenOut}...${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.dim}Executing swap ${meta.amount} ${meta.tokenIn} → ${meta.tokenOut} via LI.FI...${ANSI.reset}`);
     ws.sendLine('');
 
     try {
-      const { executeSwap } = await import('../trading/swap.js');
-      await executeSwap({
+      // Try LI.FI first, fall back to direct Uniswap
+      const { executeLifiSwap } = await import('../services/lifi.js');
+      const swapOpts = {
         tokenIn: meta.tokenIn,
         tokenOut: meta.tokenOut,
         amount: meta.amount,
@@ -556,8 +684,18 @@ export async function handlePromptResponse(id, value, meta, ws) {
         wallet: getConfig('activeWallet'),
         password: value,
         confirm: true,
-      });
-      ws.sendLine(`  ${ANSI.green}✓ Swap flow completed (check terminal output for receipt)${ANSI.reset}`);
+      };
+
+      const result = await executeLifiSwap(swapOpts);
+      if (result?.success) {
+        ws.sendLine(`  ${ANSI.green}✓ Swap completed via LI.FI${ANSI.reset}`);
+      } else if (result?.error !== 'cancelled') {
+        // Fallback to direct Uniswap
+        ws.sendLine(`  ${ANSI.darkGold}LI.FI route unavailable — trying direct Uniswap V3...${ANSI.reset}`);
+        const { executeSwap } = await import('../trading/swap.js');
+        await executeSwap(swapOpts);
+        ws.sendLine(`  ${ANSI.green}✓ Swap completed via Uniswap V3${ANSI.reset}`);
+      }
     } catch (err) {
       ws.sendLine(`  ${ANSI.red}✗ Swap failed: ${err.message}${ANSI.reset}`);
     }
@@ -686,6 +824,8 @@ export async function handleCommand(cmd, ws) {
       return await cmdMarket(args, ws);
     case 'trade':
       return await cmdTrade(args, ws);
+    case 'bridge':
+      return await cmdBridge(args, ws);
     case 'wallet':
       return await cmdWallet(args, ws);
     case 'mail':
@@ -719,7 +859,7 @@ export async function handleCommand(cmd, ws) {
       return await cmdChatLogs(args, ws);
     default: {
       // Fuzzy: if it looks like natural language, route to AI
-      const nlKeywords = /\b(swap|buy|sell|send|transfer|price|what|how|should|analyze|check|balance|gas|dca|order|card|prepaid|visa|mastercard|bet|coinflip|flip|dice|slots|hilo|gamble|play|casino)\b/i;
+      const nlKeywords = /\b(swap|buy|sell|send|transfer|price|what|how|should|analyze|check|balance|gas|dca|order|card|prepaid|visa|mastercard|bet|coinflip|flip|dice|slots|hilo|gamble|play|casino|bridge|cross-chain|crosschain)\b/i;
       if (nlKeywords.test(cmd)) {
         return await cmdAI(cmd.split(/\s+/), ws);
       }
@@ -986,11 +1126,85 @@ async function cmdTrade(args, ws) {
   ws.sendLine('');
 
   ws.sendMenu('trade_action', '◆ Trade Actions', [
-    { value: 'swap', label: '🔄 Swap', desc: 'Interactive token swap (password prompt)' },
+    { value: 'swap', label: '🔄 Swap', desc: 'Token swap via LI.FI (best route across 31 DEXs)' },
+    { value: 'bridge', label: '🌉 Bridge', desc: 'Cross-chain transfer via LI.FI (60 chains)' },
     { value: 'snipe', label: '⚡ Snipe', desc: 'Fast buy by token contract' },
     { value: 'watch', label: '👀 Watch Pairs', desc: 'Monitor new pairs (CLI guidance)' },
     { value: 'back', label: '← Back', desc: '' },
   ]);
+
+  return {};
+}
+
+// ══════════════════════════════════════════════════
+// BRIDGE (LI.FI cross-chain)
+// ══════════════════════════════════════════════════
+async function cmdBridge(args, ws) {
+  const sub = (args[0] || '').toLowerCase();
+
+  if (sub === 'status' && args[1]) {
+    // Check bridge transfer status
+    ws.sendLine(`  ${ANSI.dim}Checking bridge status...${ANSI.reset}`);
+    try {
+      const { checkBridgeStatus } = await import('../services/lifi.js');
+      await checkBridgeStatus(args[1], {
+        fromChain: args.find((a, i) => args[i - 1] === '--from'),
+        toChain: args.find((a, i) => args[i - 1] === '--to'),
+      });
+    } catch (err) {
+      ws.sendLine(`  ${ANSI.red}✗ ${err.message}${ANSI.reset}`);
+    }
+    ws.sendLine('');
+    return {};
+  }
+
+  if (sub === 'chains') {
+    ws.sendLine(`  ${ANSI.dim}Fetching supported chains...${ANSI.reset}`);
+    try {
+      const { getChains } = await import('../services/lifi.js');
+      const chains = await getChains();
+      ws.sendLine('');
+      ws.sendLine(`${ANSI.gold}  ◆ LI.FI SUPPORTED CHAINS (${chains.length})${ANSI.reset}`);
+      ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+
+      const evm = chains.filter(c => c.chainType === 'EVM').sort((a, b) => a.name.localeCompare(b.name));
+      const other = chains.filter(c => c.chainType !== 'EVM');
+
+      for (const c of evm.slice(0, 30)) {
+        ws.sendLine(`    ${ANSI.green}●${ANSI.reset} ${ANSI.white}${c.name.padEnd(22)}${ANSI.reset} ${ANSI.dim}id:${c.id}${ANSI.reset}`);
+      }
+      if (evm.length > 30) {
+        ws.sendLine(`    ${ANSI.dim}...and ${evm.length - 30} more EVM chains${ANSI.reset}`);
+      }
+      if (other.length) {
+        ws.sendLine('');
+        for (const c of other) {
+          ws.sendLine(`    ${ANSI.blue}●${ANSI.reset} ${ANSI.white}${c.name.padEnd(22)}${ANSI.reset} ${ANSI.dim}${c.chainType}${ANSI.reset}`);
+        }
+      }
+      ws.sendLine('');
+    } catch (err) {
+      ws.sendLine(`  ${ANSI.red}✗ ${err.message}${ANSI.reset}`);
+      ws.sendLine('');
+    }
+    return {};
+  }
+
+  // Default: show bridge menu
+  const currentChain = getConfig('chain') || 'base';
+
+  ws.sendLine(`${ANSI.gold}  ◆ CROSS-CHAIN BRIDGE (LI.FI)${ANSI.reset}`);
+  ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.white}Move tokens between 60+ chains with optimal routing.${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.dim}Aggregates 27 bridges for best rates.${ANSI.reset}`);
+  ws.sendLine('');
+
+  const chains = ['base', 'ethereum', 'arbitrum', 'optimism', 'polygon', 'avalanche', 'bsc', 'zksync', 'scroll', 'linea'];
+  ws.sendMenu('bridge_from_chain', '◆ Bridge From Chain', chains.map(c => ({
+    value: c,
+    label: c === currentChain ? `★ ${c}` : c,
+    desc: c === currentChain ? 'current chain' : '',
+  })));
 
   return {};
 }

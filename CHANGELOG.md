@@ -7,6 +7,37 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.8.0] - 2026-03-10
+### Added
+- **LI.FI Integration** — cross-chain swaps & bridges via LI.FI aggregator:
+  - `trade swap` now routes through LI.FI first (best route across 31 DEXs on 60 chains), with automatic Uniswap V3 fallback if LI.FI is unreachable
+  - `--direct` flag to force direct Uniswap V3 (skip LI.FI)
+  - Smart API key management: free tier works out of the box (200 req/2hr), `darksol keys add lifi` for higher limits
+  - One-time non-nagging nudge to add API key after first swap
+- **`bridge` command** — NEW cross-chain token transfers:
+  - `darksol bridge send` — interactive or flagged cross-chain bridge (source chain → dest chain → token → amount)
+  - `darksol bridge status <txHash>` — track cross-chain transfer progress (PENDING/DONE/FAILED)
+  - `darksol bridge chains` — show all 60+ supported chains with chain IDs
+  - Supports 27 bridges with optimal routing
+  - Token approval handling, gas estimation, estimated arrival time
+- **Web GUI: Interactive bridge flow** in `darksol serve`:
+  - 🌉 Bridge option in Trade menu
+  - Source chain picker (10 chains, current chain starred)
+  - Destination chain picker (auto-filtered)
+  - Token selector (ETH/USDC/USDT/custom)
+  - Amount picker (presets + custom)
+  - Password-gated execution via LI.FI
+  - `bridge chains` and `bridge status` commands in web shell
+- **Web GUI: LI.FI swap routing** — web shell swaps now use LI.FI with Uniswap V3 fallback
+- **`lifi` added to API key vault** — `darksol keys add lifi` with validation
+  - Env var fallback: `LIFI_API_KEY`
+  - 6-hour caching for chains/tokens data to minimize API calls
+- 16 pre-mapped chain IDs (Base, Ethereum, Arbitrum, Optimism, Polygon, Avalanche, BSC, zkSync, Scroll, Linea, Mantle, Celo, Blast, Mode, Gnosis, Fantom)
+
+### Changed
+- Trade menu in web shell now shows "best route across 31 DEXs" description
+- Swap pair picker header updated to reflect LI.FI routing
+
 ## [0.7.2] - 2026-03-10
 ### Changed
 - **License changed from MIT to GPL-3.0-or-later** — protects against proprietary forks while keeping the code fully open and free to use
