@@ -269,6 +269,8 @@ const ERC20_SEND_ABI = [
 
 export async function sendFunds(opts = {}) {
   const name = opts.wallet || getConfig('activeWallet');
+  const providedPassword = opts.password;
+  const providedConfirm = opts.confirm;
   if (!name) {
     error('No active wallet. Set one: darksol wallet use <name>');
     return;
@@ -331,13 +333,17 @@ export async function sendFunds(opts = {}) {
     }]));
   }
 
-  // Password
-  const { password } = await inquirer.prompt([{
-    type: 'password',
-    name: 'password',
-    message: theme.gold('Wallet password:'),
-    mask: '●',
-  }]);
+  // Password (prompt unless provided)
+  let password = providedPassword;
+  if (!password) {
+    const prompted = await inquirer.prompt([{
+      type: 'password',
+      name: 'password',
+      message: theme.gold('Wallet password:'),
+      mask: '●',
+    }]);
+    password = prompted.password;
+  }
 
   const spin = spinner('Preparing transaction...').start();
 
@@ -420,12 +426,16 @@ export async function sendFunds(opts = {}) {
     ]);
     console.log('');
 
-    const { confirm } = await inquirer.prompt([{
-      type: 'confirm',
-      name: 'confirm',
-      message: theme.accent('Send this transaction?'),
-      default: false,
-    }]);
+    let confirm = providedConfirm;
+    if (typeof confirm !== 'boolean') {
+      const prompted = await inquirer.prompt([{
+        type: 'confirm',
+        name: 'confirm',
+        message: theme.accent('Send this transaction?'),
+        default: false,
+      }]);
+      confirm = prompted.confirm;
+    }
 
     if (!confirm) {
       warn('Transaction cancelled');

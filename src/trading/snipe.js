@@ -34,6 +34,8 @@ export async function snipeToken(tokenAddress, amount, opts = {}) {
   const chain = getConfig('chain') || 'base';
   const maxSlippage = opts.slippage || getConfig('slippage') || 1.0;
   const gasMultiplier = opts.gas || getConfig('gasMultiplier') || 1.5;
+  const providedPassword = opts.password;
+  const providedConfirm = opts.confirm;
 
   if (!tokenAddress || !tokenAddress.startsWith('0x')) {
     error('Provide a valid token contract address');
@@ -45,13 +47,17 @@ export async function snipeToken(tokenAddress, amount, opts = {}) {
     return;
   }
 
-  // Get password
-  const { password } = await inquirer.prompt([{
-    type: 'password',
-    name: 'password',
-    message: theme.gold('Wallet password:'),
-    mask: '●',
-  }]);
+  // Get password (prompt unless provided)
+  let password = providedPassword;
+  if (!password) {
+    const prompted = await inquirer.prompt([{
+      type: 'password',
+      name: 'password',
+      message: theme.gold('Wallet password:'),
+      mask: '●',
+    }]);
+    password = prompted.password;
+  }
 
   const spin = spinner('Preparing snipe...').start();
 
@@ -107,12 +113,16 @@ export async function snipeToken(tokenAddress, amount, opts = {}) {
     ]);
     console.log('');
 
-    const { confirm } = await inquirer.prompt([{
-      type: 'confirm',
-      name: 'confirm',
-      message: theme.accent('Execute snipe? This is HIGH RISK.'),
-      default: false,
-    }]);
+    let confirm = providedConfirm;
+    if (typeof confirm !== 'boolean') {
+      const prompted = await inquirer.prompt([{
+        type: 'confirm',
+        name: 'confirm',
+        message: theme.accent('Execute snipe? This is HIGH RISK.'),
+        default: false,
+      }]);
+      confirm = prompted.confirm;
+    }
 
     if (!confirm) {
       warn('Snipe cancelled');

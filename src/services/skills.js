@@ -25,41 +25,148 @@ const SKILL_CATALOG = [
   {
     name: 'darksol-facilitator',
     description: 'Free on-chain x402 payment facilitator — verify and settle micropayments',
-    version: '1.0.0',
+    version: '1.0.1',
     source: 'url',
     url: 'https://facilitator.darksol.net/skill/SKILL.md',
+    urlCandidates: [
+      'https://facilitator.darksol.net/skill/SKILL.md',
+      'https://facilitator.darksol.net/skill',
+    ],
+    fallbackSkill: 'facilitator',
     category: 'payments',
     installed: () => existsSync(join(OPENCLAW_SKILLS_DIR, 'darksol-facilitator', 'SKILL.md')),
   },
   {
     name: 'darksol-prepaid-cards',
     description: 'Crypto → prepaid Visa/MC cards, no KYC, agent-native REST API',
-    version: '1.0.0',
+    version: '1.0.1',
     source: 'url',
     url: 'https://acp.darksol.net/dist/darksol-prepaid-cards.skill',
     skillMdUrl: 'https://acp.darksol.net/cards/skill/SKILL.md',
+    urlCandidates: [
+      'https://acp.darksol.net/cards/skill/SKILL.md',
+      'https://acp.darksol.net/dist/darksol-prepaid-cards.skill',
+    ],
+    fallbackSkill: 'cards',
     category: 'payments',
     installed: () => existsSync(join(OPENCLAW_SKILLS_DIR, 'darksol-prepaid-cards', 'SKILL.md')),
   },
   {
     name: 'random-oracle',
     description: 'On-chain random oracle — verifiable randomness via x402',
-    version: '1.0.0',
+    version: '1.0.1',
     source: 'url',
     url: 'https://acp.darksol.net/oracle/skill/SKILL.md',
+    urlCandidates: [
+      'https://acp.darksol.net/oracle/skill/SKILL.md',
+      'https://acp.darksol.net/oracle/skill',
+    ],
+    fallbackSkill: 'oracle',
     category: 'oracle',
     installed: () => existsSync(join(OPENCLAW_SKILLS_DIR, 'random-oracle', 'SKILL.md')),
   },
   {
     name: 'the-clawsino',
     description: 'On-chain agent casino — coin flip, dice, hi-lo, slots via x402',
-    version: '1.0.0',
+    version: '1.0.1',
     source: 'url',
     url: 'https://casino.darksol.net/skill/SKILL.md',
+    urlCandidates: [
+      'https://casino.darksol.net/skill/SKILL.md',
+      'https://casino.darksol.net/skill',
+    ],
+    fallbackSkill: 'casino',
     category: 'gaming',
     installed: () => existsSync(join(OPENCLAW_SKILLS_DIR, 'the-clawsino', 'SKILL.md')),
   },
 ];
+
+const FALLBACK_SKILLS = {
+  facilitator: `---
+name: darksol-facilitator
+description: Free on-chain x402 payment facilitator by DARKSOL. Verifies and settles EIP-3009 micropayments on Base and Polygon.
+---
+
+# DARKSOL Facilitator
+
+## Base URL
+- https://facilitator.darksol.net
+
+## Endpoints
+- GET /  (service health/info)
+- POST /verify  (verify payment payload)
+- POST /settle  (settle payment on-chain)
+
+Use this for free x402 settlement flows.`,
+  oracle: `---
+name: random-oracle
+description: On-chain random oracle — verifiable randomness via x402.
+---
+
+# Random Oracle
+
+## Base URL
+- https://acp.darksol.net/api/oracle
+
+## Endpoints
+- GET /health
+- GET /coin
+- GET /dice?sides=6
+- GET /number?min=1&max=100
+- POST /shuffle
+
+Game endpoints are x402-gated; health is public.`,
+  cards: `---
+name: darksol-prepaid-cards
+description: Crypto to prepaid cards via DARKSOL Cards API.
+---
+
+# DARKSOL Prepaid Cards
+
+## Base URL
+- https://acp.darksol.net/api/cards
+
+## Endpoints
+- GET /catalog
+- POST /order
+- GET /status?tradeId=<id>
+
+Supports provider/amount/email + optional ticker/network route selection.`,
+  casino: `---
+name: the-clawsino
+description: On-chain casino endpoints for coin flip, dice, hi-lo, slots.
+---
+
+# The Clawsino
+
+## Base URL
+- https://casino.darksol.net
+
+## Endpoints
+- GET /api/stats
+- GET /api/tables
+- POST /api/bet
+- GET /api/receipt/:id
+- GET /api/verify/:id
+
+All bets are $1 USDC with payment proof in bet request.`,
+};
+
+async function fetchFirstAvailable(urls = []) {
+  for (const u of urls.filter(Boolean)) {
+    try {
+      const resp = await fetch(u);
+      if (!resp.ok) continue;
+      const content = await resp.text();
+      if (content && content.trim().length > 0) {
+        return { url: u, content };
+      }
+    } catch {
+      // try next URL
+    }
+  }
+  return null;
+}
 
 // ──────────────────────────────────────────────────
 // LIST SKILLS
@@ -129,18 +236,17 @@ export async function installSkill(name) {
         throw new Error('Bundled SKILL.md not found in package');
       }
     } else if (skill.source === 'url') {
-      // Fetch from remote
-      const url = skill.skillMdUrl || skill.url;
-      const resp = await fetch(url);
-      if (!resp.ok) throw new Error(`Failed to fetch: ${resp.status}`);
-      const content = await resp.text();
+      // Fetch from first live endpoint, with fallback stub if remote is unavailable
+      const candidates = skill.urlCandidates || [skill.skillMdUrl, skill.url];
+      const fetched = await fetchFirstAvailable(candidates);
 
-      // Handle .skill files (may be a zip or just SKILL.md content)
-      if (url.endsWith('.skill')) {
-        // .skill files are typically just the SKILL.md content
-        writeFileSync(join(targetDir, 'SKILL.md'), content);
+      if (fetched?.content) {
+        writeFileSync(join(targetDir, 'SKILL.md'), fetched.content);
+      } else if (skill.fallbackSkill && FALLBACK_SKILLS[skill.fallbackSkill]) {
+        writeFileSync(join(targetDir, 'SKILL.md'), FALLBACK_SKILLS[skill.fallbackSkill]);
+        warn(`Remote skill endpoint unavailable — installed fallback spec for ${name}`);
       } else {
-        writeFileSync(join(targetDir, 'SKILL.md'), content);
+        throw new Error(`Failed to fetch skill from: ${candidates.filter(Boolean).join(', ')}`);
       }
     }
 

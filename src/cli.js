@@ -113,19 +113,41 @@ export function cli(argv) {
 
   trade
     .command('swap')
-    .description('Swap tokens via DEX')
-    .requiredOption('-i, --in <token>', 'Token to sell (symbol or address)')
-    .requiredOption('-o, --out <token>', 'Token to buy (symbol or address)')
-    .requiredOption('-a, --amount <amount>', 'Amount to swap')
+    .description('Swap tokens via DEX (interactive if flags omitted)')
+    .option('-i, --in <token>', 'Token to sell (symbol or address)')
+    .option('-o, --out <token>', 'Token to buy (symbol or address)')
+    .option('-a, --amount <amount>', 'Amount to swap')
     .option('-s, --slippage <percent>', 'Max slippage %', '0.5')
     .option('-w, --wallet <name>', 'Wallet to use')
-    .action((opts) => executeSwap({
-      tokenIn: opts.in,
-      tokenOut: opts.out,
-      amount: opts.amount,
-      slippage: parseFloat(opts.slippage),
-      wallet: opts.wallet,
-    }));
+    .option('-p, --password <pw>', 'Wallet password (non-interactive)')
+    .option('-y, --yes', 'Skip confirmation')
+    .action(async (opts) => {
+      let tokenIn = opts.in;
+      let tokenOut = opts.out;
+      let amount = opts.amount;
+
+      if (!tokenIn || !tokenOut || !amount) {
+        const inquirer = (await import('inquirer')).default;
+        const answers = await inquirer.prompt([
+          { type: 'input', name: 'tokenIn', message: 'Token to sell (e.g. ETH):', default: tokenIn || 'ETH' },
+          { type: 'input', name: 'tokenOut', message: 'Token to buy (e.g. USDC):', default: tokenOut || 'USDC' },
+          { type: 'input', name: 'amount', message: 'Amount to swap:', default: amount || '0.1' },
+        ]);
+        tokenIn = answers.tokenIn;
+        tokenOut = answers.tokenOut;
+        amount = answers.amount;
+      }
+
+      return executeSwap({
+        tokenIn,
+        tokenOut,
+        amount,
+        slippage: parseFloat(opts.slippage),
+        wallet: opts.wallet,
+        password: opts.password,
+        confirm: opts.yes ? true : undefined,
+      });
+    });
 
   trade
     .command('snipe <token>')
@@ -134,10 +156,14 @@ export function cli(argv) {
     .option('-s, --slippage <percent>', 'Max slippage %', '1')
     .option('-g, --gas <multiplier>', 'Gas priority multiplier', '1.5')
     .option('-w, --wallet <name>', 'Wallet to use')
+    .option('-p, --password <pw>', 'Wallet password (non-interactive)')
+    .option('-y, --yes', 'Skip confirmation')
     .action((token, opts) => snipeToken(token, opts.amount, {
       slippage: parseFloat(opts.slippage),
       gas: parseFloat(opts.gas),
       wallet: opts.wallet,
+      password: opts.password,
+      confirm: opts.yes ? true : undefined,
     }));
 
   trade
@@ -146,6 +172,26 @@ export function cli(argv) {
     .option('--auto', 'Auto-snipe mode (dangerous)')
     .option('-a, --amount <eth>', 'Auto-snipe amount')
     .action((opts) => watchSnipe(opts));
+
+  trade
+    .command('pairs')
+    .description('Show common swap pairs for current chain')
+    .action(() => {
+      const chain = getConfig('chain') || 'base';
+      const byChain = {
+        base: ['ETH/USDC', 'ETH/AERO', 'ETH/VIRTUAL', 'USDC/AERO'],
+        ethereum: ['ETH/USDC', 'ETH/USDT', 'ETH/DAI'],
+        arbitrum: ['ETH/USDC', 'ETH/USDT', 'ETH/ARB'],
+        optimism: ['ETH/USDC', 'ETH/OP'],
+        polygon: ['POL/USDC', 'POL/WETH', 'USDC/USDT'],
+      };
+      showSection(`COMMON PAIRS — ${chain.toUpperCase()}`);
+      const pairs = byChain[chain] || byChain.base;
+      pairs.forEach((p) => console.log(`  ${theme.gold(p)}`));
+      console.log('');
+      info('Swap command: darksol trade swap -i <tokenIn> -o <tokenOut> -a <amount>');
+      console.log('');
+    });
 
   // ═══════════════════════════════════════
   // DCA COMMANDS

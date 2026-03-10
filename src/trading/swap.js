@@ -137,6 +137,8 @@ export async function executeSwap(opts = {}) {
     amount,
     wallet: walletName,
     slippage,
+    password: providedPassword,
+    confirm: providedConfirm,
   } = opts;
 
   const chain = getConfig('chain') || 'base';
@@ -155,13 +157,17 @@ export async function executeSwap(opts = {}) {
     return;
   }
 
-  // Get password for wallet
-  const { password } = await inquirer.prompt([{
-    type: 'password',
-    name: 'password',
-    message: theme.gold('Wallet password:'),
-    mask: '●',
-  }]);
+  // Get password for wallet (prompt unless provided)
+  let password = providedPassword;
+  if (!password) {
+    const prompted = await inquirer.prompt([{
+      type: 'password',
+      name: 'password',
+      message: theme.gold('Wallet password:'),
+      mask: '●',
+    }]);
+    password = prompted.password;
+  }
 
   const spin = spinner('Preparing swap...').start();
 
@@ -214,12 +220,16 @@ export async function executeSwap(opts = {}) {
     ]);
     console.log('');
 
-    const { confirm } = await inquirer.prompt([{
-      type: 'confirm',
-      name: 'confirm',
-      message: theme.gold('Execute swap?'),
-      default: false,
-    }]);
+    let confirm = providedConfirm;
+    if (typeof confirm !== 'boolean') {
+      const prompted = await inquirer.prompt([{
+        type: 'confirm',
+        name: 'confirm',
+        message: theme.gold('Execute swap?'),
+        default: false,
+      }]);
+      confirm = prompted.confirm;
+    }
 
     if (!confirm) {
       warn('Swap cancelled');

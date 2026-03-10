@@ -115,12 +115,12 @@ export async function handleMenuSelect(id, value, item, ws) {
           return {};
         }
         case 'send':
-          ws.sendLine('');
-          ws.sendLine(`  ${ANSI.gold}◆ SEND${ANSI.reset}`);
-          ws.sendLine(`  ${ANSI.dim}Sending requires wallet password — use the CLI:${ANSI.reset}`);
-          ws.sendLine(`  ${ANSI.gold}darksol send --to 0x... --amount 0.1 --token ETH${ANSI.reset}`);
-          ws.sendLine(`  ${ANSI.gold}darksol send${ANSI.reset}  ${ANSI.dim}(interactive mode)${ANSI.reset}`);
-          ws.sendLine('');
+          ws.sendMenu('send_token', '◆ Send Token', [
+            { value: 'ETH', label: 'ETH', desc: 'Native token transfer' },
+            { value: 'USDC', label: 'USDC', desc: 'Stablecoin transfer' },
+            { value: 'custom', label: 'Custom token (0x...)', desc: 'ERC-20 contract address' },
+            { value: 'back', label: '← Back', desc: '' },
+          ]);
           return {};
         case 'portfolio':
           return await handleCommand('portfolio', ws);
@@ -220,6 +220,86 @@ export async function handleMenuSelect(id, value, item, ws) {
 
     case 'cards_status_check':
       return await showCardStatus(value, ws);
+
+    case 'trade_action':
+      if (value === 'swap') {
+        ws.sendMenu('trade_swap_pair', '◆ Swap Pair', [
+          { value: 'ETH->USDC', label: 'ETH → USDC', desc: 'Most common' },
+          { value: 'USDC->ETH', label: 'USDC → ETH', desc: 'Reverse' },
+          { value: 'ETH->AERO', label: 'ETH → AERO', desc: 'Base ecosystem' },
+          { value: 'ETH->VIRTUAL', label: 'ETH → VIRTUAL', desc: 'Base ecosystem' },
+          { value: 'custom', label: 'Custom pair', desc: 'Any symbol or 0x token' },
+          { value: 'back', label: '← Back', desc: '' },
+        ]);
+        return {};
+      }
+      if (value === 'snipe') {
+        ws.sendPrompt('trade_snipe_token', 'Token contract (0x...):', {});
+        return {};
+      }
+      if (value === 'watch') {
+        return await handleCommand('trade watch', ws);
+      }
+      return {};
+
+    case 'trade_swap_pair': {
+      if (value === 'back') return {};
+      if (value === 'custom') {
+        ws.sendPrompt('trade_swap_custom_pair', 'Pair (format: TOKEN_IN TOKEN_OUT):', {});
+        return {};
+      }
+      const [tokenIn, tokenOut] = value.split('->');
+      ws.sendMenu('trade_swap_amount', `◆ Amount (${tokenIn} → ${tokenOut})`, [
+        { value: '0.01', label: `0.01 ${tokenIn}`, desc: 'small' , meta: { tokenIn, tokenOut }},
+        { value: '0.05', label: `0.05 ${tokenIn}`, desc: 'small' , meta: { tokenIn, tokenOut }},
+        { value: '0.1', label: `0.1 ${tokenIn}`, desc: 'standard' , meta: { tokenIn, tokenOut }},
+        { value: '0.25', label: `0.25 ${tokenIn}`, desc: 'medium' , meta: { tokenIn, tokenOut }},
+        { value: '1', label: `1 ${tokenIn}`, desc: 'large' , meta: { tokenIn, tokenOut }},
+        { value: 'custom', label: 'Custom amount', desc: '', meta: { tokenIn, tokenOut }},
+      ]);
+      return {};
+    }
+
+    case 'trade_swap_amount':
+      if (value === 'custom') {
+        ws.sendPrompt('trade_swap_custom_amount', `Amount (${item?.meta?.tokenIn || 'token'}):`, item?.meta || {});
+        return {};
+      }
+      ws.sendPrompt('trade_swap_password', `Wallet password (${item?.meta?.tokenIn || ''} → ${item?.meta?.tokenOut || ''}, ${value}):`, {
+        ...(item?.meta || {}),
+        amount: value,
+        mask: true,
+      });
+      return {};
+
+    case 'trade_snipe_amount':
+      ws.sendPrompt('trade_snipe_password', `Wallet password (snipe ${item?.meta?.token || ''} with ${value} ETH):`, {
+        ...(item?.meta || {}),
+        amount: value,
+        mask: true,
+      });
+      return {};
+
+    case 'send_token':
+      if (value === 'back') return {};
+      if (value === 'custom') {
+        ws.sendPrompt('send_custom_token', 'Token contract address (0x...):', {});
+        return {};
+      }
+      ws.sendPrompt('send_to', `Recipient address (for ${value}):`, { token: value });
+      return {};
+
+    case 'send_amount':
+      if (value === 'custom') {
+        ws.sendPrompt('send_custom_amount', `Amount (${item?.meta?.token || 'token'}):`, item?.meta || {});
+        return {};
+      }
+      ws.sendPrompt('send_password', `Wallet password (send ${value} ${item?.meta?.token || 'token'}):`, {
+        ...(item?.meta || {}),
+        amount: value,
+        mask: true,
+      });
+      return {};
 
     case 'agent_action':
       if (value === 'start') {
@@ -348,6 +428,185 @@ export async function handlePromptResponse(id, value, meta, ws) {
     return {};
   }
 
+  if (id === 'send_custom_token') {
+    if (!value || !value.startsWith('0x') || value.length !== 42) {
+      ws.sendLine(`  ${ANSI.red}✗ Invalid token address${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+    ws.sendPrompt('send_to', 'Recipient address:', { token: value.trim() });
+    return {};
+  }
+
+  if (id === 'send_to') {
+    if (!value || !value.startsWith('0x') || value.length !== 42) {
+      ws.sendLine(`  ${ANSI.red}✗ Invalid recipient address${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+
+    const token = meta?.token || 'ETH';
+    const defaultAmounts = token === 'ETH'
+      ? ['0.005', '0.01', '0.05', '0.1']
+      : ['1', '5', '10', '25'];
+
+    ws.sendMenu('send_amount', `◆ Amount (${token})`, [
+      ...defaultAmounts.map(a => ({ value: a, label: `${a} ${token === 'ETH' ? 'ETH' : ''}`.trim(), desc: 'quick', meta: { token, to: value.trim() } })),
+      { value: 'custom', label: 'Custom amount', desc: '', meta: { token, to: value.trim() } },
+    ]);
+    return {};
+  }
+
+  if (id === 'send_custom_amount') {
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) {
+      ws.sendLine(`  ${ANSI.red}✗ Invalid amount${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+    ws.sendPrompt('send_password', `Wallet password (send ${value} ${meta?.token || 'token'}):`, {
+      ...meta,
+      amount: String(value),
+      mask: true,
+    });
+    return {};
+  }
+
+  if (id === 'send_password') {
+    if (!meta?.to || !meta?.token || !meta?.amount || !value) {
+      ws.sendLine(`  ${ANSI.red}✗ Missing send details${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+
+    ws.sendLine(`  ${ANSI.dim}Sending ${meta.amount} ${meta.token} to ${meta.to.slice(0, 8)}...${ANSI.reset}`);
+    ws.sendLine('');
+
+    try {
+      const { sendFunds } = await import('../wallet/manager.js');
+      await sendFunds({
+        wallet: getConfig('activeWallet'),
+        to: meta.to,
+        amount: meta.amount,
+        token: meta.token,
+        password: value,
+        confirm: true,
+      });
+      ws.sendLine(`  ${ANSI.green}✓ Send flow completed (check terminal output for receipt)${ANSI.reset}`);
+    } catch (err) {
+      ws.sendLine(`  ${ANSI.red}✗ Send failed: ${err.message}${ANSI.reset}`);
+    }
+    ws.sendLine('');
+    return {};
+  }
+
+  if (id === 'trade_swap_custom_pair') {
+    if (!value) { ws.sendLine(`  ${ANSI.red}✗ Cancelled${ANSI.reset}`); ws.sendLine(''); return {}; }
+    const parts = value.trim().split(/\s+/).filter(Boolean);
+    if (parts.length < 2) {
+      ws.sendLine(`  ${ANSI.red}✗ Format: TOKEN_IN TOKEN_OUT${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+    const [tokenIn, tokenOut] = parts;
+    ws.sendMenu('trade_swap_amount', `◆ Amount (${tokenIn} → ${tokenOut})`, [
+      { value: '0.01', label: `0.01 ${tokenIn}`, desc: 'small', meta: { tokenIn, tokenOut } },
+      { value: '0.05', label: `0.05 ${tokenIn}`, desc: 'small', meta: { tokenIn, tokenOut } },
+      { value: '0.1', label: `0.1 ${tokenIn}`, desc: 'standard', meta: { tokenIn, tokenOut } },
+      { value: '0.25', label: `0.25 ${tokenIn}`, desc: 'medium', meta: { tokenIn, tokenOut } },
+      { value: '1', label: `1 ${tokenIn}`, desc: 'large', meta: { tokenIn, tokenOut } },
+      { value: 'custom', label: 'Custom amount', desc: '', meta: { tokenIn, tokenOut } },
+    ]);
+    return {};
+  }
+
+  if (id === 'trade_swap_custom_amount') {
+    if (!value) { ws.sendLine(`  ${ANSI.red}✗ Cancelled${ANSI.reset}`); ws.sendLine(''); return {}; }
+    const n = Number(value);
+    if (!Number.isFinite(n) || n <= 0) {
+      ws.sendLine(`  ${ANSI.red}✗ Invalid amount${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+    ws.sendPrompt('trade_swap_password', `Wallet password (${meta?.tokenIn || ''} → ${meta?.tokenOut || ''}, ${value}):`, {
+      ...meta,
+      amount: String(value),
+      mask: true,
+    });
+    return {};
+  }
+
+  if (id === 'trade_swap_password') {
+    if (!meta?.tokenIn || !meta?.tokenOut || !meta?.amount || !value) {
+      ws.sendLine(`  ${ANSI.red}✗ Missing swap details${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+
+    ws.sendLine(`  ${ANSI.dim}Executing swap ${meta.amount} ${meta.tokenIn} → ${meta.tokenOut}...${ANSI.reset}`);
+    ws.sendLine('');
+
+    try {
+      const { executeSwap } = await import('../trading/swap.js');
+      await executeSwap({
+        tokenIn: meta.tokenIn,
+        tokenOut: meta.tokenOut,
+        amount: meta.amount,
+        slippage: parseFloat(getConfig('slippage') || 0.5),
+        wallet: getConfig('activeWallet'),
+        password: value,
+        confirm: true,
+      });
+      ws.sendLine(`  ${ANSI.green}✓ Swap flow completed (check terminal output for receipt)${ANSI.reset}`);
+    } catch (err) {
+      ws.sendLine(`  ${ANSI.red}✗ Swap failed: ${err.message}${ANSI.reset}`);
+    }
+    ws.sendLine('');
+    return {};
+  }
+
+  if (id === 'trade_snipe_token') {
+    if (!value || !value.startsWith('0x') || value.length !== 42) {
+      ws.sendLine(`  ${ANSI.red}✗ Invalid token contract${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+    ws.sendMenu('trade_snipe_amount', '◆ Snipe Amount (ETH)', [
+      { value: '0.01', label: '0.01 ETH', desc: 'small', meta: { token: value.trim() } },
+      { value: '0.05', label: '0.05 ETH', desc: 'standard', meta: { token: value.trim() } },
+      { value: '0.1', label: '0.1 ETH', desc: 'medium', meta: { token: value.trim() } },
+      { value: '0.25', label: '0.25 ETH', desc: 'large', meta: { token: value.trim() } },
+    ]);
+    return {};
+  }
+
+  if (id === 'trade_snipe_password') {
+    if (!meta?.token || !meta?.amount || !value) {
+      ws.sendLine(`  ${ANSI.red}✗ Missing snipe details${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+
+    ws.sendLine(`  ${ANSI.dim}Executing snipe ${meta.amount} ETH -> ${meta.token.slice(0, 8)}...${ANSI.reset}`);
+    ws.sendLine('');
+
+    try {
+      const { snipeToken } = await import('../trading/snipe.js');
+      await snipeToken(meta.token, meta.amount, {
+        slippage: parseFloat(getConfig('slippage') || 1),
+        gas: parseFloat(getConfig('gasMultiplier') || 1.5),
+        wallet: getConfig('activeWallet'),
+        password: value,
+        confirm: true,
+      });
+      ws.sendLine(`  ${ANSI.green}✓ Snipe flow completed (check terminal output for receipt)${ANSI.reset}`);
+    } catch (err) {
+      ws.sendLine(`  ${ANSI.red}✗ Snipe failed: ${err.message}${ANSI.reset}`);
+    }
+    ws.sendLine('');
+    return {};
+  }
+
   if (id === 'agent_signer_password') {
     const wallet = meta.wallet;
     if (!wallet || !value) {
@@ -424,6 +683,8 @@ export async function handleCommand(cmd, ws) {
       return await cmdHistory(args, ws);
     case 'market':
       return await cmdMarket(args, ws);
+    case 'trade':
+      return await cmdTrade(args, ws);
     case 'wallet':
       return await cmdWallet(args, ws);
     case 'mail':
@@ -701,6 +962,34 @@ async function cmdMarket(args, ws) {
   } catch (err) {
     return { output: `  ${ANSI.red}Error: ${err.message}${ANSI.reset}\r\n` };
   }
+
+  return {};
+}
+
+// ══════════════════════════════════════════════════
+// TRADE (interactive web flow)
+// ══════════════════════════════════════════════════
+async function cmdTrade(args, ws) {
+  const sub = (args[0] || '').toLowerCase();
+
+  if (sub === 'watch') {
+    ws.sendLine(`${ANSI.dim}Pair watch is CLI-first right now:${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.gold}darksol trade watch${ANSI.reset}`);
+    ws.sendLine('');
+    return {};
+  }
+
+  ws.sendLine(`${ANSI.gold}  ◆ TRADE${ANSI.reset}`);
+  ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.white}Choose an execution flow:${ANSI.reset}`);
+  ws.sendLine('');
+
+  ws.sendMenu('trade_action', '◆ Trade Actions', [
+    { value: 'swap', label: '🔄 Swap', desc: 'Interactive token swap (password prompt)' },
+    { value: 'snipe', label: '⚡ Snipe', desc: 'Fast buy by token contract' },
+    { value: 'watch', label: '👀 Watch Pairs', desc: 'Monitor new pairs (CLI guidance)' },
+    { value: 'back', label: '← Back', desc: '' },
+  ]);
 
   return {};
 }
@@ -1564,24 +1853,17 @@ async function cmdSend(args, ws) {
     return {};
   }
 
-  ws.sendLine(`  ${ANSI.white}Send ETH or any ERC-20 token from your wallet.${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.white}Wallet:${ANSI.reset} ${ANSI.gold}${wallet}${ANSI.reset} ${ANSI.dim}on ${chain}${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.dim}Interactive send flow will ask token → recipient → amount → password.${ANSI.reset}`);
   ws.sendLine('');
-  ws.sendLine(`  ${ANSI.darkGold}Usage:${ANSI.reset}`);
-  ws.sendLine(`  ${ANSI.gold}darksol send --to 0x... --amount 0.1 --token ETH${ANSI.reset}`);
-  ws.sendLine(`  ${ANSI.gold}darksol send --to 0x... --amount 50 --token USDC${ANSI.reset}`);
-  ws.sendLine(`  ${ANSI.gold}darksol send${ANSI.reset}  ${ANSI.dim}(interactive mode — prompts for everything)${ANSI.reset}`);
-  ws.sendLine('');
-  ws.sendLine(`  ${ANSI.darkGold}Features:${ANSI.reset}`);
-  ws.sendLine(`  ${ANSI.dim}•${ANSI.reset} ETH and any ERC-20 token`);
-  ws.sendLine(`  ${ANSI.dim}•${ANSI.reset} Balance check before sending`);
-  ws.sendLine(`  ${ANSI.dim}•${ANSI.reset} Gas estimation in preview`);
-  ws.sendLine(`  ${ANSI.dim}•${ANSI.reset} Confirmation prompt before execution`);
-  ws.sendLine(`  ${ANSI.dim}•${ANSI.reset} On-chain receipt after confirmation`);
-  ws.sendLine('');
-  ws.sendLine(`  ${ANSI.darkGold}Active:${ANSI.reset} ${ANSI.white}${wallet}${ANSI.reset} on ${ANSI.white}${chain}${ANSI.reset}`);
-  ws.sendLine('');
-  ws.sendLine(`  ${ANSI.dim}⚠ Sending requires the CLI. Install: npm i -g @darksol/terminal${ANSI.reset}`);
-  ws.sendLine('');
+
+  ws.sendMenu('send_token', '◆ Send Token', [
+    { value: 'ETH', label: 'ETH', desc: 'Native token transfer' },
+    { value: 'USDC', label: 'USDC', desc: 'Stablecoin transfer' },
+    { value: 'custom', label: 'Custom token (0x...)', desc: 'ERC-20 contract address' },
+    { value: 'back', label: '← Back', desc: '' },
+  ]);
+
   return {};
 }
 
