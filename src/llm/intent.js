@@ -65,7 +65,15 @@ ACTIONS (use the most specific one):
 - "analyze" — deep analysis of a token
 - "gas" — gas price check
 - "cards" — order a prepaid Visa/Mastercard with crypto (e.g. "order a $50 card", "get me a prepaid card")
+- "casino" — play a casino game (coinflip, dice, hilo, slots). All bets are $1 USDC. (e.g. "flip a coin", "bet on heads", "play slots", "roll dice over 3")
 - "unknown" — can't determine what the user wants
+
+CASINO GAMES:
+- coinflip: { "choice": "heads" | "tails" } → 1.90x payout
+- dice: { "direction": "over"|"under", "threshold": 2-5 } → variable payout
+- hilo: { "choice": "higher" | "lower" } → ~2.06x payout
+- slots: {} → Match-3: 5.00x, Match-2: 1.50x
+All bets are exactly $1 USDC. House edge: 5%. Results verified on-chain.
 
 CARDS ORDERING:
 When the user wants to order a prepaid card, you MUST collect:
@@ -91,7 +99,7 @@ If they mention AgentMail or "my email", suggest using their configured agent em
 
 When parsing, respond with ONLY valid JSON:
 {
-  "action": "swap|send|snipe|dca|price|balance|info|analyze|gas|cards|unknown",
+  "action": "swap|send|snipe|dca|price|balance|info|analyze|gas|cards|casino|unknown",
   "tokenIn": "symbol or address (for swaps)",
   "tokenOut": "symbol or address (for swaps)",
   "token": "symbol (for send/price/analyze)",
@@ -100,6 +108,8 @@ When parsing, respond with ONLY valid JSON:
   "email": "delivery email (for cards)",
   "provider": "card provider (for cards, default: swype)",
   "ticker": "payment crypto (for cards, default: usdc)",
+  "gameType": "casino game: coinflip|dice|hilo|slots",
+  "betParams": "casino bet parameters object",
   "chain": "chain name if specified, null if not",
   "interval": "for DCA: 1h, 4h, 1d, etc.",
   "orders": "for DCA: number of orders",
@@ -147,6 +157,7 @@ COMMAND MAPPING:
 - balance → darksol wallet balance
 - gas → darksol gas <chain>
 - cards → darksol cards order -p <provider> -a <amount> -e <email> --ticker <crypto>
+- casino → darksol casino bet <game> -c <choice>
 - analyze → darksol ai analyze <token>`;
 
 // ──────────────────────────────────────────────────
@@ -292,7 +303,7 @@ export async function startChat(opts = {}) {
       }
 
       // Try to detect actionable intent
-      const actionKeywords = /\b(swap|send|transfer|buy|sell|snipe|dca|price|balance|gas|card|cards|order|prepaid|visa|mastercard)\b/i;
+      const actionKeywords = /\b(swap|send|transfer|buy|sell|snipe|dca|price|balance|gas|card|cards|order|prepaid|visa|mastercard|casino|bet|coinflip|coin|flip|dice|slots|hilo|gamble|play)\b/i;
       const isActionable = actionKeywords.test(input);
 
       let result;
@@ -626,6 +637,17 @@ export async function executeIntent(intent, opts = {}) {
         const { showGas } = await import('../services/gas.js');
         await showGas(intent.chain || getConfig('chain') || 'base');
         return { success: true, action: 'gas' };
+      }
+
+      case 'casino': {
+        const { casinoBet } = await import('../services/casino.js');
+        const gameType = intent.gameType || 'coinflip';
+        const betParams = intent.betParams || {};
+        // Map common AI outputs
+        if (intent.choice) betParams.choice = intent.choice;
+        if (intent.direction) betParams.direction = intent.direction;
+        if (intent.threshold) betParams.threshold = intent.threshold;
+        return await casinoBet(gameType, betParams, { wallet: opts.wallet });
       }
 
       case 'cards': {

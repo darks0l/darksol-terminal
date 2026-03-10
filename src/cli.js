@@ -15,7 +15,7 @@ import { snipeToken, watchSnipe } from './trading/snipe.js';
 import { createDCA, listDCA, cancelDCA, runDCA } from './trading/dca.js';
 import { topMovers, tokenDetail, compareTokens } from './services/market.js';
 import { oracleFlip, oracleDice, oracleNumber, oracleShuffle, oracleHealth } from './services/oracle.js';
-import { casinoBet, casinoTables, casinoStats, casinoReceipt } from './services/casino.js';
+import { casinoBet, casinoTables, casinoStats, casinoReceipt, casinoHealth, casinoVerify } from './services/casino.js';
 import { cardsCatalog, cardsOrder, cardsStatus } from './services/cards.js';
 import { facilitatorHealth, facilitatorVerify, facilitatorSettle } from './services/facilitator.js';
 import { buildersLeaderboard, buildersLookup, buildersFeed } from './services/builders.js';
@@ -238,15 +238,26 @@ export function cli(argv) {
     .description('The Clawsino — on-chain betting');
 
   casino
-    .command('bet <game> [choice]')
-    .description('Place a bet (coin-flip, dice, hilo, slots)')
-    .option('-n, --number <n>', 'Number for dice over/under')
-    .option('-w, --wallet <addr>', 'Wallet address')
-    .action((game, choice, opts) => casinoBet(game, { choice, ...opts }));
+    .command('status')
+    .description('House status, balance, games')
+    .action(() => casinoHealth());
+
+  casino
+    .command('bet [game]')
+    .description('Place a $1 USDC bet (interactive if game omitted)')
+    .option('-c, --choice <choice>', 'heads/tails, higher/lower')
+    .option('-d, --direction <dir>', 'over/under (dice)')
+    .option('-t, --threshold <n>', 'Dice threshold 2-5')
+    .option('-w, --wallet <addr>', 'Payout wallet address')
+    .action((game, opts) => casinoBet(game, {
+      choice: opts.choice,
+      direction: opts.direction,
+      threshold: opts.threshold ? parseInt(opts.threshold) : undefined,
+    }, { wallet: opts.wallet }));
 
   casino
     .command('tables')
-    .description('View game tables')
+    .description('Recent bets')
     .action(() => casinoTables());
 
   casino
@@ -256,8 +267,13 @@ export function cli(argv) {
 
   casino
     .command('receipt <id>')
-    .description('Verify bet receipt')
+    .description('Get bet receipt')
     .action((id) => casinoReceipt(id));
+
+  casino
+    .command('verify <id>')
+    .description('Verify bet on-chain')
+    .action((id) => casinoVerify(id));
 
   // ═══════════════════════════════════════
   // CARDS COMMANDS

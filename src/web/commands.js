@@ -457,7 +457,7 @@ export async function handleCommand(cmd, ws) {
       return await cmdChatLogs(args, ws);
     default: {
       // Fuzzy: if it looks like natural language, route to AI
-      const nlKeywords = /\b(swap|buy|sell|send|transfer|price|what|how|should|analyze|check|balance|gas|dca|order|card|prepaid|visa|mastercard)\b/i;
+      const nlKeywords = /\b(swap|buy|sell|send|transfer|price|what|how|should|analyze|check|balance|gas|dca|order|card|prepaid|visa|mastercard|bet|coinflip|flip|dice|slots|hilo|gamble|play|casino)\b/i;
       if (nlKeywords.test(cmd)) {
         return await cmdAI(cmd.split(/\s+/), ws);
       }
@@ -1138,7 +1138,7 @@ async function cmdOracle(args, ws) {
 }
 
 async function cmdCasino(args, ws) {
-  ws.sendLine(`${ANSI.gold}  ◆ CASINO${ANSI.reset}`);
+  ws.sendLine(`${ANSI.gold}  ◆ THE CLAWSINO 🎰${ANSI.reset}`);
   ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
   try {
     const resp = await fetch('https://casino.darksol.net/api/stats');
@@ -1146,12 +1146,19 @@ async function cmdCasino(args, ws) {
     if (!ct.includes('json')) throw new Error('not json');
     const data = await resp.json();
 
-    ws.sendLine(`  ${ANSI.darkGold}Status${ANSI.reset}     ${ANSI.green}● Online${ANSI.reset}`);
-    ws.sendLine(`  ${ANSI.darkGold}Bankroll${ANSI.reset}   ${ANSI.white}$${data.bankrollUsdc || '0'} USDC${ANSI.reset}`);
-    ws.sendLine(`  ${ANSI.darkGold}Total Bets${ANSI.reset} ${ANSI.white}${data.totalBets || 0}${ANSI.reset}`);
-    ws.sendLine(`  ${ANSI.darkGold}Win Rate${ANSI.reset}   ${ANSI.white}${data.winRate || '0'}%${ANSI.reset}`);
-    ws.sendLine(`  ${ANSI.darkGold}Endpoint${ANSI.reset}   ${ANSI.blue}casino.darksol.net${ANSI.reset}`);
-    ws.sendLine(`  ${ANSI.darkGold}Docs${ANSI.reset}       ${ANSI.blue}casino.darksol.net/docs${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Status${ANSI.reset}       ${data.acceptingBets ? `${ANSI.green}● Open${ANSI.reset}` : `${ANSI.red}○ Closed${ANSI.reset}`}`);
+    ws.sendLine(`  ${ANSI.darkGold}House${ANSI.reset}        ${ANSI.white}$${data.houseBalanceUsdc || '0'} USDC${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Total Bets${ANSI.reset}   ${ANSI.white}${data.totalBets || 0}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Win Rate${ANSI.reset}     ${ANSI.white}${data.winRate || '0%'}${ANSI.reset}`);
+    ws.sendLine('');
+    ws.sendLine(`  ${ANSI.gold}GAMES${ANSI.reset}  ${ANSI.dim}All bets $1 USDC • 5% house edge${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.white}🪙 Coin Flip${ANSI.reset}   ${ANSI.dim}1.90x — heads or tails${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.white}🎲 Dice${ANSI.reset}        ${ANSI.dim}variable — over/under 2-5${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.white}🃏 Hi-Lo${ANSI.reset}       ${ANSI.dim}~2.06x — higher or lower${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.white}🎰 Slots${ANSI.reset}       ${ANSI.dim}1.50-5.00x — match symbols${ANSI.reset}`);
+    ws.sendLine('');
+    ws.sendLine(`  ${ANSI.dim}Play via CLI: darksol casino bet${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.dim}Or ask AI: "flip a coin" / "bet on heads"${ANSI.reset}`);
     ws.sendLine('');
   } catch {
     ws.sendLine(`  ${ANSI.red}○ Casino unreachable${ANSI.reset}`);
@@ -1174,7 +1181,7 @@ async function cmdFacilitator(args, ws) {
     ws.sendLine(`  ${ANSI.darkGold}Service${ANSI.reset}    ${ANSI.white}${data.service || 'DARKSOL Facilitator'}${ANSI.reset}`);
     ws.sendLine(`  ${ANSI.darkGold}Protocol${ANSI.reset}   ${ANSI.white}${data.protocol || 'x402'}${ANSI.reset}`);
     ws.sendLine(`  ${ANSI.darkGold}Fee${ANSI.reset}        ${ANSI.green}${data.fee || '0%'}${ANSI.reset}`);
-    ws.sendLine(`  ${ANSI.darkGold}Chains${ANSI.reset}     ${ANSI.white}${Array.isArray(data.chains) ? data.chains.join(', ') : 'Base, Polygon'}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Chains${ANSI.reset}     ${ANSI.white}${Array.isArray(data.chains) ? data.chains.map(c => `${c.chain} (${c.status})`) .join(', ') : 'Base, Polygon'}${ANSI.reset}`);
     ws.sendLine(`  ${ANSI.darkGold}Docs${ANSI.reset}       ${ANSI.blue}acp.darksol.net/facilitator${ANSI.reset}`);
     ws.sendLine('');
   } catch {

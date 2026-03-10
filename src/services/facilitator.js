@@ -19,14 +19,19 @@ export async function facilitatorHealth() {
       ['Version', data.version || '-'],
       ['Protocol', data.protocol || 'x402'],
       ['Fee', data.fee || '0%'],
-      ['Chains', Array.isArray(data.chains) ? data.chains.join(', ') : (data.chains || 'Base, Polygon')],
+      ['Chains', Array.isArray(data.chains) ? data.chains.map(c => c.chain || c).join(', ') : (data.chains || 'Base, Polygon')],
       ['Status', theme.success('● Online')],
     ]);
     if (data.description) {
       console.log('');
       console.log(theme.dim(`  ${data.description}`));
     }
-    if (data.contracts) {
+    if (Array.isArray(data.chains)) {
+      console.log('');
+      for (const c of data.chains) {
+        console.log(`  ${theme.gold((c.chain || '').padEnd(10))} ${theme.dim(c.facilitator || '')}  ${c.status === 'operational' ? theme.success('●') : theme.error('○')} ${c.settlements || 0} settlements, $${c.volumeUSDC || '0'} USDC`);
+      }
+    } else if (data.contracts) {
       console.log('');
       for (const [chain, addr] of Object.entries(data.contracts)) {
         console.log(`  ${theme.gold(chain.padEnd(10))} ${theme.dim(addr)}`);
