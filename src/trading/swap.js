@@ -58,7 +58,8 @@ const TOKENS = {
     OP: '0x4200000000000000000000000000000000000042',
   },
   polygon: {
-    ETH: ethers.ZeroAddress,
+    MATIC: ethers.ZeroAddress,
+    POL: ethers.ZeroAddress,
     WETH: '0x7ceB23fD6bC0adD59E62ac25578270cFf1b9f619',
     WMATIC: '0x0d500B1d8E8eF31E21C99d1Db9A6444d3ADf1270',
     USDC: '0x3c499c542cEF5E3811e1192ce70d8cC03d5c3359',
@@ -76,11 +77,19 @@ const ERC20_ABI = [
   'function name() view returns (string)',
 ];
 
-// Uniswap V3 SwapRouter ABI (exactInputSingle)
-const SWAP_ROUTER_ABI = [
+// Uniswap V3 SwapRouter ABIs
+// V1 SwapRouter (ETH, Arb, OP, Polygon) — has deadline IN the struct
+const SWAP_ROUTER_V1_ABI = [
   'function exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 deadline, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) external payable returns (uint256 amountOut)',
+];
+// V2 SwapRouter02 (Base) — NO deadline in struct, uses multicall wrapper
+const SWAP_ROUTER_V2_ABI = [
+  'function exactInputSingle((address tokenIn, address tokenOut, uint24 fee, address recipient, uint256 amountIn, uint256 amountOutMinimum, uint160 sqrtPriceLimitX96)) external payable returns (uint256 amountOut)',
   'function multicall(uint256 deadline, bytes[] data) external payable returns (bytes[])',
 ];
+
+// Which chains use V2 SwapRouter02 (no deadline in struct)
+const V2_ROUTER_CHAINS = new Set(['base']);
 
 // Uniswap V3 Quoter V2 ABI (for getting expected output)
 const QUOTER_ABI = [
@@ -232,7 +241,6 @@ export async function executeSwap(opts = {}) {
 
     // Execute swap
     swapSpin.text = 'Getting quote for slippage protection...';
-    const swapRouter = new ethers.Contract(router, SWAP_ROUTER_ABI, signer);
     const actualTokenOut = tokenOutAddr === ethers.ZeroAddress ? TOKENS[chain]?.WETH : tokenOutAddr;
 
     const deadline = Math.floor(Date.now() / 1000) + 300; // 5 min
@@ -276,19 +284,41 @@ export async function executeSwap(opts = {}) {
     }
 
     swapSpin.text = 'Sending swap transaction...';
-    const swapParams = {
-      tokenIn: actualTokenIn,
-      tokenOut: actualTokenOut,
-      fee: 3000, // 0.3% fee tier
-      recipient: address,
-      deadline,
-      amountIn,
-      amountOutMinimum: amountOutMin,
-      sqrtPriceLimitX96: 0,
-    };
-
+    const isV2Router = V2_ROUTER_CHAINS.has(chain);
+    const routerABI = isV2Router ? SWAP_ROUTER_V2_ABI : SWAP_ROUTER_V1_ABI;
+    const swapRouter = new ethers.Contract(router, routerABI, signer);
     const txOpts = isNativeIn ? { value: amountIn } : {};
-    const tx = await swapRouter.exactInputSingle(swapParams, txOpts);
+
+    let tx;
+    if (isV2Router) {
+      // SwapRouter02: no deadline in struct, use multicall wrapper
+      const swapParams = {
+        tokenIn: actualTokenIn,
+        tokenOut: actualTokenOut,
+        fee: 3000,
+        recipient: address,
+        amountIn,
+        amountOutMinimum: amountOutMin,
+        sqrtPriceLimitX96: 0,
+      };
+      // Encode the swap call, then wrap in multicall with deadline
+      const swapIface = new ethers.Interface(SWAP_ROUTER_V2_ABI);
+      const swapData = swapIface.encodeFunctionData('exactInputSingle', [swapParams]);
+      tx = await swapRouter.multicall(deadline, [swapData], txOpts);
+    } else {
+      // V1 SwapRouter: deadline is in the struct
+      const swapParams = {
+        tokenIn: actualTokenIn,
+        tokenOut: actualTokenOut,
+        fee: 3000,
+        recipient: address,
+        deadline,
+        amountIn,
+        amountOutMinimum: amountOutMin,
+        sqrtPriceLimitX96: 0,
+      };
+      tx = await swapRouter.exactInputSingle(swapParams, txOpts);
+    }
 
     swapSpin.text = 'Waiting for confirmation...';
     const receipt = await tx.wait();
