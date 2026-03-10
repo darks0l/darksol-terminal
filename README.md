@@ -15,7 +15,7 @@ A unified CLI for market intel, trading, AI-powered analysis, on-chain oracle, c
 [![License: MIT](https://img.shields.io/badge/License-MIT-gold.svg)](https://opensource.org/licenses/MIT)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
 
-- Current release: **0.5.0**
+- Current release: **0.7.0**
 - Changelog: `CHANGELOG.md`
 
 ## Install
@@ -67,10 +67,13 @@ darksol agent start main
 
 ## `darksol serve` (Web Terminal UX)
 
-`darksol serve` now supports an interactive keyboard-driven UI:
+`darksol serve` is a full interactive web terminal with keyboard-driven menus:
 
-- Arrow-key menus (`↑/↓` + `Enter`) for wallet/config flows
-- Interactive wallet picker + wallet action menu (receive/send/portfolio/history/switch chain)
+- Arrow-key menus (`↑/↓` + `Enter`) for wallet/config/trade flows
+- **Interactive send** — token → recipient → amount → password → on-chain transfer
+- **Interactive swap** — pair picker (presets + custom) → amount → password → Uniswap V3 execution
+- **Interactive snipe** — contract input → amount → password → fast buy
+- Wallet picker + wallet action menu (receive/send/portfolio/history/switch chain)
 - Agent signer control center (`agent`) with guided wallet selection + start/stop/status
 - Click-through help menu (`help`) with arrow-key command selection
 - AI connection check at startup (shows ready/not configured)
@@ -84,8 +87,10 @@ Useful web-shell commands:
 
 ```bash
 help          # clickable command menu (arrow keys + Enter)
-keys          # provider status + interactive add/update
+trade         # interactive swap / snipe menu
+send          # interactive token transfer
 wallet        # interactive wallet picker and actions
+keys          # provider status + interactive add/update
 agent         # signer start/stop/status controls
 config        # interactive config menu
 logs 20       # show recent AI chat log lines
@@ -239,14 +244,23 @@ Keys can also come from environment variables (e.g., `OPENAI_API_KEY`).
 ## 💰 Trading
 
 ```bash
-# Swap via Uniswap V3
+# Interactive swap (prompts for pair + amount if flags omitted)
+darksol trade swap
+
+# Swap with full flags (Uniswap V3 with slippage protection)
 darksol trade swap -i ETH -o USDC -a 0.1
+
+# Non-interactive swap (for automation / cron)
+darksol trade swap -i ETH -o USDC -a 0.1 -p "password" -y
+
+# Show common pairs for current chain
+darksol trade pairs
 
 # Snipe a token (Uniswap V2, fast buy)
 darksol trade snipe 0xTOKEN -a 0.05
 
-# Snipe with gas boost
-darksol trade snipe 0xTOKEN -a 0.05 -g 2.0
+# Snipe with gas boost + non-interactive
+darksol trade snipe 0xTOKEN -a 0.05 -g 2.0 -p "password" -y
 
 # Watch for new pairs
 darksol trade watch

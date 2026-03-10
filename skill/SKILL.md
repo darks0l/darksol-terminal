@@ -7,7 +7,7 @@ description: "DARKSOL Terminal — unified CLI + x402 platform for trading, wall
 
 **All DARKSOL services. One terminal. Zero trust required. 🌑**
 
-`@darksol/terminal` v0.6.x | npm: `npm install -g @darksol/terminal`
+`@darksol/terminal` v0.7.x | npm: `npm install -g @darksol/terminal`
 
 ---
 
@@ -65,10 +65,12 @@ darksol wallet export [name]           # Export (password required for PK)
 
 ### 📊 Trading (5 chains)
 ```bash
+darksol trade swap                             # Interactive swap (prompts for pair + amount)
 darksol trade swap -i ETH -o USDC -a 0.1      # Uniswap V3 swap with slippage protection
-darksol trade swap -i USDC -o ETH -a 100 -c polygon  # Swap on Polygon
+darksol trade swap -i ETH -o USDC -a 0.1 -p "pw" -y  # Non-interactive (automation/cron)
+darksol trade pairs                            # Show common pairs for active chain
 darksol trade snipe <token> -a 0.05            # Fast buy with gas boost
-darksol trade snipe <token> -a 0.05 -g 2.0     # Snipe with 2x gas priority
+darksol trade snipe <token> -a 0.05 -g 2.0 -p "pw" -y  # Non-interactive snipe
 darksol trade watch                             # Monitor new pairs (experimental)
 darksol send                                   # Interactive ETH/ERC-20 transfer
 darksol receive                                # Show your address for receiving
@@ -293,8 +295,10 @@ const result = await fetchWithX402(
 
 ### Non-interactive mode (for cron / automation)
 ```bash
-# All trading commands accept flags for non-interactive use
-darksol trade swap -i ETH -o USDC -a 0.1 -y
+# All trading commands accept --password (-p) and --yes (-y) for non-interactive use
+darksol trade swap -i ETH -o USDC -a 0.1 -p "password" -y
+darksol trade snipe 0xTOKEN -a 0.05 -p "password" -y
+darksol send --to 0x... --amount 0.1 --token ETH -p "password" -y
 darksol script run my-dca -p "password" -y
 darksol casino bet coinflip -c heads -w 0x1234...
 

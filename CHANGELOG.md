@@ -7,6 +7,34 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.7.0] - 2026-03-10
+### Added
+- **Web GUI: Interactive send flow** — full click-through token transfer in `darksol serve`:
+  - Token selector (ETH, USDC, custom ERC-20 address)
+  - Recipient address prompt
+  - Amount picker (presets + custom)
+  - Masked password prompt
+  - Executes real on-chain transfer with confirmation
+- **Web GUI: Interactive trade flows** — swap and snipe click-throughs in `darksol serve`:
+  - Swap pair picker (presets + custom pair)
+  - Amount picker with custom option
+  - Password-gated execution
+  - Snipe flow: token contract → amount → password → execute
+- **CLI: Non-interactive trading controls** — `--password` and `--yes` flags for:
+  - `darksol trade swap` (also now interactive when flags omitted)
+  - `darksol trade snipe`
+  - `darksol send`
+- **CLI: `trade pairs`** — show common swap pairs for the active chain
+- **Skills installer hardened** — multi-URL fallback + embedded specs:
+  - `urlCandidates` per remote skill (tries each endpoint)
+  - Fallback SKILL specs for facilitator, oracle, cards, casino
+  - Installs succeed even if remote endpoint is down
+
+### Changed
+- Wallet `send` action in web GUI now launches interactive flow (was CLI-only guidance)
+- Help menu in web serve now includes Send + Trade entries
+- Remote skill catalog versions bumped to 1.0.1
+
 ## [0.5.1] - 2026-03-09
 ### Added
 - **Interactive card ordering in web shell** (`cards`):
