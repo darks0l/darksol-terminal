@@ -15,11 +15,11 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 // ══════════════════════════════════════════════════
-// DARKSOL WEB SHELL — Terminal in the browser
+// DARKSOL WEB SHELL - Terminal in the browser
 // ══════════════════════════════════════════════════
 
 /**
- * Command handler registry — maps command strings to async functions
+ * Command handler registry - maps command strings to async functions
  * that return { output: string } with ANSI stripped for web
  */
 import { handleCommand, getAIStatus } from './commands.js';
@@ -174,7 +174,7 @@ export async function startWebShell(opts = {}) {
             ws.send(JSON.stringify({
               type: 'menu',
               id: 'main_menu',
-              title: '◆ Help Menu — Select Command',
+              title: '◆ Help Menu - Select Command',
               items: [
                 { value: 'ai', label: '🧠 AI Chat', desc: 'Natural language assistant' },
                 { value: 'wallet', label: '👛 Wallet', desc: 'Picker + balance + actions' },
@@ -185,6 +185,7 @@ export async function startWebShell(opts = {}) {
                 { value: 'portfolio', label: '📊 Portfolio', desc: 'Multi-chain balances' },
                 { value: 'trade', label: '🔄 Trade', desc: 'Swap / snipe click-through flows' },
                 { value: 'market', label: '📈 Market', desc: 'Price + liquidity intel' },
+                { value: 'poker', label: '🃏 Poker', desc: 'Heads-up holdem arena' },
                 { value: 'mail', label: '📧 Mail', desc: 'AgentMail status/inbox' },
                 { value: 'cards', label: '💳 Cards', desc: 'Order prepaid Visa/MC' },
                 { value: 'oracle', label: '🎲 Oracle', desc: 'Randomness service' },
@@ -286,7 +287,7 @@ function getBanner() {
     `${gold}  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚══════╝${reset}`,
     '',
     `${dim}  ╔══════════════════════════════════════════════════════════╗${reset}`,
-    `${dim}  ║${reset} ${gold}${white} DARKSOL TERMINAL${reset}${dim}  —  ${reset}${dim}Ghost in the machine with teeth${reset}${dim}  ║${reset}`,
+    `${dim}  ║${reset} ${gold}${white} DARKSOL TERMINAL${reset}${dim}  -  ${reset}${dim}Ghost in the machine with teeth${reset}${dim}  ║${reset}`,
     `${dim}  ║${reset}${dim}  v${PKG_VERSION}${' '.repeat(Math.max(0, 52 - PKG_VERSION.length))}${reset}${gold}🌑${reset}${dim} ║${reset}`,
     `${dim}  ╚══════════════════════════════════════════════════════════╝${reset}`,
     '',
@@ -332,6 +333,7 @@ function getHelp() {
     ['mail inbox', 'Check email inbox'],
     ['oracle roll', 'On-chain random oracle'],
     ['casino status', 'Casino status'],
+    ['poker', 'GTO Poker Arena'],
     ['config', 'Show configuration'],
     ['', ''],
     ['', `${gold}GENERAL${reset}`],

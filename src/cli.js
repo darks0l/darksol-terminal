@@ -17,6 +17,7 @@ import { executeLifiSwap, executeLifiBridge, checkBridgeStatus, showSupportedCha
 import { topMovers, tokenDetail, compareTokens } from './services/market.js';
 import { oracleFlip, oracleDice, oracleNumber, oracleShuffle, oracleHealth } from './services/oracle.js';
 import { casinoBet, casinoTables, casinoStats, casinoReceipt, casinoHealth, casinoVerify } from './services/casino.js';
+import { pokerNewGame, pokerAction, pokerStatus, pokerHistory } from './services/poker.js';
 import { cardsCatalog, cardsOrder, cardsStatus } from './services/cards.js';
 import { facilitatorHealth, facilitatorVerify, facilitatorSettle } from './services/facilitator.js';
 import { buildersLeaderboard, buildersLookup, buildersFeed } from './services/builders.js';
@@ -41,7 +42,7 @@ export function cli(argv) {
 
   program
     .name('darksol')
-    .description(theme.gold('DARKSOL Terminal') + theme.dim(' — Ghost in the machine with teeth 🌑'))
+    .description(theme.gold('DARKSOL Terminal') + theme.dim(' - Ghost in the machine with teeth 🌑'))
     .version(PKG_VERSION)
 ;
 
@@ -50,7 +51,7 @@ export function cli(argv) {
   // ═══════════════════════════════════════
   const wallet = program
     .command('wallet')
-    .description('Wallet management — create, import, list, balance');
+    .description('Wallet management - create, import, list, balance');
 
   wallet
     .command('create [name]')
@@ -115,7 +116,7 @@ export function cli(argv) {
   // ═══════════════════════════════════════
   const trade = program
     .command('trade')
-    .description('Trading — swap, snipe, DCA');
+    .description('Trading - swap, snipe, DCA');
 
   trade
     .command('swap')
@@ -163,14 +164,14 @@ export function cli(argv) {
           // If LI.FI failed (not cancelled), fall back to direct
           if (result?.error !== 'cancelled') {
             const { warn: showWarn, info: showInfo } = await import('./ui/components.js');
-            showWarn('LI.FI route failed — falling back to direct Uniswap V3...');
+            showWarn('LI.FI route failed - falling back to direct Uniswap V3...');
             console.log('');
           } else {
             return; // User cancelled, don't fallback
           }
         } catch {
           const { warn: showWarn } = await import('./ui/components.js');
-          showWarn('LI.FI unavailable — falling back to direct Uniswap V3...');
+          showWarn('LI.FI unavailable - falling back to direct Uniswap V3...');
           console.log('');
         }
       }
@@ -181,7 +182,7 @@ export function cli(argv) {
 
   trade
     .command('snipe <token>')
-    .description('Snipe a token — fast buy with ETH')
+    .description('Snipe a token - fast buy with ETH')
     .requiredOption('-a, --amount <eth>', 'ETH amount to spend')
     .option('-s, --slippage <percent>', 'Max slippage %', '1')
     .option('-g, --gas <multiplier>', 'Gas priority multiplier', '1.5')
@@ -215,7 +216,7 @@ export function cli(argv) {
         optimism: ['ETH/USDC', 'ETH/OP'],
         polygon: ['POL/USDC', 'POL/WETH', 'USDC/USDT'],
       };
-      showSection(`COMMON PAIRS — ${chain.toUpperCase()}`);
+      showSection(`COMMON PAIRS - ${chain.toUpperCase()}`);
       const pairs = byChain[chain] || byChain.base;
       pairs.forEach((p) => console.log(`  ${theme.gold(p)}`));
       console.log('');
@@ -228,7 +229,7 @@ export function cli(argv) {
   // ═══════════════════════════════════════
   const bridge = program
     .command('bridge')
-    .description('Cross-chain bridge — move tokens between chains via LI.FI');
+    .description('Cross-chain bridge - move tokens between chains via LI.FI');
 
   bridge
     .command('send')
@@ -320,7 +321,7 @@ export function cli(argv) {
   // ═══════════════════════════════════════
   const market = program
     .command('market')
-    .description('Market intel — prices, movers, analysis');
+    .description('Market intel - prices, movers, analysis');
 
   market
     .command('top')
@@ -331,7 +332,7 @@ export function cli(argv) {
 
   market
     .command('token <query>')
-    .description('Token detail — price, volume, liquidity')
+    .description('Token detail - price, volume, liquidity')
     .action((query) => tokenDetail(query));
 
   market
@@ -376,7 +377,7 @@ export function cli(argv) {
   // ═══════════════════════════════════════
   const casino = program
     .command('casino')
-    .description('The Clawsino — on-chain betting');
+    .description('The Clawsino - on-chain betting');
 
   casino
     .command('status')
@@ -416,12 +417,29 @@ export function cli(argv) {
     .description('Verify bet on-chain')
     .action((id) => casinoVerify(id));
 
+  const poker = program
+    .command('poker [subcommand]')
+    .description('GTO Poker Arena — heads-up holdem against the house');
+
+  poker
+    .option('--free', 'Free play mode (default)')
+    .option('--real', 'Real mode ($1 buy-in, $2 payout on win)')
+    .action(async (subcommand, opts) => {
+      if (subcommand === 'status') {
+        return showPokerCliStatus();
+      }
+      if (subcommand === 'history') {
+        return showPokerCliHistory();
+      }
+      return playPokerCli(opts);
+    });
+
   // ═══════════════════════════════════════
   // CARDS COMMANDS
   // ═══════════════════════════════════════
   const cards = program
     .command('cards')
-    .description('Prepaid cards — crypto to Visa/MC');
+    .description('Prepaid cards - crypto to Visa/MC');
 
   cards
     .command('catalog')
@@ -498,7 +516,7 @@ export function cli(argv) {
   // ═══════════════════════════════════════
   const mail = program
     .command('mail')
-    .description('📧 AgentMail — email for your agent');
+    .description('📧 AgentMail - email for your agent');
 
   mail
     .command('setup')
@@ -752,7 +770,7 @@ export function cli(argv) {
   // ═══════════════════════════════════════
   program
     .command('setup')
-    .description('First-run setup wizard — configure AI provider, chain, wallet')
+    .description('First-run setup wizard - configure AI provider, chain, wallet')
     .option('-f, --force', 'Re-run even if already configured')
     .action((opts) => runSetupWizard({ force: opts.force }));
 
@@ -860,7 +878,7 @@ export function cli(argv) {
   // ═══════════════════════════════════════
   const keys = program
     .command('keys')
-    .description('API key vault — store keys for LLMs, data providers, RPCs');
+    .description('API key vault - store keys for LLMs, data providers, RPCs');
 
   keys
     .command('list')
@@ -883,7 +901,7 @@ export function cli(argv) {
   // ═══════════════════════════════════════
   const agent = program
     .command('agent')
-    .description('Secure agent signer — PK-isolated wallet for AI agents');
+    .description('Secure agent signer - PK-isolated wallet for AI agents');
 
   agent
     .command('task <goal...>')
@@ -991,7 +1009,7 @@ export function cli(argv) {
   // ═══════════════════════════════════════
   const skills = program
     .command('skills')
-    .description('DARKSOL skills directory — install agent skills');
+    .description('DARKSOL skills directory - install agent skills');
 
   skills
     .command('list')
@@ -1056,7 +1074,7 @@ export function cli(argv) {
     .action(async (address, opts) => {
       showMiniBanner();
       if (address.length === 42 && address.startsWith('0x')) {
-        // Could be token or wallet — try token first
+        // Could be token or wallet - try token first
         try {
           await showTokenInfo(address, opts.chain);
         } catch {
@@ -1073,7 +1091,7 @@ export function cli(argv) {
   // ═══════════════════════════════════════
   const script = program
     .command('script')
-    .description('Execution scripts — automated trading strategies');
+    .description('Execution scripts - automated trading strategies');
 
   script
     .command('create')
@@ -1200,7 +1218,7 @@ export function cli(argv) {
     });
 
   // ═══════════════════════════════════════
-  // DASHBOARD (default) — commands + optional AI
+  // DASHBOARD (default) - commands + optional AI
   // ═══════════════════════════════════════
   program
     .command('dashboard', { isDefault: true })
@@ -1228,7 +1246,7 @@ export function cli(argv) {
 
       // ── AI nudge or chat prompt ──
       if (hasLLM) {
-        console.log(theme.gold('  💬 AI is ready — run ') + theme.label('darksol ai chat') + theme.gold(' or just ') + theme.label('darksol chat'));
+        console.log(theme.gold('  💬 AI is ready - run ') + theme.label('darksol ai chat') + theme.gold(' or just ') + theme.label('darksol chat'));
         console.log(theme.dim('     "swap 0.1 ETH for USDC" • "what\'s AERO at?" • any question'));
         console.log('');
       } else {
@@ -1252,7 +1270,7 @@ export function cli(argv) {
       const { info, error: showError } = await import('./ui/components.js');
 
       console.log('');
-      info(`"${input}" isn't a command — asking AI...`);
+      info(`"${input}" isn't a command - asking AI...`);
       console.log('');
 
       try {
@@ -1406,6 +1424,154 @@ async function chatResponse(llm, input) {
   }
 }
 
+function pokerModeFromOpts(opts = {}) {
+  return opts.real ? 'real' : 'free';
+}
+
+function renderPokerCards(cards, hidden = false) {
+  const suitMap = { s: '♠', h: '♥', d: '♦', c: '♣' };
+  const colorize = (card, text) => {
+    const suit = card[1];
+    return suit === 'h' || suit === 'd' ? theme.error(text) : theme.bright(text);
+  };
+
+  const source = hidden ? ['??', '??'] : cards;
+  const rows = ['', '', '', '', ''];
+
+  for (const card of source) {
+    if (card === '??') {
+      rows[0] += `${theme.dim('┌─────┐')} `;
+      rows[1] += `${theme.dim('│░░░░░│')} `;
+      rows[2] += `${theme.dim('│░░▓░░│')} `;
+      rows[3] += `${theme.dim('│░░░░░│')} `;
+      rows[4] += `${theme.dim('└─────┘')} `;
+      continue;
+    }
+
+    const rank = card[0] === 'T' ? '10' : card[0];
+    const suit = suitMap[card[1]];
+    rows[0] += `${theme.dim('┌─────┐')} `;
+    rows[1] += `${theme.dim('│')}${colorize(card, rank.padEnd(2, ' '))}${theme.dim('   │')} `;
+    rows[2] += `${theme.dim('│  ')}${colorize(card, suit)}${theme.dim('  │')} `;
+    rows[3] += `${theme.dim('│   ')}${colorize(card, rank.padStart(2, ' '))}${theme.dim('│')} `;
+    rows[4] += `${theme.dim('└─────┘')} `;
+  }
+
+  rows.forEach((row) => console.log(`  ${row}`));
+}
+
+function showPokerState(status) {
+  showSection(`POKER ARENA - ${status.mode === 'real' ? 'REAL MODE' : 'FREE MODE'}`);
+  kvDisplay([
+    ['Street', status.street.toUpperCase()],
+    ['Dealer', status.dealer],
+    ['Pot', `${status.pot} chips`],
+    ['Current Bet', `${status.currentBet} chips`],
+    ['Your Stack', `${status.player.stack} chips`],
+    ['House Stack', `${status.house.stack} chips`],
+    ['To Act', status.currentActor || '-'],
+  ]);
+
+  console.log('');
+  console.log(`  ${theme.label('House')}`);
+  renderPokerCards(status.house.hole, status.house.holeHidden);
+  console.log('');
+  console.log(`  ${theme.label('Board')}`);
+  if (status.community.length) renderPokerCards(status.community);
+  else console.log(`  ${theme.dim('  No community cards yet')}`);
+  console.log('');
+  console.log(`  ${theme.label('You')}`);
+  renderPokerCards(status.player.hole);
+  console.log('');
+
+  if (status.street === 'finished') {
+    const result = status.winner === 'player'
+      ? theme.success('WIN')
+      : status.winner === 'house'
+        ? theme.error('LOSS')
+        : theme.warning('PUSH');
+    kvDisplay([
+      ['Result', result],
+      ['Summary', status.summary || '-'],
+      ['Your Hand', status.player.hand?.name || '-'],
+      ['House Hand', status.house.hand?.name || '-'],
+      ['Payout', status.mode === 'real' && status.winner === 'player' ? `$${status.payoutUsdc} USDC` : status.mode === 'real' ? '$0 USDC' : 'free mode'],
+    ]);
+    console.log('');
+  } else if (status.availableActions?.length) {
+    info(`Actions: ${status.availableActions.join(', ')}`);
+  }
+}
+
+async function playPokerCli(opts = {}) {
+  const inquirer = (await import('inquirer')).default;
+  const mode = pokerModeFromOpts(opts);
+  const spin = spinner(`Opening ${mode === 'real' ? 'real-mode' : 'free-mode'} poker table...`).start();
+
+  try {
+    let status = await pokerNewGame({ mode });
+    spin.succeed('Table ready');
+
+    while (status && status.street !== 'finished') {
+      console.log('');
+      showPokerState(status);
+
+      if (status.currentActor !== 'player') {
+        status = pokerStatus(status.id);
+        continue;
+      }
+
+      const { action } = await inquirer.prompt([{
+        type: 'list',
+        name: 'action',
+        message: theme.gold('Pick your action:'),
+        choices: status.availableActions.map((item) => ({
+          name: item === 'all-in' ? 'all-in' : item,
+          value: item,
+        })),
+      }]);
+
+      status = await pokerAction(status.id, action);
+    }
+
+    console.log('');
+    showPokerState(status);
+  } catch (err) {
+    spin.fail('Poker table unavailable');
+    error(err.message);
+  }
+}
+
+function showPokerCliStatus() {
+  showMiniBanner();
+  const status = pokerStatus();
+  if (!status) {
+    info('No active poker game');
+    return;
+  }
+  showPokerState(status);
+}
+
+function showPokerCliHistory() {
+  showMiniBanner();
+  const items = pokerHistory();
+  if (!items.length) {
+    info('No poker hands played yet');
+    return;
+  }
+
+  showSection('POKER HISTORY');
+  items.slice(0, 10).forEach((item) => {
+    const verdict = item.winner === 'player'
+      ? theme.success('W')
+      : item.winner === 'house'
+        ? theme.error('L')
+        : theme.warning('P');
+    console.log(`  ${verdict} ${theme.gold(item.mode.toUpperCase().padEnd(5))} ${theme.bright(item.summary)}`);
+  });
+  console.log('');
+}
+
 function showCommandList() {
   console.log('');
   showSection('COMMANDS');
@@ -1429,10 +1595,11 @@ function showCommandList() {
     ['script', 'Execution scripts & strategies'],
     ['market', 'Market intel & token data'],
     ['oracle', 'On-chain random oracle'],
-    ['casino', 'The Clawsino — betting'],
+    ['casino', 'The Clawsino - betting'],
+    ['poker', 'GTO Poker Arena — heads-up holdem'],
     ['cards', 'Prepaid Visa/MC cards'],
     ['builders', 'ERC-8021 builder index'],
-    ['mail', 'AgentMail — email for your agent'],
+    ['mail', 'AgentMail - email for your agent'],
     ['facilitator', 'x402 payment facilitator'],
     ['skills', 'Agent skill directory'],
     ['serve', 'Launch web terminal in browser'],

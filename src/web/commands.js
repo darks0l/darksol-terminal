@@ -10,6 +10,7 @@ import { homedir } from 'os';
 import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { getConfiguredModel, getModelSelectionMeta, getProviderDefaultModel } from '../llm/models.js';
+import { pokerNewGame, pokerAction, pokerStatus, pokerHistory } from '../services/poker.js';
 
 // ══════════════════════════════════════════════════
 // CHAT LOG PERSISTENCE
@@ -205,6 +206,38 @@ export async function handleMenuSelect(id, value, item, ws) {
         { value: '1000', label: '$1,000', desc: 'Pay ~$1,060' },
         { value: 'back', label: '← Back', desc: '' },
       ].map(i => ({ ...i, meta: { provider: value } })));
+      return {};
+
+    case 'poker_mode':
+      if (value === 'back') return {};
+      if (value === 'status') return await cmdPoker(['status'], ws);
+      if (value === 'history') return await cmdPoker(['history'], ws);
+      return await startPokerWebGame(value === 'real' ? 'real' : 'free', ws);
+
+    case 'poker_action': {
+      const gameId = item?.meta?.gameId || pokerSessions.get(ws);
+      if (!gameId) {
+        ws.sendLine(`  ${ANSI.red}No active poker game${ANSI.reset}`);
+        ws.sendLine('');
+        return {};
+      }
+
+      const before = pokerStatus(gameId);
+      const status = await pokerAction(gameId, value);
+      pokerSessions.set(ws, status.id);
+      await renderPokerState(status, ws, { previous: before });
+      if (status.street !== 'finished' && status.currentActor === 'player') {
+        sendPokerActionMenu(status, ws);
+      } else if (status.street === 'finished') {
+        sendPokerPostHandMenu(status, ws);
+      }
+      return {};
+    }
+
+    case 'poker_post_hand':
+      if (value === 'again-free') return await startPokerWebGame('free', ws);
+      if (value === 'again-real') return await startPokerWebGame('real', ws);
+      if (value === 'history') return await cmdPoker(['history'], ws);
       return {};
 
     case 'cards_amount':
@@ -882,6 +915,8 @@ export async function handleCommand(cmd, ws) {
       return await cmdCards(args, ws);
     case 'casino':
       return await cmdCasino(args, ws);
+    case 'poker':
+      return await cmdPoker(args, ws);
     case 'facilitator':
       return await cmdFacilitator(args, ws);
     case 'send':
@@ -905,7 +940,7 @@ export async function handleCommand(cmd, ws) {
       return await cmdChatLogs(args, ws);
     default: {
       // Fuzzy: if it looks like natural language, route to AI
-      const nlKeywords = /\b(swap|buy|sell|send|transfer|price|what|how|should|analyze|check|balance|gas|dca|order|card|prepaid|visa|mastercard|bet|coinflip|flip|dice|slots|hilo|gamble|play|casino|bridge|cross-chain|crosschain)\b/i;
+      const nlKeywords = /\b(swap|buy|sell|send|transfer|price|what|how|should|analyze|check|balance|gas|dca|order|card|prepaid|visa|mastercard|bet|coinflip|flip|dice|slots|hilo|gamble|play|casino|poker|holdem|bridge|cross-chain|crosschain)\b/i;
       if (nlKeywords.test(cmd)) {
         return await cmdAI(cmd.split(/\s+/), ws);
       }
@@ -1778,6 +1813,222 @@ async function cmdOracle(args, ws) {
   return {};
 }
 
+function pokerColor(card, text) {
+  if (card === '??') return `${ANSI.dim}${text}${ANSI.reset}`;
+  return card[1] === 'h' || card[1] === 'd'
+    ? `${ANSI.red}${text}${ANSI.reset}`
+    : `${ANSI.white}${text}${ANSI.reset}`;
+}
+
+function pokerCardRows(cards, hidden = false) {
+  const suitMap = { s: '♠', h: '♥', d: '♦', c: '♣' };
+  const source = hidden ? ['??', '??'] : cards;
+  const rows = ['', '', '', '', ''];
+
+  for (const card of source) {
+    if (card === '??') {
+      rows[0] += `${ANSI.dim}┌─────┐${ANSI.reset} `;
+      rows[1] += `${ANSI.dim}│░░░░░│${ANSI.reset} `;
+      rows[2] += `${ANSI.dim}│░░▓░░│${ANSI.reset} `;
+      rows[3] += `${ANSI.dim}│░░░░░│${ANSI.reset} `;
+      rows[4] += `${ANSI.dim}└─────┘${ANSI.reset} `;
+      continue;
+    }
+
+    const rank = card[0] === 'T' ? '10' : card[0];
+    const suit = suitMap[card[1]];
+    rows[0] += `${ANSI.dim}┌─────┐${ANSI.reset} `;
+    rows[1] += `${ANSI.dim}│${ANSI.reset}${pokerColor(card, rank.padEnd(2, ' '))}${ANSI.dim}   │${ANSI.reset} `;
+    rows[2] += `${ANSI.dim}│  ${ANSI.reset}${pokerColor(card, suit)}${ANSI.dim}  │${ANSI.reset} `;
+    rows[3] += `${ANSI.dim}│   ${ANSI.reset}${pokerColor(card, rank.padStart(2, ' '))}${ANSI.dim}│${ANSI.reset} `;
+    rows[4] += `${ANSI.dim}└─────┘${ANSI.reset} `;
+  }
+
+  return rows;
+}
+
+function sendPokerCards(label, cards, ws, hidden = false) {
+  ws.sendLine(`  ${ANSI.darkGold}${label}${ANSI.reset}`);
+  for (const row of pokerCardRows(cards, hidden)) {
+    ws.sendLine(`  ${row}`);
+  }
+}
+
+function sendPokerActionMenu(status, ws) {
+  ws.sendMenu('poker_action', `◆ Poker Actions (${status.street})`, status.availableActions.map((action) => ({
+    value: action,
+    label: action,
+    desc: action === 'all-in' ? 'Commit the rest of your stack' : '',
+    meta: { gameId: status.id },
+  })));
+}
+
+function sendPokerPostHandMenu(status, ws) {
+  ws.sendMenu('poker_post_hand', '◆ Next Hand', [
+    { value: 'again-free', label: 'Play Free', desc: 'Start another free hand', meta: { gameId: status.id } },
+    { value: 'again-real', label: 'Play Real', desc: 'Start another $1 USDC hand', meta: { gameId: status.id } },
+    { value: 'history', label: 'History', desc: 'Recent poker hands', meta: { gameId: status.id } },
+    { value: 'back', label: '← Back', desc: '', meta: { gameId: status.id } },
+  ]);
+}
+
+async function renderPokerState(status, ws, opts = {}) {
+  const previous = opts.previous || null;
+  const header = status.mode === 'real'
+    ? `${ANSI.gold}  ◆ GTO POKER ARENA${ANSI.reset} ${ANSI.dim}REAL MODE · $${status.buyInUsdc} in / $${status.payoutUsdc} out${ANSI.reset}`
+    : `${ANSI.gold}  ◆ GTO POKER ARENA${ANSI.reset} ${ANSI.dim}FREE MODE${ANSI.reset}`;
+
+  if (!previous) {
+    ws.sendLine(header);
+    ws.sendLine(`  ${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.dim}Dealing cards...${ANSI.reset}`);
+    ws.sendLine('');
+    await sleep(120);
+    sendPokerCards('House', ['??'], ws, true);
+    ws.sendLine('');
+    await sleep(120);
+    sendPokerCards('You', [status.player.hole[0]], ws);
+    ws.sendLine('');
+    await sleep(120);
+  }
+
+  if (previous && status.community.length > previous.community.length) {
+    const label = status.community.length === 3 ? 'Flop' : status.community.length === 4 ? 'Turn' : 'River';
+    ws.sendLine(`  ${ANSI.dim}${label} coming in...${ANSI.reset}`);
+    ws.sendLine('');
+    await sleep(140);
+  }
+
+  if (previous && previous.house.holeHidden && !status.house.holeHidden) {
+    ws.sendLine(`  ${ANSI.gold}  ◆ SHOWDOWN${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.dim}Revealing the house cards...${ANSI.reset}`);
+    ws.sendLine('');
+    await sleep(180);
+  }
+
+  ws.sendLine(header);
+  ws.sendLine(`  ${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.darkGold}Street${ANSI.reset}       ${ANSI.white}${status.street.toUpperCase()}${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.darkGold}Pot${ANSI.reset}          ${ANSI.white}${status.pot} chips${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.darkGold}Current Bet${ANSI.reset}  ${ANSI.white}${status.currentBet} chips${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.darkGold}Your Stack${ANSI.reset}   ${ANSI.white}${status.player.stack} chips${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.darkGold}House Stack${ANSI.reset}  ${ANSI.white}${status.house.stack} chips${ANSI.reset}`);
+  ws.sendLine('');
+
+  sendPokerCards('House', status.house.hole, ws, status.house.holeHidden);
+  ws.sendLine('');
+  ws.sendLine(`  ${ANSI.darkGold}Board${ANSI.reset}`);
+  if (status.community.length) {
+    for (const row of pokerCardRows(status.community)) {
+      ws.sendLine(`  ${row}`);
+    }
+  } else {
+    ws.sendLine(`  ${ANSI.dim}No community cards yet${ANSI.reset}`);
+  }
+  ws.sendLine('');
+  sendPokerCards('You', status.player.hole, ws);
+  ws.sendLine('');
+
+  if (status.street === 'finished') {
+    const outcome = status.winner === 'player'
+      ? `${ANSI.green}YOU WIN${ANSI.reset}`
+      : status.winner === 'house'
+        ? `${ANSI.red}HOUSE WINS${ANSI.reset}`
+        : `${ANSI.gold}PUSH${ANSI.reset}`;
+    ws.sendLine(`  ${ANSI.darkGold}Result${ANSI.reset}       ${outcome}`);
+    ws.sendLine(`  ${ANSI.darkGold}Summary${ANSI.reset}      ${ANSI.white}${status.summary || '-'}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Your Hand${ANSI.reset}    ${ANSI.white}${status.player.hand?.name || '-'}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}House Hand${ANSI.reset}   ${ANSI.white}${status.house.hand?.name || '-'}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.darkGold}Payout${ANSI.reset}       ${ANSI.white}${status.mode === 'real' && status.winner === 'player' ? `$${status.payoutUsdc} USDC` : status.mode === 'real' ? '$0 USDC' : 'fun only'}${ANSI.reset}`);
+    if (status.payment?.payoutTxHash) {
+      ws.sendLine(`  ${ANSI.darkGold}Payout TX${ANSI.reset}    ${ANSI.white}${status.payment.payoutTxHash.slice(0, 18)}...${ANSI.reset}`);
+    }
+    if (status.payment?.payoutError) {
+      ws.sendLine(`  ${ANSI.darkGold}Payout${ANSI.reset}       ${ANSI.red}${status.payment.payoutError}${ANSI.reset}`);
+    }
+    ws.sendLine('');
+    return {};
+  }
+
+  if (status.house.lastAction) {
+    ws.sendLine(`  ${ANSI.dim}House last action: ${status.house.lastAction}${ANSI.reset}`);
+  }
+  ws.sendLine(`  ${ANSI.dim}Available actions: ${status.availableActions.join(', ')}${ANSI.reset}`);
+  ws.sendLine('');
+  return {};
+}
+
+async function startPokerWebGame(mode, ws) {
+  const status = await pokerNewGame({ mode });
+  pokerSessions.set(ws, status.id);
+  await renderPokerState(status, ws);
+  if (status.street !== 'finished' && status.currentActor === 'player') {
+    sendPokerActionMenu(status, ws);
+  } else if (status.street === 'finished') {
+    sendPokerPostHandMenu(status, ws);
+  }
+  return {};
+}
+
+async function cmdPoker(args, ws) {
+  const sub = (args[0] || '').toLowerCase();
+
+  if (sub === 'free' || sub === 'real') {
+    return await startPokerWebGame(sub, ws);
+  }
+
+  if (sub === 'status') {
+    const status = pokerStatus(pokerSessions.get(ws));
+    if (!status) {
+      ws.sendLine(`  ${ANSI.dim}No active poker game${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+    await renderPokerState(status, ws);
+    if (status.street !== 'finished' && status.currentActor === 'player') {
+      sendPokerActionMenu(status, ws);
+    } else if (status.street === 'finished') {
+      sendPokerPostHandMenu(status, ws);
+    }
+    return {};
+  }
+
+  if (sub === 'history') {
+    const items = pokerHistory();
+    ws.sendLine(`${ANSI.gold}  ◆ POKER HISTORY${ANSI.reset}`);
+    ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+    if (!items.length) {
+      ws.sendLine(`  ${ANSI.dim}No poker hands played yet${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+    for (const item of items.slice(0, 10)) {
+      const verdict = item.winner === 'player'
+        ? `${ANSI.green}W${ANSI.reset}`
+        : item.winner === 'house'
+          ? `${ANSI.red}L${ANSI.reset}`
+          : `${ANSI.gold}P${ANSI.reset}`;
+      ws.sendLine(`  ${verdict} ${ANSI.white}${item.mode.toUpperCase().padEnd(5)}${ANSI.reset} ${item.summary}`);
+    }
+    ws.sendLine('');
+    return {};
+  }
+
+  ws.sendLine(`${ANSI.gold}  ◆ GTO POKER ARENA${ANSI.reset}`);
+  ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.white}Heads-up Texas Hold'em versus the house.${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.dim}Free mode skips payment checks. Real mode uses x402 with a $1 USDC buy-in.${ANSI.reset}`);
+  ws.sendLine('');
+  ws.sendMenu('poker_mode', '◆ Choose Poker Mode', [
+    { value: 'free', label: 'Free Mode', desc: 'Play for fun' },
+    { value: 'real', label: 'Real Mode', desc: '$1 buy-in · $2 payout on win' },
+    { value: 'status', label: 'Status', desc: 'Show current hand' },
+    { value: 'history', label: 'History', desc: 'Recent hands' },
+    { value: 'back', label: '← Back', desc: '' },
+  ]);
+  return {};
+}
+
 async function cmdCasino(args, ws) {
   ws.sendLine(`${ANSI.gold}  ◆ THE CLAWSINO 🎰${ANSI.reset}`);
   ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
@@ -1919,6 +2170,7 @@ function saveSelectedModel(model, provider = getConfig('llm.provider') || 'opena
 
 // Persistent chat engine per WebSocket connection
 const chatEngines = new WeakMap();
+const pokerSessions = new WeakMap();
 
 async function cmdAI(args, ws) {
   const input = args.join(' ').trim();
