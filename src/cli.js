@@ -22,6 +22,17 @@ import { cardsCatalog, cardsOrder, cardsStatus } from './services/cards.js';
 import { facilitatorHealth, facilitatorVerify, facilitatorSettle } from './services/facilitator.js';
 import { buildersLeaderboard, buildersLookup, buildersFeed } from './services/builders.js';
 import { createScript, listScripts, runScript, showScript, editScript, deleteScript, cloneScript, listTemplates } from './scripts/engine.js';
+import {
+  launchBrowserCommand,
+  navigateBrowserCommand,
+  browserScreenshotCommand,
+  browserClickCommand,
+  browserTypeCommand,
+  browserEvalCommand,
+  browserCloseCommand,
+  showBrowserStatus,
+  installPlaywrightBrowsers,
+} from './services/browser.js';
 import { showTradingTips, showScriptTips, showNetworkReference, showQuickStart, showWalletSummary, showTokenInfo, showTxResult } from './utils/helpers.js';
 import { addKey, removeKey, listKeys } from './config/keys.js';
 import { parseIntent, startChat, adviseStrategy, analyzeToken, executeIntent } from './llm/intent.js';
@@ -31,6 +42,8 @@ import { runSetupWizard } from './setup/wizard.js';
 import { displaySoul, hasSoul, resetSoul, runSoulSetup } from './soul/index.js';
 import { clearMemories, exportMemories, getRecentMemories, searchMemories } from './memory/index.js';
 import { getAgentStatus, planAgentGoal, runAgentTask } from './agent/index.js';
+import { daemonStart, daemonStop, daemonStatus, daemonRestart } from './daemon/index.js';
+import { telegramSetup, telegramStartForeground, telegramStopCommand, telegramStatusCommand, telegramSendCommand } from './services/telegram.js';
 import { createRequire } from 'module';
 import { resolve } from 'path';
 import { getConfiguredModel, getProviderDefaultModel } from './llm/models.js';
@@ -608,6 +621,64 @@ export function cli(argv) {
     .option('--no-open', 'Don\'t auto-open browser')
     .action((opts) => startWebShell(opts));
 
+  const browser = program
+    .command('browser')
+    .description('Playwright-powered browser automation');
+
+  browser
+    .command('launch')
+    .description('Launch a browser instance and keep it running')
+    .option('--headed', 'Launch with a visible browser window')
+    .option('--type <browser>', 'Browser type', 'chromium')
+    .option('--profile <name>', 'Browser profile name', 'default')
+    .action((opts) => launchBrowserCommand(opts));
+
+  browser
+    .command('navigate <url>')
+    .description('Navigate the active page to a URL')
+    .action((url) => navigateBrowserCommand(url));
+
+  browser
+    .command('screenshot [filename]')
+    .description('Capture a screenshot of the active page')
+    .action((filename) => browserScreenshotCommand(filename));
+
+  browser
+    .command('click <selector>')
+    .description('Click an element on the active page')
+    .action((selector) => browserClickCommand(selector));
+
+  browser
+    .command('type <selector> <text>')
+    .description('Type text into an element on the active page')
+    .action((selector, text) => browserTypeCommand(selector, text));
+
+  browser
+    .command('eval <js>')
+    .description('Evaluate JavaScript in the active page')
+    .action((js) => browserEvalCommand(js));
+
+  browser
+    .command('close')
+    .description('Close the running browser service')
+    .action(() => browserCloseCommand());
+
+  browser
+    .command('status')
+    .description('Show current browser state')
+    .action(() => showBrowserStatus());
+
+  browser
+    .command('install')
+    .description('Install a Playwright browser binary after user confirmation')
+    .action(async () => {
+      try {
+        await installPlaywrightBrowsers();
+      } catch (err) {
+        error(err.message);
+      }
+    });
+
   // ═══════════════════════════════════════
   // PORTFOLIO SHORTCUT
   // ═══════════════════════════════════════
@@ -1030,6 +1101,68 @@ export function cli(argv) {
     .command('uninstall <name>')
     .description('Uninstall a skill')
     .action((name) => uninstallSkill(name));
+
+  // ═══════════════════════════════════════
+  // DAEMON COMMANDS
+  // ═══════════════════════════════════════
+  const daemon = program
+    .command('daemon')
+    .description('Background daemon - manage persistent services');
+
+  daemon
+    .command('start')
+    .description('Start the background daemon')
+    .option('-p, --port <port>', 'Health server port', '18792')
+    .action((opts) => daemonStart(opts));
+
+  daemon
+    .command('stop')
+    .description('Stop the background daemon')
+    .action(() => daemonStop());
+
+  daemon
+    .command('status')
+    .description('Show daemon status and health')
+    .option('-p, --port <port>', 'Health server port', '18792')
+    .action((opts) => daemonStatus(opts));
+
+  daemon
+    .command('restart')
+    .description('Restart the daemon')
+    .option('-p, --port <port>', 'Health server port', '18792')
+    .action((opts) => daemonRestart(opts));
+
+  // ═══════════════════════════════════════
+  // TELEGRAM COMMANDS
+  // ═══════════════════════════════════════
+  const telegram = program
+    .command('telegram')
+    .description('Telegram bot - AI chat via Telegram');
+
+  telegram
+    .command('setup')
+    .description('Interactive Telegram bot setup with BotFather')
+    .action(() => telegramSetup());
+
+  telegram
+    .command('start')
+    .description('Start the Telegram bot (foreground)')
+    .action(() => telegramStartForeground());
+
+  telegram
+    .command('stop')
+    .description('Stop the Telegram bot')
+    .action(() => telegramStopCommand());
+
+  telegram
+    .command('status')
+    .description('Show bot info and connection state')
+    .action(() => telegramStatusCommand());
+
+  telegram
+    .command('send <chatId> <message...>')
+    .description('Send a direct message to a chat')
+    .action((chatId, message) => telegramSendCommand(chatId, message));
 
   // ═══════════════════════════════════════
   // TIPS & REFERENCE COMMANDS
@@ -1602,6 +1735,9 @@ function showCommandList() {
     ['mail', 'AgentMail - email for your agent'],
     ['facilitator', 'x402 payment facilitator'],
     ['skills', 'Agent skill directory'],
+    ['browser', 'Playwright browser automation'],
+    ['daemon', 'Background service daemon'],
+    ['telegram', 'Telegram bot - AI chat'],
     ['serve', 'Launch web terminal in browser'],
     ['setup', 'Re-run setup wizard'],
     ['config', 'Terminal configuration'],

@@ -15,7 +15,7 @@ A unified CLI for market intel, trading, AI-powered analysis, on-chain oracle, c
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-gold.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
 
-- Current release: **0.9.2**
+- Current release: **0.11.0**
 - Changelog: `CHANGELOG.md`
 
 ## Install
@@ -81,6 +81,27 @@ darksol serve
 
 # Start agent signer for OpenClaw
 darksol agent start main
+
+# Telegram bot — AI chat through Telegram
+darksol telegram setup
+darksol telegram start
+darksol telegram status
+darksol telegram send 123456789 "Hello from DARKSOL"
+
+# Background daemon — manage persistent services
+darksol daemon start
+darksol daemon status
+darksol daemon stop
+
+# Browser automation (requires: npm i playwright-core)
+darksol browser launch --headed
+darksol browser navigate https://app.uniswap.org
+darksol browser screenshot swap-page.png
+darksol browser click "#swap-button"
+darksol browser type "#amount-input" "1.0"
+darksol browser eval "document.title"
+darksol browser close
+darksol browser install
 ```
 
 ## `darksol serve` (Web Terminal UX)
@@ -147,8 +168,97 @@ ai <prompt>   # chat with trading assistant
 | `cards` | Crypto → prepaid Visa/MC cards | Service fees |
 | `builders` | ERC-8021 builder directory + leaderboard | Free |
 | `facilitator` | x402 payment verification & settlement | Free |
+| `telegram` | Telegram bot — AI chat via Telegram Bot API | Provider dependent |
+| `daemon` | Background service daemon (manages TG, browser, etc.) | Free |
+| `browser` | Playwright-powered browser automation | Free |
 | `serve` | Local interactive web terminal (xterm.js) | Free |
 | `config` | Terminal configuration | Free |
+
+---
+
+## 📱 Telegram Bot
+
+Turn your terminal into a Telegram AI agent. Same brain (LLM + soul + memory), different mouth.
+
+```bash
+# Guided setup — walks you through BotFather
+darksol telegram setup
+
+# Start the bot (foreground, or managed by daemon)
+darksol telegram start
+
+# Check bot status
+darksol telegram status
+
+# Send a direct message
+darksol telegram send <chat_id> "Hello from DARKSOL"
+```
+
+**Setup walkthrough:**
+1. Open Telegram → search `@BotFather` → send `/newbot`
+2. Follow BotFather's prompts to name your bot
+3. Copy the bot token
+4. Run `darksol telegram setup` → paste token → auto-validates via `getMe`
+5. Token encrypted and stored in your key vault
+6. `darksol telegram start` → bot goes live
+
+**Features:**
+- Per-chat session memory (remembers conversation context)
+- Soul system prompt (your agent's personality carries over)
+- Built-in commands: `/start`, `/help`, `/status`
+- Typing indicators while LLM processes
+- Rate limiting (1 req/sec per chat)
+- 429 auto-retry for Telegram API limits
+- Daemon-aware: runs foreground solo, or as a managed service
+
+---
+
+## 🖥️ Background Daemon
+
+One process to rule them all. Manages persistent services (Telegram bot, browser, future channels).
+
+```bash
+darksol daemon start              # Detached background process
+darksol daemon status             # PID, uptime, active services
+darksol daemon stop               # Graceful shutdown
+darksol daemon restart            # Stop + start
+darksol daemon start --port 9999  # Custom health port
+```
+
+**Health endpoint:** `http://localhost:18792/health` — returns uptime, version, active services list.
+
+**Service registry:** Services (Telegram, browser, etc.) register with the daemon for managed lifecycle. Start once, everything runs.
+
+---
+
+## 🌐 Browser Automation
+
+Playwright-powered browser control — automate dApps, scrape data, take screenshots.
+
+```bash
+# Install browser binary (one-time)
+darksol browser install
+
+# Launch and control
+darksol browser launch --headed --type chromium
+darksol browser navigate https://app.uniswap.org
+darksol browser screenshot swap-page.png
+darksol browser click "#connect-wallet"
+darksol browser type "#search" "AERO"
+darksol browser eval "document.title"
+darksol browser status
+darksol browser close
+```
+
+**Requires:** `npm install playwright-core` (optional dependency — only needed if you use browser features).
+
+**Features:**
+- Chromium, Firefox, or WebKit
+- Headless (default) or headed mode
+- Named profiles with persistent cookies/sessions (`~/.darksol/browser/profiles/`)
+- IPC via named pipes — CLI commands talk to a running browser instance
+- Web shell integration (`browser` command in `darksol serve`)
+- Daemon-managed when running
 
 ---
 

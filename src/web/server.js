@@ -1,12 +1,13 @@
 import { createServer } from 'http';
 import { WebSocketServer } from 'ws';
-import { readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import open from 'open';
 import { theme } from '../ui/theme.js';
 import { getRecentMemories } from '../memory/index.js';
 import { getSoul, hasSoul } from '../soul/index.js';
+import { getBrowserScreenshotPath, sendBrowserCommand } from '../services/browser.js';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
 const { version: PKG_VERSION } = require('../../package.json');
@@ -36,7 +37,7 @@ export async function startWebShell(opts = {}) {
   const css = readFileSync(join(__dirname, 'terminal.css'), 'utf-8');
   const js = readFileSync(join(__dirname, 'terminal.js'), 'utf-8');
 
-  const server = createServer((req, res) => {
+  const server = createServer(async (req, res) => {
     try {
       const pathname = req.url.split('?')[0];
 
@@ -52,6 +53,24 @@ export async function startWebShell(opts = {}) {
       } else if (pathname === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'ok', version: PKG_VERSION }));
+      } else if (pathname === '/browser/status') {
+        try {
+          const status = await sendBrowserCommand('status');
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify(status));
+        } catch {
+          res.writeHead(200, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ running: false }));
+        }
+      } else if (pathname === '/browser/screenshot') {
+        const screenshotPath = getBrowserScreenshotPath();
+        if (!existsSync(screenshotPath)) {
+          res.writeHead(404);
+          res.end('No screenshot available');
+          return;
+        }
+        res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store' });
+        res.end(readFileSync(screenshotPath));
       } else {
         res.writeHead(404);
         res.end('Not found');

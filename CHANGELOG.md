@@ -7,6 +7,40 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.11.0] - 2026-03-11
+### Added
+- **Telegram Bot Integration** (`darksol telegram`) — full Telegram Bot API client:
+  - `darksol telegram setup` — guided BotFather walkthrough with token validation
+  - `darksol telegram start` — long-polling message listener with LLM + soul + memory
+  - `darksol telegram stop` / `darksol telegram status` — lifecycle management
+  - `darksol telegram send <chatId> <message>` — direct message send
+  - Per-chat `SessionMemory` instances (conversation context persists)
+  - Soul system prompt injection (agent personality carries over)
+  - Built-in `/start`, `/help`, `/status` Telegram commands
+  - Typing indicators, rate limiting (1 req/sec/chat), 429 auto-retry
+  - Token stored in encrypted key vault (`darksol keys add telegram`)
+  - Daemon-aware: foreground solo or managed service
+- **Background Daemon** (`darksol daemon`) — unified service manager:
+  - `darksol daemon start` — detached background process with PID tracking
+  - `darksol daemon stop` — graceful shutdown (Windows taskkill + Unix SIGTERM)
+  - `darksol daemon status` — PID check + health endpoint query
+  - `darksol daemon restart` — stop + start
+  - HTTP health server at `:18792` with uptime, version, active services
+  - Service registry for managed lifecycle (Telegram, browser, future channels)
+  - PID file at `~/.darksol/daemon.pid`, logs at `~/.darksol/logs/daemon.log`
+- **Browser Automation** (`darksol browser`) — Playwright-powered web control:
+  - `darksol browser launch` — launch browser (headed/headless, chromium/firefox/webkit)
+  - `darksol browser navigate <url>` — page navigation
+  - `darksol browser screenshot [filename]` — capture screenshots
+  - `darksol browser click <selector>` / `type <selector> <text>` — element interaction
+  - `darksol browser eval <js>` — evaluate JavaScript in page context
+  - `darksol browser close` / `status` — lifecycle management
+  - `darksol browser install` — install Playwright browser binary
+  - Named profiles with persistent cookies/sessions
+  - IPC via named pipes for cross-process communication
+  - Web shell integration (`browser` command in `darksol serve`)
+  - `playwright-core` as optional dependency (no bloat for non-browser users)
+
 ## [0.9.2] - 2026-03-10
 ### Added
 - **Model Selection** — users can now pick their LLM model during setup and anytime after:

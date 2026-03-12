@@ -11,6 +11,7 @@ import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { getConfiguredModel, getModelSelectionMeta, getProviderDefaultModel } from '../llm/models.js';
 import { pokerNewGame, pokerAction, pokerStatus, pokerHistory } from '../services/poker.js';
+import { sendBrowserCommand, installPlaywrightBrowsers } from '../services/browser.js';
 
 // ══════════════════════════════════════════════════
 // CHAT LOG PERSISTENCE
@@ -917,6 +918,8 @@ export async function handleCommand(cmd, ws) {
       return await cmdCasino(args, ws);
     case 'poker':
       return await cmdPoker(args, ws);
+    case 'browser':
+      return await cmdBrowser(args, ws);
     case 'facilitator':
       return await cmdFacilitator(args, ws);
     case 'send':
@@ -940,7 +943,7 @@ export async function handleCommand(cmd, ws) {
       return await cmdChatLogs(args, ws);
     default: {
       // Fuzzy: if it looks like natural language, route to AI
-      const nlKeywords = /\b(swap|buy|sell|send|transfer|price|what|how|should|analyze|check|balance|gas|dca|order|card|prepaid|visa|mastercard|bet|coinflip|flip|dice|slots|hilo|gamble|play|casino|poker|holdem|bridge|cross-chain|crosschain)\b/i;
+      const nlKeywords = /\b(swap|buy|sell|send|transfer|price|what|how|should|analyze|check|balance|gas|dca|order|card|prepaid|visa|mastercard|bet|coinflip|flip|dice|slots|hilo|gamble|play|casino|poker|holdem|bridge|cross-chain|crosschain|browser|screenshot|click)\b/i;
       if (nlKeywords.test(cmd)) {
         return await cmdAI(cmd.split(/\s+/), ws);
       }
@@ -954,6 +957,137 @@ export async function handleCommand(cmd, ws) {
 // ══════════════════════════════════════════════════
 // PRICE
 // ══════════════════════════════════════════════════
+async function cmdBrowser(args, ws) {
+  const sub = args[0]?.toLowerCase() || 'status';
+
+  if (sub === 'help') {
+    ws.sendLine(`${ANSI.gold}  ◆ BROWSER AUTOMATION${ANSI.reset}`);
+    ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+    ws.sendLine('');
+    ws.sendLine(`  ${ANSI.green}browser status${ANSI.reset}                 ${ANSI.dim}Show browser state${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.green}browser navigate https://...${ANSI.reset}  ${ANSI.dim}Navigate active page${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.green}browser screenshot${ANSI.reset}             ${ANSI.dim}Save + refresh browser panel${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.green}browser click <selector>${ANSI.reset}       ${ANSI.dim}Click an element${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.green}browser type <selector> <text>${ANSI.reset} ${ANSI.dim}Type text into an input${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.green}browser eval <js>${ANSI.reset}              ${ANSI.dim}Run JavaScript in page context${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.green}browser close${ANSI.reset}                  ${ANSI.dim}Close the browser service${ANSI.reset}`);
+    ws.sendLine('');
+    return {};
+  }
+
+  if (sub === 'install') {
+    try {
+      await installPlaywrightBrowsers();
+      ws.sendLine(`  ${ANSI.green}✓ Playwright Chromium install complete${ANSI.reset}`);
+      ws.sendLine('');
+    } catch (err) {
+      ws.sendLine(`  ${ANSI.red}✗ ${err.message}${ANSI.reset}`);
+      ws.sendLine('');
+    }
+    return {};
+  }
+
+  try {
+    if (sub === 'status') {
+      const status = await sendBrowserCommand('status');
+      ws.sendLine(`${ANSI.gold}  ◆ BROWSER STATUS${ANSI.reset}`);
+      ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.darkGold}Running${ANSI.reset}    ${status.running ? ANSI.green + 'yes' : ANSI.dim + 'no'}${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.darkGold}Type${ANSI.reset}       ${ANSI.white}${status.browserType || 'chromium'}${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.darkGold}Profile${ANSI.reset}    ${ANSI.white}${status.profile || 'default'}${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.darkGold}Mode${ANSI.reset}       ${ANSI.white}${status.headed ? 'headed' : 'headless'}${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.darkGold}URL${ANSI.reset}        ${status.url ? ANSI.white + status.url : ANSI.dim + '(blank)'}${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.darkGold}Title${ANSI.reset}      ${status.title ? ANSI.white + status.title : ANSI.dim + '(none)'}${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.darkGold}Pages${ANSI.reset}      ${ANSI.white}${status.pageCount || 0}${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+
+    if (sub === 'navigate') {
+      const url = args[1];
+      if (!url) {
+        ws.sendLine(`  ${ANSI.dim}Usage: browser navigate <url>${ANSI.reset}`);
+        ws.sendLine('');
+        return {};
+      }
+      const status = await sendBrowserCommand('navigate', { url });
+      ws.sendLine(`  ${ANSI.green}✓ Navigated to ${status.url}${ANSI.reset}`);
+      ws.sendLine('');
+      ws.send(JSON.stringify({ type: 'browser:refresh' }));
+      return {};
+    }
+
+    if (sub === 'screenshot') {
+      const result = await sendBrowserCommand('screenshot', {});
+      ws.sendLine(`  ${ANSI.green}✓ Screenshot saved${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.dim}${result.path}${ANSI.reset}`);
+      ws.sendLine('');
+      ws.send(JSON.stringify({ type: 'browser:refresh' }));
+      return {};
+    }
+
+    if (sub === 'click') {
+      const selector = args[1];
+      if (!selector) {
+        ws.sendLine(`  ${ANSI.dim}Usage: browser click <selector>${ANSI.reset}`);
+        ws.sendLine('');
+        return {};
+      }
+      await sendBrowserCommand('click', { selector });
+      ws.sendLine(`  ${ANSI.green}✓ Clicked ${selector}${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+
+    if (sub === 'type') {
+      const selector = args[1];
+      const text = args.slice(2).join(' ');
+      if (!selector || !text) {
+        ws.sendLine(`  ${ANSI.dim}Usage: browser type <selector> <text>${ANSI.reset}`);
+        ws.sendLine('');
+        return {};
+      }
+      await sendBrowserCommand('type', { selector, text });
+      ws.sendLine(`  ${ANSI.green}✓ Typed into ${selector}${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+
+    if (sub === 'eval') {
+      const expression = args.slice(1).join(' ');
+      if (!expression) {
+        ws.sendLine(`  ${ANSI.dim}Usage: browser eval <js>${ANSI.reset}`);
+        ws.sendLine('');
+        return {};
+      }
+      const result = await sendBrowserCommand('eval', { expression });
+      ws.sendLine(`${ANSI.gold}  ◆ BROWSER EVAL${ANSI.reset}`);
+      ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+      ws.sendLine(`  ${ANSI.white}${String(result.formatted)}${ANSI.reset}`);
+      ws.sendLine('');
+      return {};
+    }
+
+    if (sub === 'close') {
+      await sendBrowserCommand('close');
+      ws.sendLine(`  ${ANSI.green}✓ Browser closed${ANSI.reset}`);
+      ws.sendLine('');
+      ws.send(JSON.stringify({ type: 'browser:refresh' }));
+      return {};
+    }
+
+    ws.sendLine(`  ${ANSI.red}✗ Unknown browser subcommand: ${sub}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.dim}Try: browser help${ANSI.reset}`);
+    ws.sendLine('');
+  } catch (err) {
+    ws.sendLine(`  ${ANSI.red}✗ ${err.message}${ANSI.reset}`);
+    ws.sendLine(`  ${ANSI.dim}Start it with: darksol browser launch${ANSI.reset}`);
+    ws.sendLine('');
+  }
+
+  return {};
+}
+
 async function cmdPrice(tokens, ws) {
   if (!tokens.length) {
     return { output: `  ${ANSI.dim}Usage: price ETH AERO VIRTUAL${ANSI.reset}\r\n` };

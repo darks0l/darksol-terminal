@@ -178,6 +178,16 @@ export const SERVICES = {
     docsUrl: 'https://console.agentmail.to',
     validate: (key) => key.startsWith('am_'),
   },
+
+  // Messaging
+  telegram: {
+    name: 'Telegram Bot',
+    category: 'messaging',
+    description: 'Telegram bot token — AI chat via Telegram',
+    envVar: 'TELEGRAM_BOT_TOKEN',
+    docsUrl: 'https://core.telegram.org/bots#botfather',
+    validate: (key) => /^\d+:.+$/.test(key),
+  },
   paraswap: {
     name: 'ParaSwap',
     category: 'trading',
@@ -319,8 +329,8 @@ export function listKeys() {
 
   showSection('API KEY VAULT');
 
-  const categories = ['llm', 'data', 'rpc', 'trading', 'email'];
-  const catNames = { llm: '🧠 LLM PROVIDERS', data: '📊 DATA PROVIDERS', rpc: '🌐 RPC PROVIDERS', trading: '📈 TRADING', email: '📧 EMAIL' };
+  const categories = ['llm', 'data', 'rpc', 'trading', 'email', 'messaging'];
+  const catNames = { llm: '🧠 LLM PROVIDERS', data: '📊 DATA PROVIDERS', rpc: '🌐 RPC PROVIDERS', trading: '📈 TRADING', email: '📧 EMAIL', messaging: '💬 MESSAGING' };
 
   for (const cat of categories) {
     console.log('');
