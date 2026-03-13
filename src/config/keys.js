@@ -126,6 +126,14 @@ export const SERVICES = {
     docsUrl: 'https://docs.dexscreener.com',
     validate: (key) => key.length > 10,
   },
+  etherscan: {
+    name: 'Etherscan',
+    category: 'data',
+    description: 'Explorer APIs — Etherscan, Basescan, Arbiscan, Polygonscan',
+    envVar: 'ETHERSCAN_API_KEY',
+    docsUrl: 'https://etherscan.io/apis',
+    validate: (key) => key.length > 10,
+  },
   defillama: {
     name: 'DefiLlama',
     category: 'data',
@@ -296,6 +304,14 @@ export function getKeyFromEnv(service) {
     return process.env[svc.envVar];
   }
   return null;
+}
+
+/**
+ * Get an API key without prompting.
+ * Prefers auto-stored keys, then environment variables.
+ */
+export function getApiKey(service) {
+  return getKeyAuto(service) || getKeyFromEnv(service);
 }
 
 /**

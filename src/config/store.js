@@ -51,6 +51,12 @@ const config = new Conf({
         maxOrders: 100,
       },
     },
+    autonomous: {
+      type: 'object',
+      default: {
+        strategies: [],
+      },
+    },
     services: {
       type: 'object',
       default: {

@@ -1,24 +1,16 @@
 import fetch from 'node-fetch';
 import { theme } from '../ui/theme.js';
-import { spinner, kvDisplay, success, error, warn, info } from '../ui/components.js';
-import { showSection, showDivider } from '../ui/banner.js';
+import { error, info } from '../ui/components.js';
+import { showSection } from '../ui/banner.js';
 
-// ══════════════════════════════════════════════════
-// PRICE WATCH — Live price monitoring with alerts
-// ══════════════════════════════════════════════════
-
-/**
- * Watch a token's price with optional alert thresholds
- */
 export async function watchPrice(token, opts = {}) {
-  const interval = parseInt(opts.interval || '10') * 1000;  // seconds → ms
+  const interval = parseInt(opts.interval || '10', 10) * 1000;
   const above = opts.above ? parseFloat(opts.above) : null;
   const below = opts.below ? parseFloat(opts.below) : null;
-  const duration = opts.duration ? parseInt(opts.duration) * 60 * 1000 : null;  // minutes → ms
+  const duration = opts.duration ? parseInt(opts.duration, 10) * 60 * 1000 : null;
 
   console.log('');
-  showSection(`PRICE WATCH — ${token.toUpperCase()}`);
-
+  showSection(`PRICE WATCH - ${token.toUpperCase()}`);
   if (above) info(`Alert above: $${above}`);
   if (below) info(`Alert below: $${below}`);
   info(`Polling every ${interval / 1000}s`);
@@ -33,57 +25,49 @@ export async function watchPrice(token, opts = {}) {
 
   const poll = async () => {
     try {
-      const resp = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${token}`);
-      const data = await resp.json();
-      const pair = data.pairs?.[0];
-
-      if (!pair) {
+      const snapshot = await fetchTokenPrice(token);
+      if (!snapshot) {
         console.log(theme.dim(`  [${timestamp()}] No data for ${token}`));
         return;
       }
 
-      const price = parseFloat(pair.priceUsd);
-      const change24h = pair.priceChange?.h24 || 0;
-      const volume = pair.volume?.h24 || 0;
-
-      // Price change indicator
       let arrow = '  ';
       if (lastPrice !== null) {
-        if (price > lastPrice) arrow = theme.success('▲ ');
-        else if (price < lastPrice) arrow = theme.accent('▼ ');
-        else arrow = theme.dim('= ');
+        if (snapshot.price > lastPrice) arrow = theme.success('UP ');
+        else if (snapshot.price < lastPrice) arrow = theme.accent('DN ');
+        else arrow = theme.dim('=  ');
       }
 
-      const priceStr = formatWatchPrice(price);
-      const changeStr = change24h >= 0 ? theme.success(`+${change24h.toFixed(2)}%`) : theme.accent(`${change24h.toFixed(2)}%`);
-      const volStr = volume > 1000000 ? `$${(volume / 1000000).toFixed(1)}M` : `$${(volume / 1000).toFixed(0)}K`;
+      const changeStr = snapshot.change24h >= 0
+        ? theme.success(`+${snapshot.change24h.toFixed(2)}%`)
+        : theme.accent(`${snapshot.change24h.toFixed(2)}%`);
+      const volStr = snapshot.volume24h > 1000000
+        ? `$${(snapshot.volume24h / 1000000).toFixed(1)}M`
+        : `$${(snapshot.volume24h / 1000).toFixed(0)}K`;
 
-      console.log(`  ${theme.dim(timestamp())}  ${arrow}${theme.gold(priceStr.padEnd(14))} ${changeStr.padEnd(20)} vol: ${theme.dim(volStr)}`);
+      console.log(`  ${theme.dim(timestamp())}  ${arrow}${theme.gold(formatWatchPrice(snapshot.price).padEnd(14))} ${changeStr.padEnd(12)} vol: ${theme.dim(volStr)}`);
 
-      // Alert checks
-      if (above && price >= above) {
+      if (above && snapshot.price >= above) {
         console.log('');
-        console.log(theme.success(`  🔔 ALERT: ${pair.baseToken.symbol} hit $${price} (above $${above})`));
-        console.log('');
-      }
-
-      if (below && price <= below) {
-        console.log('');
-        console.log(theme.accent(`  🔔 ALERT: ${pair.baseToken.symbol} dropped to $${price} (below $${below})`));
+        console.log(theme.success(`  ALERT: ${snapshot.symbol} hit $${snapshot.price} (above $${above})`));
         console.log('');
       }
 
-      lastPrice = price;
-      ticks++;
+      if (below && snapshot.price <= below) {
+        console.log('');
+        console.log(theme.accent(`  ALERT: ${snapshot.symbol} dropped to $${snapshot.price} (below $${below})`));
+        console.log('');
+      }
+
+      lastPrice = snapshot.price;
+      ticks += 1;
     } catch (err) {
       console.log(theme.dim(`  [${timestamp()}] Error: ${err.message}`));
     }
   };
 
-  // Initial fetch
   await poll();
 
-  // Polling loop
   const timer = setInterval(async () => {
     if (duration && (Date.now() - startTime) >= duration) {
       clearInterval(timer);
@@ -91,10 +75,10 @@ export async function watchPrice(token, opts = {}) {
       info(`Watch ended after ${duration / 60000} minutes (${ticks} ticks)`);
       return;
     }
+
     await poll();
   }, interval);
 
-  // Keep alive
   await new Promise((resolve) => {
     process.on('SIGINT', () => {
       clearInterval(timer);
@@ -102,6 +86,7 @@ export async function watchPrice(token, opts = {}) {
       info(`Watched ${ticks} ticks`);
       resolve();
     });
+
     if (duration) {
       setTimeout(() => {
         clearInterval(timer);
@@ -111,9 +96,34 @@ export async function watchPrice(token, opts = {}) {
   });
 }
 
-/**
- * Quick price check (one-shot, multiple tokens)
- */
+export async function fetchTokenPrice(token) {
+  const resp = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${token}`);
+  const data = await resp.json();
+  const pair = data.pairs?.[0];
+  if (!pair) return null;
+
+  return {
+    query: token,
+    symbol: pair.baseToken.symbol,
+    price: parseFloat(pair.priceUsd),
+    change24h: pair.priceChange?.h24 || 0,
+    volume24h: pair.volume?.h24 || 0,
+    pair,
+  };
+}
+
+export async function getPriceSnapshots(tokens = []) {
+  const snapshots = await Promise.all(tokens.map(async (token) => {
+    try {
+      return await fetchTokenPrice(token);
+    } catch {
+      return { query: token, error: true };
+    }
+  }));
+
+  return snapshots.filter(Boolean);
+}
+
 export async function checkPrices(tokens) {
   if (!tokens || tokens.length === 0) {
     error('Specify tokens: darksol price ETH AERO VIRTUAL');
@@ -123,31 +133,27 @@ export async function checkPrices(tokens) {
   console.log('');
   showSection('PRICE CHECK');
 
-  for (const token of tokens) {
-    try {
-      const resp = await fetch(`https://api.dexscreener.com/latest/dex/search?q=${token}`);
-      const data = await resp.json();
-      const pair = data.pairs?.[0];
-
-      if (!pair) {
-        console.log(`  ${theme.dim(token.toUpperCase().padEnd(10))} ${theme.dim('Not found')}`);
-        continue;
-      }
-
-      const price = parseFloat(pair.priceUsd);
-      const change = pair.priceChange?.h24 || 0;
-      const changeStr = change >= 0 ? theme.success(`+${change.toFixed(2)}%`) : theme.accent(`${change.toFixed(2)}%`);
-
-      console.log(`  ${theme.gold(pair.baseToken.symbol.padEnd(10))} ${formatWatchPrice(price).padEnd(14)} ${changeStr}`);
-    } catch {
-      console.log(`  ${theme.dim(token.padEnd(10))} ${theme.dim('Error')}`);
+  const snapshots = await getPriceSnapshots(tokens);
+  for (const snapshot of snapshots) {
+    if (snapshot.error) {
+      console.log(`  ${theme.dim(String(snapshot.query).padEnd(10))} ${theme.dim('Error')}`);
+      continue;
     }
+
+    if (!snapshot?.symbol) {
+      console.log(`  ${theme.dim(String(snapshot?.query || '').toUpperCase().padEnd(10))} ${theme.dim('Not found')}`);
+      continue;
+    }
+
+    const changeStr = snapshot.change24h >= 0
+      ? theme.success(`+${snapshot.change24h.toFixed(2)}%`)
+      : theme.accent(`${snapshot.change24h.toFixed(2)}%`);
+    console.log(`  ${theme.gold(snapshot.symbol.padEnd(10))} ${formatWatchPrice(snapshot.price).padEnd(14)} ${changeStr}`);
   }
 
   console.log('');
 }
 
-// Helpers
 function timestamp() {
   return new Date().toLocaleTimeString('en-US', { hour12: false });
 }

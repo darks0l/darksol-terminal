@@ -15,7 +15,7 @@ A unified CLI for market intel, trading, AI-powered analysis, on-chain oracle, c
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-gold.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
 
-- Current release: **0.11.0**
+- Current release: **0.12.0**
 - Changelog: `CHANGELOG.md`
 
 ## Install
@@ -150,6 +150,9 @@ ai <prompt>   # chat with trading assistant
 | `dca` | Dollar-cost averaging engine | Gas only |
 | `soul` | Agent identity & personality configuration | Free |
 | `memory` | Persistent cross-session memory store | Free |
+| `whale` | Whale Radar — track wallets, copy-trade, live feed | Free |
+| `dash` | Live TUI dashboard — portfolio, prices, gas, whale feed | Free |
+| `auto` | Autonomous Trader — goal-based automated execution | Provider dependent |
 | `agent task` | Autonomous ReAct agent loop with tool use | Provider dependent |
 | `ai` | LLM-powered trading assistant & intent execution | Provider dependent |
 | `agent` | Secure agent signer (PK-isolated proxy) | Free |
@@ -173,6 +176,98 @@ ai <prompt>   # chat with trading assistant
 | `browser` | Playwright-powered browser automation | Free |
 | `serve` | Local interactive web terminal (xterm.js) | Free |
 | `config` | Terminal configuration | Free |
+
+---
+
+## 🐋 Whale Radar
+
+Track any wallet across 5 chains. Get alerts on swaps, transfers, new tokens. Enable copy-trading to mirror a whale's moves automatically.
+
+```bash
+# Track a wallet
+darksol whale track 0xd8dA6BF26964aF9D7eEd9e03E53415D37aA96045 --label "vitalik" --chain ethereum
+
+# List all tracked wallets
+darksol whale list
+
+# View recent activity
+darksol whale activity 0xd8dA... --limit 20
+
+# Enable copy-trading (mirrors swaps with your own limits)
+darksol whale mirror 0xd8dA... --max 50 --slippage 2 --dry-run
+
+# Open the live feed (blessed TUI)
+darksol whale feed
+
+# Stop tracking
+darksol whale stop 0xd8dA...
+```
+
+- **5-chain support:** Base, Ethereum, Arbitrum, Polygon, Optimism
+- **Swap decoding:** Uniswap V2 + V3 router signatures automatically parsed
+- **Copy-trading:** Mirror whale swaps with budget caps, slippage limits, dry-run mode
+- **Live feed:** Real-time blessed terminal UI with whale events streaming
+- **Daemon integration:** Runs as a background service, feeds alerts to Telegram bot
+- **Event system:** Subscribe to `whale:swap`, `whale:transfer`, `whale:newtoken`, `whale:mirror-executed`
+
+---
+
+## 📊 Live Dashboard
+
+Full-screen terminal dashboard. Portfolio, prices, gas, transactions, whale alerts — all updating in real-time.
+
+```bash
+# Launch the dashboard
+darksol dash
+
+# Custom refresh interval
+darksol dash --refresh 15
+
+# Compact mode (portfolio + prices only)
+darksol dash --compact
+```
+
+- **Portfolio summary** — total value, token balances, chain breakdown
+- **Price ticker** — sparkline micro-charts for tracked tokens
+- **Gas gauge** — current gas prices across all 5 chains
+- **Recent transactions** — last 10 txs from wallet history
+- **Whale feed** — live alerts when whale monitor is running
+- **Keyboard shortcuts:** `q` quit, `r` refresh, `tab` cycle focus, `w` toggle whales, `1-5` switch chains
+- **DARKSOL gold/dark theme** throughout
+
+---
+
+## 🤖 Autonomous Trader
+
+Set a goal in plain English. The AI builds a strategy, monitors the market, and executes trades within your budget and risk limits. Full audit trail on every decision.
+
+```bash
+# Start an autonomous strategy
+darksol auto start "accumulate ETH under 2400" --budget 500 --max-per-trade 50 --risk moderate
+
+# DCA into memecoins
+darksol auto start "DCA into BASE memecoins with >1M liquidity" --budget 200 --interval 15 --dry-run
+
+# Check status
+darksol auto status
+darksol auto status auto_1741...
+
+# View audit trail
+darksol auto log auto_1741... --limit 20
+
+# Stop a strategy
+darksol auto stop auto_1741...
+
+# List all strategies
+darksol auto list
+```
+
+- **Natural language goals** — parsed by LLM intent system into executable strategies
+- **Three risk levels:** conservative (5% stop-loss), moderate (10%), aggressive (20%)
+- **Kill switches:** budget exhaustion, max loss, error threshold — auto-stops immediately
+- **Dry-run mode** — test strategies without executing real trades
+- **Full audit log** — every decision, trade, and skip logged to `~/.darksol/autonomous/<id>/audit.json`
+- **Event system:** `auto:started`, `auto:trade`, `auto:skipped`, `auto:stopped`, `auto:budget-hit`, `auto:error`
 
 ---
 

@@ -75,4 +75,10 @@ test('command registration includes trade and script subcommands', (t) => {
   assert.match(agentHelp.stdout, /\btask\b/);
   assert.match(agentHelp.stdout, /\bplan\b/);
   assert.match(agentHelp.stdout, /\bstatus\b/);
+
+  const autoHelp = runCli(['auto', '--help'], env);
+  assert.equal(autoHelp.status, 0, autoHelp.stderr);
+  assert.match(autoHelp.stdout, /\bstart\b/);
+  assert.match(autoHelp.stdout, /\bstatus\b/);
+  assert.match(autoHelp.stdout, /\blist\b/);
 });

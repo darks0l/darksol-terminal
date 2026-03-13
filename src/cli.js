@@ -2,12 +2,15 @@ import { Command } from 'commander';
 import { showBanner, showMiniBanner, showSection } from './ui/banner.js';
 import { theme } from './ui/theme.js';
 import { kvDisplay, success, error, warn, info } from './ui/components.js';
+import { createDashboard } from './ui/dashboard.js';
 import { getConfig, setConfig, getAllConfig, getRPC, setRPC, configPath } from './config/store.js';
 import { createWallet, importWallet, showWallets, getBalance, useWallet, exportWallet, sendFunds, receiveAddress } from './wallet/manager.js';
 import { showPortfolio } from './wallet/portfolio.js';
 import { showHistory } from './wallet/history.js';
 import { showGas } from './services/gas.js';
 import { watchPrice, checkPrices } from './services/watch.js';
+import { getWhaleActivity, listTracked, mirrorTrade, stopTracking, trackWallet } from './services/whale.js';
+import { startWhaleFeed } from './services/whale-monitor.js';
 import { mailSetup, mailCreate, mailInboxes, mailSend, mailList, mailRead, mailReply, mailForward, mailThreads, mailDelete, mailUse, mailStats, mailStatus } from './services/mail.js';
 import { startWebShell } from './web/server.js';
 import { executeSwap } from './trading/swap.js';
@@ -42,6 +45,7 @@ import { runSetupWizard } from './setup/wizard.js';
 import { displaySoul, hasSoul, resetSoul, runSoulSetup } from './soul/index.js';
 import { clearMemories, exportMemories, getRecentMemories, searchMemories } from './memory/index.js';
 import { getAgentStatus, planAgentGoal, runAgentTask } from './agent/index.js';
+import { getAuditLog, getStatus as getAutoStatus, listStrategies as listAutoStrategies, startAutonomous, stopAutonomous } from './agent/autonomous.js';
 import { daemonStart, daemonStop, daemonStatus, daemonRestart } from './daemon/index.js';
 import { telegramSetup, telegramStartForeground, telegramStopCommand, telegramStatusCommand, telegramSendCommand } from './services/telegram.js';
 import { createRequire } from 'module';
@@ -328,6 +332,159 @@ export function cli(argv) {
     .command('run')
     .description('Execute pending DCA orders')
     .action(() => runDCA());
+
+  const auto = program
+    .command('auto')
+    .description('Autonomous trader mode - goal-based automated execution');
+
+  auto
+    .command('start <goal>')
+    .description('Start an autonomous strategy from a natural language goal')
+    .requiredOption('--budget <amount>', 'Total USDC budget')
+    .requiredOption('--max-per-trade <amount>', 'Per-trade cap')
+    .option('--risk <level>', 'Risk level (conservative|moderate|aggressive)', 'moderate')
+    .option('--interval <minutes>', 'Evaluation interval in minutes', '5')
+    .option('--chain <chain>', 'Target chain (repeatable)', (value, previous = []) => previous.concat(value), [])
+    .option('--dry-run', 'Simulate decisions without executing swaps')
+    .action(async (goal, opts) => {
+      showMiniBanner();
+      showSection('AUTONOMOUS START');
+      const strategy = await startAutonomous(goal, {
+        budget: parseFloat(opts.budget),
+        maxPerTrade: parseFloat(opts.maxPerTrade),
+        riskLevel: opts.risk,
+        interval: parseFloat(opts.interval),
+        chains: opts.chain,
+        dryRun: opts.dryRun,
+      });
+
+      kvDisplay([
+        ['ID', strategy.id],
+        ['Goal', strategy.goal],
+        ['Budget', `${strategy.budget} USDC`],
+        ['Max / Trade', `${strategy.maxPerTrade} USDC`],
+        ['Risk', strategy.riskLevel],
+        ['Mode', strategy.dryRun ? 'dry-run' : 'live'],
+        ['Next Check', strategy.nextCheckAt],
+      ]);
+      console.log('');
+    });
+
+  auto
+    .command('stop <id>')
+    .description('Stop a running autonomous strategy')
+    .action((id) => {
+      showMiniBanner();
+      showSection('AUTONOMOUS STOP');
+      const strategy = stopAutonomous(id);
+      if (!strategy) {
+        warn(`Strategy not found: ${id}`);
+        console.log('');
+        return;
+      }
+      success(`Stopped ${strategy.id}`);
+      console.log('');
+    });
+
+  auto
+    .command('status [id]')
+    .description('Show one autonomous strategy or all active strategies')
+    .action((id) => {
+      showMiniBanner();
+      showSection('AUTONOMOUS STATUS');
+
+      if (!id) {
+        const items = getAutoStatus();
+        if (!items.length) {
+          warn('No autonomous strategies found');
+          console.log('');
+          return;
+        }
+        items.forEach((item) => {
+          kvDisplay([
+            ['ID', item.id],
+            ['Status', item.status],
+            ['Spent', `${item.spent}/${item.budget} USDC`],
+            ['Trades', String(item.tradesExecuted)],
+            ['PnL', `${item.pnl}`],
+            ['Next Check', item.nextCheckAt || '-'],
+          ]);
+          console.log('');
+        });
+        return;
+      }
+
+      const strategy = getAutoStatus(id);
+      if (!strategy) {
+        warn(`Strategy not found: ${id}`);
+        console.log('');
+        return;
+      }
+
+      kvDisplay([
+        ['ID', strategy.id],
+        ['Goal', strategy.goal],
+        ['Status', strategy.status],
+        ['Spent', `${strategy.spent}/${strategy.budget} USDC`],
+        ['Trades', String(strategy.tradesExecuted)],
+        ['PnL', `${strategy.pnl}`],
+        ['Risk', strategy.riskLevel],
+        ['Mode', strategy.dryRun ? 'dry-run' : 'live'],
+        ['Next Check', strategy.nextCheckAt || '-'],
+        ['Last Decision', strategy.lastDecision || '-'],
+      ]);
+      console.log('');
+    });
+
+  auto
+    .command('log <id>')
+    .description('Show the recent autonomous audit log')
+    .option('--limit <n>', 'Number of audit entries', '20')
+    .action((id, opts) => {
+      showMiniBanner();
+      showSection('AUTONOMOUS AUDIT');
+      const entries = getAuditLog(id, parseInt(opts.limit, 10));
+      if (!entries.length) {
+        warn('No audit entries found');
+        console.log('');
+        return;
+      }
+
+      entries.forEach((entry) => {
+        const headline = `${entry.timestamp}  ${entry.type}${entry.action ? ` ${entry.action}` : ''}`;
+        console.log(`  ${theme.gold(headline)}`);
+        if (entry.reason) console.log(`  ${theme.dim(entry.reason)}`);
+        if (entry.message) console.log(`  ${theme.dim(entry.message)}`);
+        if (entry.price !== undefined) console.log(`  ${theme.dim(`price: ${entry.price}`)}`);
+        console.log('');
+      });
+    });
+
+  auto
+    .command('list')
+    .description('List all autonomous strategies')
+    .action(() => {
+      showMiniBanner();
+      showSection('AUTONOMOUS STRATEGIES');
+      const items = listAutoStrategies();
+      if (!items.length) {
+        warn('No autonomous strategies found');
+        console.log('');
+        return;
+      }
+
+      items.forEach((item) => {
+        kvDisplay([
+          ['ID', item.id],
+          ['Status', item.status],
+          ['Spent', `${item.spent}/${item.budget} USDC`],
+          ['Trades', String(item.tradesExecuted)],
+          ['PnL', `${item.pnl}`],
+          ['Next Check', item.nextCheckAt || '-'],
+        ]);
+        console.log('');
+      });
+    });
 
   // ═══════════════════════════════════════
   // MARKET COMMANDS
@@ -1132,6 +1289,52 @@ export function cli(argv) {
     .option('-p, --port <port>', 'Health server port', '18792')
     .action((opts) => daemonRestart(opts));
 
+  const whale = program
+    .command('whale')
+    .description('Whale Radar - wallet tracking and mirror trades');
+
+  whale
+    .command('track <address>')
+    .description('Track a wallet for new activity')
+    .option('-c, --chain <chain>', 'Chain to monitor', 'base')
+    .option('-l, --label <label>', 'Friendly wallet label')
+    .option('--notify', 'Enable terminal notifications', true)
+    .action((address, opts) => trackWallet(address, opts));
+
+  whale
+    .command('list')
+    .description('List tracked whale wallets')
+    .action(() => listTracked());
+
+  whale
+    .command('stop <address>')
+    .description('Stop tracking a wallet')
+    .action((address) => stopTracking(address));
+
+  whale
+    .command('mirror <address>')
+    .description('Enable copy-trading for a tracked whale')
+    .option('--max <amount>', 'Max USDC-equivalent per trade')
+    .option('-s, --slippage <pct>', 'Mirror trade slippage %', '2')
+    .option('--dry-run', 'Log mirror trades without executing')
+    .action((address, opts) => mirrorTrade(address, {
+      maxPerTrade: opts.max ? parseFloat(opts.max) : null,
+      slippage: parseFloat(opts.slippage),
+      dryRun: Boolean(opts.dryRun),
+    }));
+
+  whale
+    .command('activity <address>')
+    .description('Show recent activity for a whale wallet')
+    .option('-l, --limit <n>', 'Number of transactions', '10')
+    .option('-c, --chain <chain>', 'Chain to query', 'base')
+    .action((address, opts) => getWhaleActivity(address, parseInt(opts.limit, 10), opts));
+
+  whale
+    .command('feed')
+    .description('Open the live whale event feed')
+    .action(() => startWhaleFeed());
+
   // ═══════════════════════════════════════
   // TELEGRAM COMMANDS
   // ═══════════════════════════════════════
@@ -1387,6 +1590,19 @@ export function cli(argv) {
         console.log(theme.dim('     Supports OpenAI, Anthropic, OpenRouter, or Ollama (free/local)'));
         console.log('');
       }
+    });
+
+  program
+    .command('dash')
+    .description('Launch the live terminal dashboard')
+    .option('--refresh <seconds>', 'Refresh interval in seconds', '30')
+    .option('--compact', 'Use the compact 2-panel layout')
+    .action(async (opts) => {
+      const dashboard = createDashboard({
+        refresh: parseInt(opts.refresh, 10),
+        compact: Boolean(opts.compact),
+      });
+      await dashboard.ready;
     });
 
   // ═══════════════════════════════════════
@@ -1717,6 +1933,7 @@ function showCommandList() {
     ['watch', 'Live price monitoring + alerts'],
     ['gas', 'Gas prices & cost estimates'],
     ['trade', 'Swap tokens, snipe, trading'],
+    ['auto', 'Autonomous trader strategies'],
     ['bridge', 'Cross-chain bridge (LI.FI)'],
     ['dca', 'Dollar-cost averaging orders'],
     ['ai chat', 'Standalone AI chat session'],
@@ -1727,6 +1944,7 @@ function showCommandList() {
     ['memory', 'Persistent cross-session memory'],
     ['script', 'Execution scripts & strategies'],
     ['market', 'Market intel & token data'],
+    ['whale', 'Whale Radar - wallet tracking'],
     ['oracle', 'On-chain random oracle'],
     ['casino', 'The Clawsino - betting'],
     ['poker', 'GTO Poker Arena — heads-up holdem'],

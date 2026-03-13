@@ -7,6 +7,56 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.12.0] - 2026-03-12
+
+### Added — 🐋 Whale Radar
+- `darksol whale track <address>` — track any wallet for new transactions (5-chain support)
+- `darksol whale list` — show all tracked wallets with labels, chain, last activity
+- `darksol whale stop <address>` — remove a wallet from tracking
+- `darksol whale mirror <address>` — copy-trade a tracked whale (max-per-trade cap, slippage, dry-run)
+- `darksol whale activity <address>` — fetch recent transactions for any address
+- `darksol whale feed` — live blessed TUI feed of all whale events in real-time
+- Background whale monitor with Uniswap V2/V3 swap decoding and ERC-20 transfer detection
+- EventEmitter-based alert system (`whale:swap`, `whale:transfer`, `whale:newtoken`, `whale:mirror-executed`)
+- Daemon service integration — whale monitor runs as a managed background service
+- Etherscan API key support added to key vault (`darksol keys add etherscan`)
+
+### Added — 📊 Live Terminal Dashboard
+- `darksol dash` — full-screen blessed/blessed-contrib TUI dashboard
+- Portfolio summary panel with total value and chain breakdown
+- Price ticker with sparkline micro-charts for tracked tokens
+- Gas gauge showing current gas prices across all 5 chains
+- Recent transactions panel (last 10 txs from wallet history)
+- Whale feed panel (live alerts when whale monitor is running)
+- Status bar with current wallet, chain, block number, refresh countdown
+- Keyboard shortcuts: q=quit, r=refresh, tab=cycle focus, w=toggle whale feed, 1-5=switch chains
+- `--refresh <seconds>` and `--compact` options
+- DARKSOL gold/dark theme throughout
+
+### Added — 🤖 Autonomous Trader Mode
+- `darksol auto start '<goal>'` — natural language goal-based autonomous trading
+- `darksol auto stop <id>` — stop a running strategy with kill switch
+- `darksol auto status [id]` — show strategy status, spend, PnL, next check
+- `darksol auto list` — list all active/paused/completed strategies
+- `darksol auto log <id>` — full audit trail of every decision and trade
+- LLM-powered goal parsing (uses existing intent system)
+- Strategy evaluator with market condition checks, risk profiles, cooldowns
+- Budget enforcement, max-per-trade caps, stop-loss, error threshold kill switches
+- Full audit log written to `~/.darksol/autonomous/<id>/audit.json`
+- EventEmitter events: `auto:started`, `auto:trade`, `auto:skipped`, `auto:stopped`, `auto:budget-hit`, `auto:error`
+- Three risk levels: conservative, moderate, aggressive
+- Dry-run mode for strategy testing without real trades
+
+### Changed
+- `src/wallet/portfolio.js` — refactored with `fetchPortfolioSnapshot()` for dashboard consumption
+- `src/wallet/history.js` — refactored with `fetchHistorySnapshot()` for dashboard consumption
+- `src/services/gas.js` — added `fetchGasSnapshot()` export
+- `src/services/watch.js` — added `getPriceSnapshots()` export
+- `src/config/keys.js` — added `getApiKey()` convenience export
+
+### Tests
+- 130 tests passing (up from 111), 0 failures
+
 ## [0.11.0] - 2026-03-11
 ### Added
 - **Telegram Bot Integration** (`darksol telegram`) — full Telegram Bot API client:
