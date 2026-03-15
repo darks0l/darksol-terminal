@@ -17,6 +17,7 @@ import { executeSwap } from './trading/swap.js';
 import { snipeToken, watchSnipe } from './trading/snipe.js';
 import { createDCA, listDCA, cancelDCA, runDCA } from './trading/dca.js';
 import { arbScan, arbMonitor, arbExecute, arbStats, arbConfig, arbAddEndpoint, arbAddPair, arbRemovePair, arbInfo } from './trading/arb.js';
+import { aiDiscoverPairs, aiTuneThresholds, aiStrategyBriefing, aiLearn } from './trading/arb-ai.js';
 import { executeLifiSwap, executeLifiBridge, checkBridgeStatus, showSupportedChains } from './services/lifi.js';
 import { topMovers, tokenDetail, compareTokens } from './services/market.js';
 import { oracleFlip, oracleDice, oracleNumber, oracleShuffle, oracleHealth } from './services/oracle.js';
@@ -399,6 +400,30 @@ export function cli(argv) {
     .command('info')
     .description('How arbitrage works, setup guide, and risk warnings')
     .action(() => arbInfo());
+
+  arb
+    .command('ai')
+    .description('AI strategy briefing — assessment, recommendations, next actions')
+    .option('-c, --chain <chain>', 'Target chain', 'base')
+    .action((opts) => aiStrategyBriefing({ chain: opts.chain }));
+
+  arb
+    .command('discover')
+    .description('AI-powered pair discovery — find new opportunities, drop dead pairs')
+    .option('-c, --chain <chain>', 'Target chain', 'base')
+    .action((opts) => aiDiscoverPairs({ chain: opts.chain }));
+
+  arb
+    .command('tune')
+    .description('AI threshold tuning — optimize min profit, trade size, gas ceiling')
+    .option('-c, --chain <chain>', 'Target chain', 'base')
+    .action((opts) => aiTuneThresholds({ chain: opts.chain }));
+
+  arb
+    .command('learn')
+    .description('Run AI learning cycle — analyze history and update patterns')
+    .option('-c, --chain <chain>', 'Target chain', 'base')
+    .action((opts) => aiLearn({ chain: opts.chain }));
 
   const auto = program
     .command('auto')

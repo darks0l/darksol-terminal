@@ -57,13 +57,19 @@ darksol bridge status 0xTxHash...
 darksol bridge chains
 
 # Cross-DEX arbitrage
-darksol arb scan --chain base                       # one-shot price comparison
+darksol arb scan --chain base                       # AI-scored DEX price comparison
 darksol arb monitor --chain base --execute          # real-time block-by-block scanning
 darksol arb config                                   # set thresholds, dry-run, DEXes
 darksol arb add-endpoint base wss://your-quicknode   # faster with WSS endpoints
 darksol arb add-pair WETH AERO                       # add pairs to scan
 darksol arb stats --days 7                           # PnL history
 darksol arb info                                     # setup guide + risk warnings
+
+# AI arbitrage intelligence
+darksol arb ai                                       # strategy briefing + recommendations
+darksol arb discover --chain base                    # AI pair discovery
+darksol arb tune --chain base                        # AI threshold optimization
+darksol arb learn --chain base                       # learn from history patterns
 
 # Set up your agent identity
 darksol soul

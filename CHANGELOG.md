@@ -7,6 +7,23 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.13.1] - 2026-03-14
+
+### Added — 🧠 AI Arbitrage Intelligence
+- `darksol arb ai` — AI strategy briefing with assessment, recommendations, risks, and next actions
+- `darksol arb discover` — AI-powered pair discovery: find promising new pairs, identify dead pairs to drop
+- `darksol arb tune` — AI threshold tuning: analyze history to optimize min profit, trade size, gas ceiling
+- `darksol arb learn` — run learning cycle: extract hourly patterns, DEX combo rankings, pair profitability
+- **AI pattern filter** — fast local scoring (no API call) applied to every scan and monitor block
+  - Boosts known-profitable pairs and DEX combos
+  - Penalizes dead pairs and low-confidence opportunities
+  - Uses time-of-day patterns from learned history
+- **AI risk scoring** — deep LLM analysis on scan results: risk score (1-10), MEV likelihood, go/no-go recommendation
+- **Persistent learning store** — `~/.darksol/arb-learnings.json` tracks profitable pairs, dead pairs, best DEX combos, hourly heatmap, chain rankings, strategy notes
+- **Hourly opportunity heatmap** in `arb learn` output — shows when arb ops peak
+- Web shell integration: 7 arb menu items (scan, AI briefing, discover, tune, learn, stats, guide)
+- AI action audit log at `~/.darksol/arb-ai-log.json`
+
 ## [0.13.0] - 2026-03-14
 
 ### Added — ⚡ Cross-DEX Arbitrage Engine

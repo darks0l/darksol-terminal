@@ -1390,14 +1390,58 @@ async function cmdArb(args, ws) {
     return {};
   }
 
+  if (sub === 'ai') {
+    try {
+      const { aiStrategyBriefing } = await import('../trading/arb-ai.js');
+      await aiStrategyBriefing({ chain: args[1] || getConfig('chain') || 'base' });
+    } catch (e) {
+      ws.sendLine(`  ${ANSI.red}AI briefing failed: ${e.message}${ANSI.reset}`);
+    }
+    return {};
+  }
+
+  if (sub === 'discover') {
+    try {
+      const { aiDiscoverPairs } = await import('../trading/arb-ai.js');
+      await aiDiscoverPairs({ chain: args[1] || getConfig('chain') || 'base' });
+    } catch (e) {
+      ws.sendLine(`  ${ANSI.red}Discovery failed: ${e.message}${ANSI.reset}`);
+    }
+    return {};
+  }
+
+  if (sub === 'tune') {
+    try {
+      const { aiTuneThresholds } = await import('../trading/arb-ai.js');
+      await aiTuneThresholds({ chain: args[1] || getConfig('chain') || 'base' });
+    } catch (e) {
+      ws.sendLine(`  ${ANSI.red}Tuning failed: ${e.message}${ANSI.reset}`);
+    }
+    return {};
+  }
+
+  if (sub === 'learn') {
+    try {
+      const { aiLearn } = await import('../trading/arb-ai.js');
+      await aiLearn({ chain: args[1] || getConfig('chain') || 'base' });
+    } catch (e) {
+      ws.sendLine(`  ${ANSI.red}Learning failed: ${e.message}${ANSI.reset}`);
+    }
+    return {};
+  }
+
   // Default: show arb menu
   ws.sendLine(`${ANSI.gold}  ◆ ARBITRAGE${ANSI.reset}`);
   ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
-  ws.sendLine(`  ${ANSI.white}Cross-DEX arbitrage scanner${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.white}AI-powered cross-DEX arbitrage${ANSI.reset}`);
   ws.sendLine('');
 
   ws.sendMenu('arb_action', '◆ Arb Actions', [
-    { value: 'arb scan', label: '🔍 Scan', desc: 'One-shot DEX price comparison' },
+    { value: 'arb scan', label: '🔍 Scan', desc: 'AI-scored DEX price comparison' },
+    { value: 'arb ai', label: '🧠 AI Briefing', desc: 'Strategy assessment + recommendations' },
+    { value: 'arb discover', label: '📈 Discover', desc: 'AI pair discovery — find new opportunities' },
+    { value: 'arb tune', label: '🔧 Tune', desc: 'AI threshold optimization' },
+    { value: 'arb learn', label: '📚 Learn', desc: 'Run learning cycle on history' },
     { value: 'arb stats', label: '📊 Stats', desc: 'View arb history & PnL' },
     { value: 'arb info', label: '📖 Guide', desc: 'How arb works, setup tips, risks' },
     { value: 'back', label: '← Back', desc: '' },

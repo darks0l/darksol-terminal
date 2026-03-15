@@ -22,6 +22,7 @@ import { spinner, kvDisplay, success, error, warn, info, table } from '../ui/com
 import { showSection } from '../ui/banner.js';
 import { resolveToken, getTokenInfo } from './swap.js';
 import { getDexesForChain, DEX_ADAPTERS } from './arb-dexes.js';
+import { aiFilterOpportunity, aiScoreOpportunities } from './arb-ai.js';
 
 // ═══════════════════════════════════════════════════════════════
 // CONSTANTS & PATHS
@@ -346,21 +347,63 @@ export async function arbScan(opts = {}) {
     console.log('');
 
     const profitable = allOpps.filter(o => o.netProfitUsd >= minProfit);
-    displayOpportunities(profitable);
+
+    // Apply AI pattern filter (fast, no API call)
+    const aiFiltered = profitable.map(o => {
+      const aiResult = aiFilterOpportunity(o);
+      return { ...o, aiScore: aiResult.score, aiPass: aiResult.pass, aiReason: aiResult.reason };
+    });
+    const aiPassed = aiFiltered.filter(o => o.aiPass);
+    const aiSkipped = aiFiltered.length - aiPassed.length;
+
+    displayOpportunities(aiPassed);
+
+    if (aiSkipped > 0) {
+      info(`AI filter skipped ${aiSkipped} low-confidence opportunity(s) — run 'darksol arb learn' to improve accuracy`);
+      console.log('');
+    }
+
+    // AI deep scoring for top opportunities (uses LLM)
+    if (aiPassed.length > 0 && !opts.skipAi) {
+      const scoreSpin = spinner('AI scoring opportunities...').start();
+      try {
+        const scoring = await aiScoreOpportunities(aiPassed);
+        if (scoring?.scored?.length > 0) {
+          scoreSpin.succeed('AI risk scoring complete');
+          console.log('');
+          console.log(theme.gold('  🧠 AI Risk Assessment:'));
+          for (const s of scoring.scored) {
+            const riskColor = s.riskScore <= 3 ? theme.success : s.riskScore <= 6 ? theme.warning : theme.error;
+            const recColor = s.recommendation === 'execute' ? theme.success : s.recommendation === 'watch' ? theme.warning : theme.error;
+            console.log(`    ${theme.bright(s.pair)} — risk: ${riskColor(String(s.riskScore) + '/10')} | MEV: ${theme.dim(s.mevLikelihood)} | ${recColor(s.recommendation.toUpperCase())}`);
+            console.log(`      ${theme.dim(s.reason)}`);
+          }
+          if (scoring.summary) {
+            console.log('');
+            console.log(`    ${theme.dim('Summary: ' + scoring.summary)}`);
+          }
+          console.log('');
+        } else {
+          scoreSpin.succeed('AI scoring returned no results');
+        }
+      } catch {
+        scoreSpin.warn('AI scoring unavailable — showing raw results');
+      }
+    }
 
     // Log everything (including unprofitable) to history
     for (const o of allOpps) {
       recordArb({ type: 'scan', ...o });
     }
 
-    if (profitable.length > 0) {
+    if (aiPassed.length > 0) {
       console.log('');
       console.log(theme.warning('  ⚠ MEV Warning: ') + theme.dim('simple two-tx arb is likely to be front-run.'));
       console.log(theme.dim('  Use WSS endpoints + Flashbots bundles for reliable execution.'));
       console.log('');
     }
 
-    return profitable;
+    return aiPassed;
   } catch (err) {
     spin.fail('Scan failed');
     error(err.message);
@@ -427,15 +470,20 @@ export async function arbMonitor(opts = {}) {
       }
 
       const profitable = allOpps.filter(o => o.netProfitUsd >= minProfit);
-      oppsFound += profitable.length;
 
-      if (profitable.length > 0) {
-        blockSpin.succeed(`[Block ${blockNumber}] ${profitable.length} opportunity(s) found`);
-        displayOpportunities(profitable.slice(0, 5));
+      // AI pattern filter (fast, no API call)
+      const aiPassed = profitable.filter(o => aiFilterOpportunity(o).pass);
+      oppsFound += aiPassed.length;
+
+      if (aiPassed.length > 0) {
+        const skipped = profitable.length - aiPassed.length;
+        const skipNote = skipped > 0 ? ` (${skipped} AI-filtered)` : '';
+        blockSpin.succeed(`[Block ${blockNumber}] ${aiPassed.length} opportunity(s) found${skipNote}`);
+        displayOpportunities(aiPassed.slice(0, 5));
 
         // Auto-execute if requested and cooldown satisfied
         if (execute && !dryRun && Date.now() - lastExecute > (arbCfg.cooldownMs || 5000)) {
-          const best = profitable.sort((a, b) => b.netProfitUsd - a.netProfitUsd)[0];
+          const best = aiPassed.sort((a, b) => b.netProfitUsd - a.netProfitUsd)[0];
           if (best.netProfitUsd >= minProfit) {
             await arbExecute({ opportunity: best, dryRun: false, skipConfirm: true });
             lastExecute = Date.now();
@@ -443,7 +491,7 @@ export async function arbMonitor(opts = {}) {
           }
         }
       } else {
-        blockSpin.text = `[Block ${blockNumber}] No profitable arb found (${allOpps.length} pairs scanned)`;
+        blockSpin.text = `[Block ${blockNumber}] No profitable arb found (${allOpps.length} scanned, ${profitable.length} pre-filter)`;
         blockSpin.succeed();
       }
 
