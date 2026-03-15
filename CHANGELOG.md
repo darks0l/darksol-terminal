@@ -7,6 +7,33 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.13.0] - 2026-03-14
+
+### Added — ⚡ Cross-DEX Arbitrage Engine
+- `darksol arb scan` — one-shot cross-DEX price comparison across multiple DEXs per chain
+- `darksol arb monitor` — real-time block-by-block arb scanning via WSS (with HTTP polling fallback)
+- `darksol arb execute` — auto-execute when spread exceeds gas + fees + configurable min profit
+- `darksol arb config` — interactive click-through configuration (thresholds, dry-run toggle, DEX list)
+- `darksol arb add-endpoint <chain> <url>` — plug in custom QuickNode/Alchemy/Infura WSS/RPC endpoints
+- `darksol arb add-pair <tokenA> <tokenB>` — add token pairs to scan list
+- `darksol arb remove-pair <tokenA> <tokenB>` — remove pairs from scan list
+- `darksol arb stats` — historical PnL, win rate, gas spent, top opportunities
+- `darksol arb info` — honest guide on setup, MEV reality, risk warnings, recommended steps
+- **6 DEX adapters** with verified on-chain contract addresses:
+  - Uniswap V3 (Base, Ethereum, Arbitrum, Optimism, Polygon)
+  - Aerodrome (Base)
+  - SushiSwap V3 (Base, Ethereum, Arbitrum)
+  - Velodrome (Optimism)
+  - QuickSwap V3 (Polygon)
+  - Camelot (Arbitrum)
+- Safety defaults: dry-run ON, $0.50 min profit, 1 ETH max trade, gas ceiling, cooldown
+- Token allowlist/denylist for pair filtering
+- CoinGecko ETH price feed for USD profit calculations
+- Arb history persisted to `~/.darksol/arb-history.json` (last 1000 entries)
+- Flash loan execution hook (future-ready — code structured for atomic arb upgrade)
+- Web shell integration with scan/stats/info menu
+- LLM intent system updated with `arb_scan` and `arb_monitor` actions
+
 ## [0.12.0] - 2026-03-12
 
 ### Added — 🐋 Whale Radar

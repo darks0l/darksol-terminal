@@ -56,6 +56,15 @@ darksol bridge send --from base --to arbitrum --token ETH -a 0.1
 darksol bridge status 0xTxHash...
 darksol bridge chains
 
+# Cross-DEX arbitrage
+darksol arb scan --chain base                       # one-shot price comparison
+darksol arb monitor --chain base --execute          # real-time block-by-block scanning
+darksol arb config                                   # set thresholds, dry-run, DEXes
+darksol arb add-endpoint base wss://your-quicknode   # faster with WSS endpoints
+darksol arb add-pair WETH AERO                       # add pairs to scan
+darksol arb stats --days 7                           # PnL history
+darksol arb info                                     # setup guide + risk warnings
+
 # Set up your agent identity
 darksol soul
 
@@ -128,6 +137,7 @@ Useful web-shell commands:
 ```bash
 help          # clickable command menu (arrow keys + Enter)
 trade         # interactive swap / snipe / bridge menu
+arb           # cross-DEX arbitrage scanner
 bridge        # cross-chain bridge (LI.FI)
 send          # interactive token transfer
 wallet        # interactive wallet picker and actions

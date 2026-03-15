@@ -16,6 +16,7 @@ import { startWebShell } from './web/server.js';
 import { executeSwap } from './trading/swap.js';
 import { snipeToken, watchSnipe } from './trading/snipe.js';
 import { createDCA, listDCA, cancelDCA, runDCA } from './trading/dca.js';
+import { arbScan, arbMonitor, arbExecute, arbStats, arbConfig, arbAddEndpoint, arbAddPair, arbRemovePair, arbInfo } from './trading/arb.js';
 import { executeLifiSwap, executeLifiBridge, checkBridgeStatus, showSupportedChains } from './services/lifi.js';
 import { topMovers, tokenDetail, compareTokens } from './services/market.js';
 import { oracleFlip, oracleDice, oracleNumber, oracleShuffle, oracleHealth } from './services/oracle.js';
@@ -332,6 +333,72 @@ export function cli(argv) {
     .command('run')
     .description('Execute pending DCA orders')
     .action(() => runDCA());
+
+  // ═══════════════════════════════════════
+  // ARBITRAGE COMMANDS
+  // ═══════════════════════════════════════
+  const arb = program
+    .command('arb')
+    .description('Cross-DEX arbitrage - scan, monitor, execute');
+
+  arb
+    .command('scan')
+    .description('One-shot scan across DEXs for price differences')
+    .option('-c, --chain <chain>', 'Target chain', 'base')
+    .option('-p, --pair <pair>', 'Token pair to scan (e.g. WETH/USDC)')
+    .option('-m, --min-profit <usd>', 'Minimum profit threshold in USD', '0.50')
+    .option('-s, --trade-size <eth>', 'Trade size in ETH', '0.1')
+    .action((opts) => arbScan({
+      chain: opts.chain,
+      pair: opts.pair,
+      minProfit: parseFloat(opts.minProfit),
+      tradeSize: parseFloat(opts.tradeSize),
+    }));
+
+  arb
+    .command('monitor')
+    .description('Real-time block-by-block arb monitoring (WSS recommended)')
+    .option('-c, --chain <chain>', 'Target chain', 'base')
+    .option('-e, --execute', 'Auto-execute profitable arbs')
+    .option('-d, --dry-run', 'Dry-run mode (no real transactions)')
+    .option('-m, --min-profit <usd>', 'Minimum profit threshold in USD', '0.50')
+    .action((opts) => arbMonitor({
+      chain: opts.chain,
+      execute: opts.execute,
+      dryRun: opts.dryRun !== undefined ? opts.dryRun : undefined,
+      minProfit: opts.minProfit,
+    }));
+
+  arb
+    .command('stats')
+    .description('View arb history and performance stats')
+    .option('-d, --days <days>', 'Number of days to show', '7')
+    .action((opts) => arbStats({ days: opts.days }));
+
+  arb
+    .command('config')
+    .description('Interactive arb configuration (thresholds, dry-run, DEXes)')
+    .action(() => arbConfig());
+
+  arb
+    .command('add-endpoint <chain> <url>')
+    .description('Add a custom WSS or RPC endpoint for faster arb detection')
+    .action((chain, url) => arbAddEndpoint({ chain, url }));
+
+  arb
+    .command('add-pair <tokenA> <tokenB>')
+    .description('Add a token pair to the arb scan list')
+    .action((tokenA, tokenB) => arbAddPair({ tokenA, tokenB }));
+
+  arb
+    .command('remove-pair <tokenA> <tokenB>')
+    .description('Remove a token pair from the arb scan list')
+    .action((tokenA, tokenB) => arbRemovePair({ tokenA, tokenB }));
+
+  arb
+    .command('info')
+    .description('How arbitrage works, setup guide, and risk warnings')
+    .action(() => arbInfo());
 
   const auto = program
     .command('auto')
@@ -1933,6 +2000,7 @@ function showCommandList() {
     ['watch', 'Live price monitoring + alerts'],
     ['gas', 'Gas prices & cost estimates'],
     ['trade', 'Swap tokens, snipe, trading'],
+    ['arb', 'Cross-DEX arbitrage scanner'],
     ['auto', 'Autonomous trader strategies'],
     ['bridge', 'Cross-chain bridge (LI.FI)'],
     ['dca', 'Dollar-cost averaging orders'],

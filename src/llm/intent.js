@@ -66,6 +66,8 @@ ACTIONS (use the most specific one):
 - "gas" — gas price check
 - "cards" — order a prepaid Visa/Mastercard with crypto (e.g. "order a $50 card", "get me a prepaid card")
 - "casino" — play a casino game (coinflip, dice, hilo, slots). All bets are $1 USDC. (e.g. "flip a coin", "bet on heads", "play slots", "roll dice over 3")
+- "arb_scan" — scan for cross-DEX arbitrage opportunities (e.g. "find arb opportunities", "scan for price differences", "check arb on base")
+- "arb_monitor" — start real-time arbitrage monitoring (e.g. "monitor arb", "watch for arb opportunities")
 - "unknown" — can't determine what the user wants
 
 CASINO GAMES:

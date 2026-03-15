@@ -57,6 +57,34 @@ const config = new Conf({
         strategies: [],
       },
     },
+    arb: {
+      type: 'object',
+      default: {
+        enabled: false,
+        minProfitUsd: 0.50,
+        maxTradeSize: 1.0,
+        gasCeiling: 0.01,
+        cooldownMs: 5000,
+        dryRun: true,
+        tokenAllowlist: [],
+        tokenDenylist: [],
+        endpoints: {
+          wss: {},
+          rpc: {},
+        },
+        dexes: {
+          base:     ['uniswapV3', 'aerodrome', 'sushiswap'],
+          ethereum: ['uniswapV3', 'sushiswap'],
+          arbitrum: ['uniswapV3', 'sushiswap', 'camelot'],
+          optimism: ['uniswapV3', 'velodrome'],
+          polygon:  ['uniswapV3', 'quickswap'],
+        },
+        pairs: [
+          { tokenA: 'WETH', tokenB: 'USDC' },
+          { tokenA: 'WETH', tokenB: 'USDT' },
+        ],
+      },
+    },
     services: {
       type: 'object',
       default: {

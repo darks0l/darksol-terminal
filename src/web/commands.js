@@ -902,6 +902,8 @@ export async function handleCommand(cmd, ws) {
       return await cmdMarket(args, ws);
     case 'trade':
       return await cmdTrade(args, ws);
+    case 'arb':
+      return await cmdArb(args, ws);
     case 'bridge':
       return await cmdBridge(args, ws);
     case 'wallet':
@@ -1345,6 +1347,59 @@ async function cmdTrade(args, ws) {
     { value: 'bridge', label: '🌉 Bridge', desc: 'Cross-chain transfer via LI.FI (60 chains)' },
     { value: 'snipe', label: '⚡ Snipe', desc: 'Fast buy by token contract' },
     { value: 'watch', label: '👀 Watch Pairs', desc: 'Monitor new pairs (CLI guidance)' },
+    { value: 'back', label: '← Back', desc: '' },
+  ]);
+
+  return {};
+}
+
+// ══════════════════════════════════════════════════
+// ARBITRAGE
+// ══════════════════════════════════════════════════
+async function cmdArb(args, ws) {
+  const sub = (args[0] || '').toLowerCase();
+
+  if (sub === 'scan') {
+    ws.sendLine(`  ${ANSI.dim}Running arb scan...${ANSI.reset}`);
+    try {
+      const { arbScan } = await import('../trading/arb.js');
+      await arbScan({ chain: args[1] || getConfig('chain') || 'base' });
+    } catch (e) {
+      ws.sendLine(`  ${ANSI.red}Scan failed: ${e.message}${ANSI.reset}`);
+    }
+    return {};
+  }
+
+  if (sub === 'stats') {
+    try {
+      const { arbStats } = await import('../trading/arb.js');
+      await arbStats({ days: args[1] || '7' });
+    } catch (e) {
+      ws.sendLine(`  ${ANSI.red}Stats failed: ${e.message}${ANSI.reset}`);
+    }
+    return {};
+  }
+
+  if (sub === 'info') {
+    try {
+      const { arbInfo } = await import('../trading/arb.js');
+      await arbInfo();
+    } catch (e) {
+      ws.sendLine(`  ${ANSI.red}${e.message}${ANSI.reset}`);
+    }
+    return {};
+  }
+
+  // Default: show arb menu
+  ws.sendLine(`${ANSI.gold}  ◆ ARBITRAGE${ANSI.reset}`);
+  ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
+  ws.sendLine(`  ${ANSI.white}Cross-DEX arbitrage scanner${ANSI.reset}`);
+  ws.sendLine('');
+
+  ws.sendMenu('arb_action', '◆ Arb Actions', [
+    { value: 'arb scan', label: '🔍 Scan', desc: 'One-shot DEX price comparison' },
+    { value: 'arb stats', label: '📊 Stats', desc: 'View arb history & PnL' },
+    { value: 'arb info', label: '📖 Guide', desc: 'How arb works, setup tips, risks' },
     { value: 'back', label: '← Back', desc: '' },
   ]);
 
