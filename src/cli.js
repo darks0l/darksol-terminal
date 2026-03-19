@@ -18,6 +18,7 @@ import { snipeToken, watchSnipe } from './trading/snipe.js';
 import { createDCA, listDCA, cancelDCA, runDCA } from './trading/dca.js';
 import { arbScan, arbMonitor, arbExecute, arbStats, arbConfig, arbAddEndpoint, arbAddPair, arbRemovePair, arbInfo } from './trading/arb.js';
 import { aiDiscoverPairs, aiTuneThresholds, aiStrategyBriefing, aiLearn } from './trading/arb-ai.js';
+import { listApprovals, revokeApproval, checkSpecificApproval } from './services/approvals.js';
 import { executeLifiSwap, executeLifiBridge, checkBridgeStatus, showSupportedChains } from './services/lifi.js';
 import { topMovers, tokenDetail, compareTokens } from './services/market.js';
 import { oracleFlip, oracleDice, oracleNumber, oracleShuffle, oracleHealth } from './services/oracle.js';
@@ -772,6 +773,33 @@ export function cli(argv) {
     .command('settle <payment>')
     .description('Settle payment on-chain')
     .action((payment) => facilitatorSettle(payment));
+
+  // ═══════════════════════════════════════
+  // APPROVALS COMMANDS
+  // ═══════════════════════════════════════
+  const approvals = program
+    .command('approvals')
+    .description('🔐 Token approval manager — view and revoke ERC-20 approvals');
+
+  approvals
+    .command('list')
+    .alias('ls')
+    .description('List all active token approvals')
+    .option('-c, --chain <chain>', 'Target chain', 'base')
+    .action((opts) => listApprovals(opts));
+
+  approvals
+    .command('revoke')
+    .description('Interactively revoke token approvals')
+    .option('-c, --chain <chain>', 'Target chain', 'base')
+    .option('-a, --all', 'Revoke ALL approvals')
+    .action((opts) => revokeApproval(opts));
+
+  approvals
+    .command('check <token> <spender>')
+    .description('Check specific token + spender approval')
+    .option('-c, --chain <chain>', 'Target chain', 'base')
+    .action((token, spender, opts) => checkSpecificApproval(token, spender, opts));
 
   // ═══════════════════════════════════════
   // MAIL COMMANDS
@@ -2045,6 +2073,7 @@ function showCommandList() {
     ['builders', 'ERC-8021 builder index'],
     ['mail', 'AgentMail - email for your agent'],
     ['facilitator', 'x402 payment facilitator'],
+    ['approvals', 'Token approval manager'],
     ['skills', 'Agent skill directory'],
     ['browser', 'Playwright browser automation'],
     ['daemon', 'Background service daemon'],

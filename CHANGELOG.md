@@ -7,6 +7,23 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.14.0] - 2026-03-18
+
+### Added — 🔐 Token Approvals Manager
+- `darksol approvals list` — scan and display all active ERC-20 token approvals for your wallet
+- `darksol approvals revoke` — interactive approval revocation with checkbox selection
+- `darksol approvals revoke --all` — batch revoke all approvals in one go
+- `darksol approvals check <token> <spender>` — check specific token + spender approval status
+- **Known spender identification** — labels Uniswap, Aerodrome, Permit2, LI.FI, 1inch, SushiSwap, Aave with risk levels
+- **Unlimited approval detection** — flags dangerous ♾️ unlimited approvals with warnings
+- **Unknown spender alerts** — highlights approvals to unrecognized contracts
+- **5-chain support** — Base, Ethereum, Arbitrum, Optimism, Polygon
+- **Block explorer integration** — fetches token interaction history from Basescan/Etherscan APIs
+- **Common token coverage** — always checks USDC + WETH approvals per chain
+- **LLM intent support** — "check my approvals" / "revoke approvals" via AI chat
+- **Risk-colored output** — green (low), yellow (medium), red (unknown) risk indicators
+- 8 new tests for approvals module
+
 ## [0.13.1] - 2026-03-14
 
 ### Added — 🧠 AI Arbitrage Intelligence

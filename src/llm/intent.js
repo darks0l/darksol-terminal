@@ -68,6 +68,7 @@ ACTIONS (use the most specific one):
 - "casino" — play a casino game (coinflip, dice, hilo, slots). All bets are $1 USDC. (e.g. "flip a coin", "bet on heads", "play slots", "roll dice over 3")
 - "arb_scan" — scan for cross-DEX arbitrage opportunities (e.g. "find arb opportunities", "scan for price differences", "check arb on base")
 - "arb_monitor" — start real-time arbitrage monitoring (e.g. "monitor arb", "watch for arb opportunities")
+- "approvals" — check or revoke ERC-20 token approvals (e.g. "check my approvals", "revoke approvals", "what tokens have I approved", "show unlimited approvals")
 - "unknown" — can't determine what the user wants
 
 CASINO GAMES:
@@ -678,6 +679,18 @@ export async function executeIntent(intent, opts = {}) {
         }
         info('Which token do you want me to analyze?');
         return { success: false, reason: 'Tell me which token to look at.' };
+      }
+
+      case 'approvals': {
+        const { listApprovals, revokeApproval } = await import('../services/approvals.js');
+        const chain = intent.chain || opts.chain || 'base';
+        // If they mention "revoke", go to revoke flow
+        if (intent.raw && /revoke|remove|clear/i.test(intent.raw)) {
+          await revokeApproval({ chain });
+        } else {
+          await listApprovals({ chain });
+        }
+        return { success: true, action: 'approvals' };
       }
 
       default:
