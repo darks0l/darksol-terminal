@@ -7,6 +7,14 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.14.1] - 2026-03-21
+
+### Changed — 🔧 Maintenance
+- Updated `agentmail` to 0.4.10 (latest)
+- Updated `figlet` to 1.11.0
+- Updated `ws` to 8.20.0
+- All 142 tests passing
+
 ## [0.14.0] - 2026-03-18
 
 ### Added — 🔐 Token Approvals Manager
