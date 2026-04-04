@@ -1,13 +1,13 @@
 import { Command } from 'commander';
 import { showBanner, showMiniBanner, showSection } from './ui/banner.js';
 import { theme } from './ui/theme.js';
-import { kvDisplay, success, error, warn, info } from './ui/components.js';
+import { spinner, kvDisplay, success, error, warn, info } from './ui/components.js';
 import { createDashboard } from './ui/dashboard.js';
 import { getConfig, setConfig, getAllConfig, getRPC, setRPC, configPath } from './config/store.js';
 import { createWallet, importWallet, showWallets, getBalance, useWallet, exportWallet, sendFunds, receiveAddress } from './wallet/manager.js';
 import { showPortfolio } from './wallet/portfolio.js';
-import { showHistory } from './wallet/history.js';
-import { showGas } from './services/gas.js';
+import { showHistory, exportHistory } from './wallet/history.js';
+import { showGas, showGasAll, monitorGas } from './services/gas.js';
 import { watchPrice, checkPrices } from './services/watch.js';
 import { getWhaleActivity, listTracked, mirrorTrade, stopTracking, trackWallet } from './services/whale.js';
 import { startWhaleFeed } from './services/whale-monitor.js';
@@ -19,13 +19,23 @@ import { createDCA, listDCA, cancelDCA, runDCA } from './trading/dca.js';
 import { arbScan, arbMonitor, arbExecute, arbStats, arbConfig, arbAddEndpoint, arbAddPair, arbRemovePair, arbInfo } from './trading/arb.js';
 import { aiDiscoverPairs, aiTuneThresholds, aiStrategyBriefing, aiLearn } from './trading/arb-ai.js';
 import { listApprovals, revokeApproval, checkSpecificApproval } from './services/approvals.js';
-import { executeLifiSwap, executeLifiBridge, checkBridgeStatus, showSupportedChains } from './services/lifi.js';
+import { executeLifiSwap, executeLifiBridge, checkBridgeStatus, showSupportedChains, showBridgeQuote, compareBridgeQuotes } from './services/lifi.js';
 import { topMovers, tokenDetail, compareTokens } from './services/market.js';
 import { oracleFlip, oracleDice, oracleNumber, oracleShuffle, oracleHealth } from './services/oracle.js';
 import { casinoBet, casinoTables, casinoStats, casinoReceipt, casinoHealth, casinoVerify } from './services/casino.js';
 import { pokerNewGame, pokerAction, pokerStatus, pokerHistory } from './services/poker.js';
 import { cardsCatalog, cardsOrder, cardsStatus } from './services/cards.js';
 import { facilitatorHealth, facilitatorVerify, facilitatorSettle } from './services/facilitator.js';
+import { healthCommand } from './services/health.js';
+import { scanToken, displayScanResult, scanResultToJSON } from './services/scanner.js';
+import {
+  lightningInit, lightningStart, lightningStop, lightningInfo, lightningBalance,
+  lightningPay, lightningInvoice, lightningOffer, lightningDecode,
+  lightningChannels, lightningOpen, lightningClose, lightningPeers,
+  lightningConnect, lightningLiquidity, lightningJitChannel, lightningHistory,
+} from './lightning/commands.js';
+import { detectLightningPayment } from './lightning/bolt11.js';
+import { privacyScore, shieldStatus, routerInfo, railgunShield, railgunUnshield } from './services/privacy.js';
 import { buildersLeaderboard, buildersLookup, buildersFeed } from './services/builders.js';
 import { createScript, listScripts, runScript, showScript, editScript, deleteScript, cloneScript, listTemplates } from './scripts/engine.js';
 import {
@@ -88,12 +98,14 @@ export function cli(argv) {
   wallet
     .command('list')
     .description('List all wallets')
-    .action(() => showWallets());
+    .option('--json', 'Output as JSON')
+    .action((opts) => showWallets({ json: opts.json }));
 
   wallet
     .command('balance [name]')
     .description('Check wallet balance')
-    .action((name) => getBalance(name));
+    .option('--json', 'Output as JSON')
+    .action((name, opts) => getBalance(name, { json: opts.json }));
 
   wallet
     .command('use <name>')
@@ -122,14 +134,28 @@ export function cli(argv) {
   wallet
     .command('portfolio [name]')
     .description('View balances across all EVM chains')
-    .action((name) => showPortfolio(name));
+    .option('--json', 'Output as JSON')
+    .action((name, opts) => showPortfolio(name, { json: opts.json }));
 
   wallet
     .command('history [name]')
     .description('Recent transaction history')
     .option('-c, --chain <chain>', 'Chain to check')
     .option('-l, --limit <n>', 'Number of transactions', '10')
+    .option('--json', 'Output as JSON')
     .action((name, opts) => showHistory(name, opts));
+
+  wallet
+    .command('export-history [name]')
+    .description('Export transaction history to CSV or JSON')
+    .option('-c, --chain <chain>', 'Chain to export', 'base')
+    .option('-f, --format <format>', 'Export format (csv or json)', 'csv')
+    .option('-l, --limit <n>', 'Number of transactions to fetch', '100')
+    .option('-o, --output <file>', 'Output file path')
+    .option('--since <date>', 'Filter: only txs after date (YYYY-MM-DD)')
+    .option('--until <date>', 'Filter: only txs before date (YYYY-MM-DD)')
+    .option('--type <type>', 'Filter by type (in, out, contract, transfer)')
+    .action((name, opts) => exportHistory(name, opts));
 
   // ═══════════════════════════════════════
   // TRADING COMMANDS
@@ -299,15 +325,92 @@ export function cli(argv) {
     .description('Check bridge transfer status')
     .option('-f, --from <chain>', 'Source chain')
     .option('-t, --to <chain>', 'Destination chain')
+    .option('--json', 'Output as JSON')
     .action((txHash, opts) => checkBridgeStatus(txHash, {
       fromChain: opts.from,
       toChain: opts.to,
+      json: opts.json,
     }));
+
+  bridge
+    .command('quote')
+    .description('Get a cross-chain bridge quote without executing')
+    .option('-f, --from <chain>', 'Source chain (e.g. base, ethereum)')
+    .option('-t, --to <chain>', 'Destination chain (e.g. arbitrum, optimism)')
+    .option('--token <symbol>', 'Token to bridge (e.g. ETH, USDC)', 'ETH')
+    .option('-a, --amount <amount>', 'Amount to bridge')
+    .option('--json', 'Output as JSON')
+    .action(async (opts) => {
+      let fromChain = opts.from;
+      let toChain = opts.to;
+      let token = opts.token;
+      let amount = opts.amount;
+
+      if (!fromChain || !toChain || !amount) {
+        const inquirer = (await import('inquirer')).default;
+        const answers = await inquirer.prompt([
+          { type: 'input', name: 'fromChain', message: 'Source chain:', default: fromChain || getConfig('chain') || 'base' },
+          { type: 'input', name: 'toChain', message: 'Destination chain:', default: toChain || 'arbitrum' },
+          { type: 'input', name: 'token', message: 'Token to bridge:', default: token || 'ETH' },
+          { type: 'input', name: 'amount', message: 'Amount:', default: amount || '0.1' },
+        ]);
+        fromChain = answers.fromChain;
+        toChain = answers.toChain;
+        token = answers.token;
+        amount = answers.amount;
+      }
+
+      return showBridgeQuote({
+        fromChain,
+        toChain,
+        token,
+        amount,
+        json: opts.json,
+      });
+    });
 
   bridge
     .command('chains')
     .description('Show all supported chains')
-    .action(() => showSupportedChains());
+    .option('--json', 'Output as JSON')
+    .action((opts) => showSupportedChains({ json: opts.json }));
+
+  bridge
+    .command('compare')
+    .description('Compare bridge quotes across multiple destination chains')
+    .option('-f, --from <chain>', 'Source chain (e.g. base, ethereum)')
+    .option('-t, --to <chains...>', 'Destination chains (repeatable)')
+    .option('--token <symbol>', 'Token to bridge (e.g. ETH, USDC)', 'ETH')
+    .option('-a, --amount <amount>', 'Amount to bridge')
+    .option('--json', 'Output as JSON')
+    .action(async (opts) => {
+      let fromChain = opts.from;
+      let toChains = opts.to;
+      let token = opts.token;
+      let amount = opts.amount;
+
+      if (!fromChain || !toChains?.length || !amount) {
+        const inquirer = (await import('inquirer')).default;
+        const answers = await inquirer.prompt([
+          { type: 'input', name: 'fromChain', message: 'Source chain:', default: fromChain || getConfig('chain') || 'base' },
+          { type: 'input', name: 'toChains', message: 'Destination chains (comma-separated):', default: (toChains || []).join(',') || 'arbitrum,optimism,polygon' },
+          { type: 'input', name: 'token', message: 'Token to bridge:', default: token || 'ETH' },
+          { type: 'input', name: 'amount', message: 'Amount:', default: amount || '0.1' },
+        ]);
+        fromChain = answers.fromChain;
+        toChains = answers.toChains.split(',').map(c => c.trim()).filter(Boolean);
+        token = answers.token;
+        amount = answers.amount;
+      }
+
+      return compareBridgeQuotes({
+        fromChain,
+        toChains,
+        token,
+        amount,
+        json: opts.json,
+      });
+    });
 
   // ═══════════════════════════════════════
   // DCA COMMANDS
@@ -324,7 +427,8 @@ export function cli(argv) {
   dca
     .command('list')
     .description('List DCA orders')
-    .action(() => listDCA());
+    .option('--json', 'Output as JSON')
+    .action((opts) => listDCA({ json: opts.json }));
 
   dca
     .command('cancel <id>')
@@ -350,11 +454,13 @@ export function cli(argv) {
     .option('-p, --pair <pair>', 'Token pair to scan (e.g. WETH/USDC)')
     .option('-m, --min-profit <usd>', 'Minimum profit threshold in USD', '0.50')
     .option('-s, --trade-size <eth>', 'Trade size in ETH', '0.1')
+    .option('--json', 'Output as JSON')
     .action((opts) => arbScan({
       chain: opts.chain,
       pair: opts.pair,
       minProfit: parseFloat(opts.minProfit),
       tradeSize: parseFloat(opts.tradeSize),
+      json: opts.json,
     }));
 
   arb
@@ -375,7 +481,8 @@ export function cli(argv) {
     .command('stats')
     .description('View arb history and performance stats')
     .option('-d, --days <days>', 'Number of days to show', '7')
-    .action((opts) => arbStats({ days: opts.days }));
+    .option('--json', 'Output as JSON')
+    .action((opts) => arbStats({ days: opts.days, json: opts.json }));
 
   arb
     .command('config')
@@ -591,17 +698,20 @@ export function cli(argv) {
     .description('Top movers on chain')
     .option('-c, --chain <chain>', 'Chain to scan')
     .option('-l, --limit <n>', 'Number of results', '15')
-    .action((opts) => topMovers(opts.chain, { limit: parseInt(opts.limit) }));
+    .option('--json', 'Output as JSON')
+    .action((opts) => topMovers(opts.chain, { limit: parseInt(opts.limit), json: opts.json }));
 
   market
     .command('token <query>')
     .description('Token detail - price, volume, liquidity')
-    .action((query) => tokenDetail(query));
+    .option('--json', 'Output as JSON')
+    .action((query, opts) => tokenDetail(query, { json: opts.json }));
 
   market
     .command('compare <tokens...>')
     .description('Compare multiple tokens side by side')
-    .action((tokens) => compareTokens(tokens));
+    .option('--json', 'Output as JSON')
+    .action((tokens, opts) => compareTokens(tokens, { json: opts.json }));
 
   // ═══════════════════════════════════════
   // ORACLE COMMANDS
@@ -775,6 +885,49 @@ export function cli(argv) {
     .action((payment) => facilitatorSettle(payment));
 
   // ═══════════════════════════════════════
+  // TOKEN SCANNER
+  // ═══════════════════════════════════════
+  program
+    .command('scan <address>')
+    .description('🔍 Token security scanner — check for honeypots, rug pulls, red flags')
+    .option('-c, --chain <chain>', 'Target chain (base, ethereum, arbitrum, optimism, polygon)', 'base')
+    .option('--json', 'Output as JSON')
+    .option('--quick', 'Skip slow checks (honeypot simulation)')
+    .action(async (address, opts) => {
+      const { showMiniBanner } = await import('./ui/banner.js');
+      showMiniBanner();
+
+      const spin = spinner('Scanning token for security issues...').start();
+      try {
+        const result = await scanToken(address, opts.chain, {
+          quick: opts.quick,
+        });
+        spin.succeed('Scan complete');
+
+        if (opts.json) {
+          console.log(JSON.stringify(scanResultToJSON(result), null, 2));
+        } else {
+          displayScanResult(result);
+        }
+      } catch (err) {
+        spin.fail('Scan failed');
+        error(err.message);
+        if (err.message.includes('not a contract')) {
+          info('Make sure the address is a token contract, not a wallet.');
+          info('Find tokens on basescan.org or etherscan.io and copy the contract address.');
+        } else if (err.message.includes('No RPC')) {
+          info(`Set an RPC: darksol config rpc ${opts.chain} <url>`);
+          info('Free RPCs: llamarpc.com (ETH), base.org (Base), arbitrum.io (Arb)');
+        } else if (err.message.includes('Invalid address')) {
+          info('Provide a valid 0x address (42 characters starting with 0x).');
+        } else if (err.message.includes('timed out') || err.message.includes('ETIMEDOUT')) {
+          info('RPC request timed out. Try again or switch to a faster RPC endpoint.');
+          info(`Change RPC: darksol config rpc ${opts.chain} <url>`);
+        }
+      }
+    });
+
+  // ═══════════════════════════════════════
   // APPROVALS COMMANDS
   // ═══════════════════════════════════════
   const approvals = program
@@ -786,6 +939,7 @@ export function cli(argv) {
     .alias('ls')
     .description('List all active token approvals')
     .option('-c, --chain <chain>', 'Target chain', 'base')
+    .option('--json', 'Output as JSON')
     .action((opts) => listApprovals(opts));
 
   approvals
@@ -800,6 +954,144 @@ export function cli(argv) {
     .description('Check specific token + spender approval')
     .option('-c, --chain <chain>', 'Target chain', 'base')
     .action((token, spender, opts) => checkSpecificApproval(token, spender, opts));
+
+  // ═══════════════════════════════════════
+  // PRIVACY COMMANDS
+  // ═══════════════════════════════════════
+  const privacy = program
+    .command('privacy')
+    .description('🛡️ Privacy tools — score, shield status, DarkLabzRouter');
+
+  privacy
+    .command('score <address>')
+    .description('Analyze wallet privacy posture via on-chain activity')
+    .option('-c, --chain <chain>', 'Target chain (base, ethereum, arbitrum, optimism, polygon)', 'base')
+    .option('--json', 'Output as JSON')
+    .action(async (address, opts) => {
+      const { showMiniBanner } = await import('./ui/banner.js');
+      showMiniBanner();
+
+      const spin = spinner('Analyzing privacy posture...').start();
+      try {
+        spin.succeed('Analysis complete');
+        await privacyScore(address, { chain: opts.chain, json: opts.json });
+      } catch (err) {
+        spin.fail('Privacy analysis failed');
+        error(err.message);
+        if (err.message.includes('Invalid address')) {
+          info('Provide a valid 0x Ethereum address (42 characters).');
+        }
+        if (err.message.includes('Unsupported chain')) {
+          info('Supported chains: base, ethereum, arbitrum, optimism, polygon');
+        }
+      }
+    });
+
+  privacy
+    .command('shield <address>')
+    .description('Check DarkLabzRouter shield status on Base')
+    .option('--json', 'Output as JSON')
+    .action(async (address, opts) => {
+      const { showMiniBanner } = await import('./ui/banner.js');
+      showMiniBanner();
+
+      const spin = spinner('Checking shield status...').start();
+      try {
+        spin.succeed('Shield status retrieved');
+        await shieldStatus(address, { json: opts.json });
+      } catch (err) {
+        spin.fail('Shield check failed');
+        error(err.message);
+        if (err.message.includes('No RPC')) {
+          info('Set a Base RPC: darksol config rpc base <url>');
+        }
+      }
+    });
+
+  privacy
+    .command('router')
+    .description('Show DarkLabzRouter contract info')
+    .option('--json', 'Output as JSON')
+    .action(async (opts) => {
+      const { showMiniBanner } = await import('./ui/banner.js');
+      showMiniBanner();
+
+      const spin = spinner('Fetching router info...').start();
+      try {
+        spin.succeed('Router info retrieved');
+        await routerInfo({ json: opts.json });
+      } catch (err) {
+        spin.fail('Router info failed');
+        error(err.message);
+        if (err.message.includes('No RPC')) {
+          info('Set a Base RPC: darksol config rpc base <url>');
+        }
+      }
+    });
+
+  privacy
+    .command('railgun-shield')
+    .alias('rs')
+    .description('Shield tokens via RAILGUN — deposit into private pool')
+    .option('-t, --token <token>', 'Token to shield (ETH or 0x address)', 'ETH')
+    .option('-a, --amount <amount>', 'Amount to shield')
+    .option('-c, --chain <chain>', 'Chain (base, ethereum, arbitrum, polygon)', 'base')
+    .option('-w, --wallet <name>', 'Wallet to use')
+    .option('-p, --password <pw>', 'Wallet password (non-interactive)')
+    .option('--json', 'Output as JSON')
+    .action(async (opts) => {
+      if (!opts.amount) {
+        const inquirer = (await import('inquirer')).default;
+        const answers = await inquirer.prompt([
+          { type: 'input', name: 'token', message: 'Token to shield:', default: opts.token || 'ETH' },
+          { type: 'input', name: 'amount', message: 'Amount:', default: '0.1' },
+        ]);
+        opts.token = answers.token;
+        opts.amount = answers.amount;
+      }
+      await railgunShield({
+        token: opts.token,
+        amount: opts.amount,
+        chain: opts.chain,
+        wallet: opts.wallet,
+        password: opts.password,
+        json: opts.json,
+      });
+    });
+
+  privacy
+    .command('railgun-unshield')
+    .alias('ru')
+    .description('Unshield tokens from RAILGUN — withdraw to public address')
+    .option('-t, --token <token>', 'Token to unshield (ETH or 0x address)', 'ETH')
+    .option('-a, --amount <amount>', 'Amount to unshield')
+    .option('--to <address>', 'Recipient address')
+    .option('-c, --chain <chain>', 'Chain (base, ethereum, arbitrum, polygon)', 'base')
+    .option('-w, --wallet <name>', 'Wallet to use')
+    .option('-p, --password <pw>', 'Wallet password (non-interactive)')
+    .option('--json', 'Output as JSON')
+    .action(async (opts) => {
+      if (!opts.amount || !opts.to) {
+        const inquirer = (await import('inquirer')).default;
+        const answers = await inquirer.prompt([
+          { type: 'input', name: 'token', message: 'Token to unshield:', default: opts.token || 'ETH' },
+          { type: 'input', name: 'amount', message: 'Amount:', default: opts.amount || '0.1' },
+          { type: 'input', name: 'to', message: 'Recipient address:', default: opts.to || '' },
+        ]);
+        opts.token = answers.token;
+        opts.amount = answers.amount;
+        opts.to = answers.to;
+      }
+      await railgunUnshield({
+        token: opts.token,
+        amount: opts.amount,
+        recipient: opts.to,
+        chain: opts.chain,
+        wallet: opts.wallet,
+        password: opts.password,
+        json: opts.json,
+      });
+    });
 
   // ═══════════════════════════════════════
   // MAIL COMMANDS
@@ -962,7 +1254,8 @@ export function cli(argv) {
   program
     .command('portfolio [name]')
     .description('Multi-chain balance view (shortcut for: wallet portfolio)')
-    .action((name) => showPortfolio(name));
+    .option('--json', 'Output as JSON')
+    .action((name, opts) => showPortfolio(name, { json: opts.json }));
 
   // ═══════════════════════════════════════
   // SEND SHORTCUT
@@ -986,10 +1279,29 @@ export function cli(argv) {
   // ═══════════════════════════════════════
   // GAS COMMAND
   // ═══════════════════════════════════════
-  program
+  const gas = program
     .command('gas [chain]')
     .description('Show current gas prices and estimated costs')
-    .action((chain) => showGas(chain));
+    .option('--all', 'Show gas prices across all supported chains')
+    .option('--json', 'Output as JSON')
+    .action((chain, opts) => {
+      if (opts.all) return showGasAll({ json: opts.json });
+      return showGas(chain, { json: opts.json });
+    });
+
+  gas
+    .command('monitor')
+    .description('Live gas price monitor with alerts')
+    .option('-c, --chain <chains...>', 'Chains to monitor (repeatable)')
+    .option('-i, --interval <sec>', 'Poll interval in seconds', '30')
+    .option('--below <gwei>', 'Alert when gas drops below threshold (gwei)')
+    .option('-d, --duration <min>', 'Run for N minutes then stop')
+    .action((opts) => monitorGas({
+      chains: opts.chain,
+      interval: opts.interval,
+      below: opts.below,
+      duration: opts.duration,
+    }));
 
   // ═══════════════════════════════════════
   // PRICE COMMANDS
@@ -997,7 +1309,8 @@ export function cli(argv) {
   program
     .command('price <tokens...>')
     .description('Quick price check for one or more tokens')
-    .action((tokens) => checkPrices(tokens));
+    .option('--json', 'Output as JSON')
+    .action((tokens, opts) => checkPrices(tokens, { json: opts.json }));
 
   program
     .command('watch <token>')
@@ -1424,7 +1737,8 @@ export function cli(argv) {
   whale
     .command('list')
     .description('List tracked whale wallets')
-    .action(() => listTracked());
+    .option('--json', 'Output as JSON')
+    .action((opts) => listTracked({ json: opts.json }));
 
   whale
     .command('stop <address>')
@@ -1448,6 +1762,7 @@ export function cli(argv) {
     .description('Show recent activity for a whale wallet')
     .option('-l, --limit <n>', 'Number of transactions', '10')
     .option('-c, --chain <chain>', 'Chain to query', 'base')
+    .option('--json', 'Output as JSON')
     .action((address, opts) => getWhaleActivity(address, parseInt(opts.limit, 10), opts));
 
   whale
@@ -1486,6 +1801,157 @@ export function cli(argv) {
     .command('send <chatId> <message...>')
     .description('Send a direct message to a chat')
     .action((chatId, message) => telegramSendCommand(chatId, message));
+
+  // ═══════════════════════════════════════
+  // LIGHTNING COMMANDS
+  // ═══════════════════════════════════════
+  const lightning = program
+    .command('lightning')
+    .alias('ln')
+    .description('⚡ Lightning Network — send/receive BTC instantly');
+
+  lightning
+    .command('init')
+    .description('Initialize Lightning node from BIP39 mnemonic')
+    .option('-f, --force', 'Re-initialize (overwrite existing keys)')
+    .action((opts) => lightningInit(opts));
+
+  lightning
+    .command('start')
+    .description('Start the Lightning node')
+    .option('-p, --password <pw>', 'Wallet password (non-interactive)')
+    .action((opts) => lightningStart(opts));
+
+  lightning
+    .command('stop')
+    .description('Stop the Lightning node gracefully')
+    .action(() => lightningStop());
+
+  lightning
+    .command('info')
+    .description('Show node info (pubkey, alias, channels, balance)')
+    .action((opts) => lightningInfo(opts));
+
+  lightning
+    .command('balance')
+    .description('Show on-chain + Lightning balance')
+    .option('--json', 'Output as JSON')
+    .action((opts) => lightningBalance(opts));
+
+  lightning
+    .command('pay [invoice]')
+    .description('Pay a BOLT11 invoice or BOLT12 offer')
+    .option('-a, --amount <sats>', 'Amount for amount-less invoices')
+    .option('-y, --yes', 'Skip confirmation')
+    .action((invoice, opts) => lightningPay(invoice, opts));
+
+  lightning
+    .command('invoice [amount_sats]')
+    .description('Generate BOLT11 invoice')
+    .option('-d, --desc <description>', 'Invoice description')
+    .action((amount, opts) => lightningInvoice(amount, opts));
+
+  lightning
+    .command('offer [amount_sats]')
+    .description('Generate reusable BOLT12 offer')
+    .option('-d, --desc <description>', 'Offer description')
+    .action((amount, opts) => lightningOffer(amount, opts));
+
+  lightning
+    .command('decode [input]')
+    .description('Decode and display invoice/offer details')
+    .option('--json', 'Output as JSON')
+    .action((input, opts) => lightningDecode(input, opts));
+
+  lightning
+    .command('channels')
+    .description('List all channels')
+    .option('--json', 'Output as JSON')
+    .action((opts) => lightningChannels(opts));
+
+  lightning
+    .command('open [peer] [amount_sats]')
+    .description('Open channel (peer format: pubkey@host:port)')
+    .option('-y, --yes', 'Skip confirmation')
+    .option('--public', 'Make channel public (default)')
+    .option('--private', 'Make channel private')
+    .action((peer, amount, opts) => lightningOpen(peer, amount, { ...opts, isPublic: !opts.private }));
+
+  lightning
+    .command('close [channel_id]')
+    .description('Close channel cooperatively')
+    .option('-y, --yes', 'Skip confirmation')
+    .action((channelId, opts) => lightningClose(channelId, opts));
+
+  lightning
+    .command('force-close <channel_id>')
+    .description('Force close channel (use as last resort)')
+    .option('-y, --yes', 'Skip confirmation')
+    .action((channelId, opts) => lightningClose(channelId, { ...opts, force: true }));
+
+  lightning
+    .command('peers')
+    .description('List connected peers')
+    .option('--json', 'Output as JSON')
+    .action((opts) => lightningPeers(opts));
+
+  lightning
+    .command('connect [peer]')
+    .description('Connect to peer (pubkey@host:port)')
+    .action((peer) => lightningConnect(peer));
+
+  lightning
+    .command('liquidity')
+    .description('Show inbound/outbound liquidity')
+    .option('--json', 'Output as JSON')
+    .action((opts) => lightningLiquidity(opts));
+
+  lightning
+    .command('jit-channel')
+    .description('Request JIT channel from LSP (LSPS2)')
+    .option('-a, --amount <sats>', 'Requested inbound amount', '100000')
+    .action((opts) => lightningJitChannel(opts));
+
+  lightning
+    .command('history [payment_id]')
+    .description('Payment history')
+    .option('-l, --limit <n>', 'Number of payments', '20')
+    .option('--json', 'Output as JSON')
+    .action((paymentId, opts) => lightningHistory(paymentId, opts));
+
+  // ═══════════════════════════════════════
+  // PAY — Universal payment (auto-detect Lightning vs EVM)
+  // ═══════════════════════════════════════
+  program
+    .command('pay [target]')
+    .description('⚡ Universal pay — auto-detects Lightning invoices vs EVM addresses')
+    .option('-a, --amount <amount>', 'Amount')
+    .option('-y, --yes', 'Skip confirmation')
+    .action(async (target, opts) => {
+      if (!target) {
+        const inq = (await import('inquirer')).default;
+        const { input } = await inq.prompt([{
+          type: 'input',
+          name: 'input',
+          message: theme.gold('Payment target (Lightning invoice, BOLT12 offer, or EVM address):'),
+        }]);
+        target = input.trim();
+      }
+
+      // Auto-detect Lightning
+      const lnDetected = detectLightningPayment(target);
+      if (lnDetected) {
+        return lightningPay(target, opts);
+      }
+
+      // Fallback to EVM send
+      if (target.startsWith('0x') && target.length === 42) {
+        return sendFunds({ to: target, amount: opts.amount, token: 'ETH' });
+      }
+
+      error('Unrecognized payment target.');
+      info('Expected: Lightning invoice (lnbc...), BOLT12 offer (lno...), or EVM address (0x...)');
+    });
 
   // ═══════════════════════════════════════
   // TIPS & REFERENCE COMMANDS
@@ -1712,6 +2178,15 @@ export function cli(argv) {
       }
     });
 
+  // ═══════════════════════════════════════
+  // HEALTH CHECK
+  // ═══════════════════════════════════════
+  program
+    .command('health')
+    .description('Check status of all DARKSOL services')
+    .option('--json', 'Output as JSON')
+    .action((opts) => healthCommand({ json: opts.json }));
+
   program
     .command('dash')
     .description('Launch the live terminal dashboard')
@@ -1726,6 +2201,79 @@ export function cli(argv) {
     });
 
   // ═══════════════════════════════════════
+  // COMMAND ALIASES (shortcuts)
+  // ═══════════════════════════════════════
+  program
+    .command('balance [name]')
+    .description('Check wallet balance (alias for: wallet balance)')
+    .option('--json', 'Output as JSON')
+    .action((name, opts) => getBalance(name, { json: opts.json }));
+
+  program
+    .command('swap')
+    .description('Swap tokens (alias for: trade swap)')
+    .option('-i, --in <token>', 'Token to sell')
+    .option('-o, --out <token>', 'Token to buy')
+    .option('-a, --amount <amount>', 'Amount to swap')
+    .option('-s, --slippage <percent>', 'Max slippage %', '0.5')
+    .option('-w, --wallet <name>', 'Wallet to use')
+    .option('-p, --password <pw>', 'Wallet password')
+    .option('-y, --yes', 'Skip confirmation')
+    .action(async (opts) => {
+      let tokenIn = opts.in;
+      let tokenOut = opts.out;
+      let amount = opts.amount;
+      if (!tokenIn || !tokenOut || !amount) {
+        const inquirer = (await import('inquirer')).default;
+        const answers = await inquirer.prompt([
+          { type: 'input', name: 'tokenIn', message: 'Token to sell:', default: tokenIn || 'ETH' },
+          { type: 'input', name: 'tokenOut', message: 'Token to buy:', default: tokenOut || 'USDC' },
+          { type: 'input', name: 'amount', message: 'Amount:', default: amount || '0.1' },
+        ]);
+        tokenIn = answers.tokenIn;
+        tokenOut = answers.tokenOut;
+        amount = answers.amount;
+      }
+      const swapOpts = { tokenIn, tokenOut, amount, slippage: parseFloat(opts.slippage), wallet: opts.wallet, password: opts.password, confirm: opts.yes ? true : undefined };
+      try {
+        const result = await executeLifiSwap(swapOpts);
+        if (result?.success) return;
+        if (result?.error !== 'cancelled') {
+          warn('LI.FI route failed - falling back to direct Uniswap V3...');
+          console.log('');
+        } else return;
+      } catch {
+        warn('LI.FI unavailable - falling back to direct Uniswap V3...');
+        console.log('');
+      }
+      return executeSwap(swapOpts);
+    });
+
+  program
+    .command('history [name]')
+    .description('Transaction history (alias for: wallet history)')
+    .option('-c, --chain <chain>', 'Chain to check')
+    .option('-l, --limit <n>', 'Number of transactions', '10')
+    .option('--json', 'Output as JSON')
+    .action((name, opts) => showHistory(name, opts));
+
+  // ═══════════════════════════════════════
+  // TAB COMPLETION HELPER
+  // ═══════════════════════════════════════
+  program
+    .command('completion')
+    .description('Output shell completion script for bash/zsh')
+    .option('--shell <shell>', 'Shell type (bash or zsh)', 'bash')
+    .action((opts) => {
+      const shell = opts.shell.toLowerCase();
+      if (shell === 'zsh') {
+        console.log(generateZshCompletion());
+      } else {
+        console.log(generateBashCompletion());
+      }
+    });
+
+  // ═══════════════════════════════════════
   // FUZZY / NATURAL LANGUAGE FALLBACK
   // ═══════════════════════════════════════
   // If someone types something Commander doesn't recognize,
@@ -1736,10 +2284,10 @@ export function cli(argv) {
 
     if (hasAnyLLM()) {
       const { parseIntent } = await import('./llm/intent.js');
-      const { info, error: showError } = await import('./ui/components.js');
+      const { info, error: showError, warn: showWarn } = await import('./ui/components.js');
 
       console.log('');
-      info(`"${input}" isn't a command - asking AI...`);
+      info(`"${input}" isn't a recognized command — routing to AI...`);
       console.log('');
 
       try {
@@ -1752,12 +2300,13 @@ export function cli(argv) {
       } catch {}
 
       showError(`Unknown command: ${input}`);
-      info('Try: darksol help');
+      info('Run "darksol --help" to see all available commands.');
+      info('Or try: darksol ai ask "' + input + '"');
     } else {
       const { error: showError, info } = await import('./ui/components.js');
       showError(`Unknown command: ${input}`);
-      info('Tip: Set up AI (darksol setup) for natural language commands');
-      info('Run: darksol help');
+      info('Available commands: wallet, trade, bridge, gas, price, scan, arb, privacy, ai, ...');
+      info('Run "darksol --help" for the full list, or "darksol setup" to enable AI-powered natural language.');
     }
   });
 
@@ -2048,10 +2597,13 @@ function showCommandList() {
     ['wallet', 'Create, import, manage wallets'],
     ['send', 'Send ETH or tokens'],
     ['receive', 'Show address to receive funds'],
+    ['balance', 'Check wallet balance (alias)'],
     ['portfolio', 'Multi-chain balance view'],
+    ['swap', 'Swap tokens (alias)'],
     ['price', 'Quick token price check'],
     ['watch', 'Live price monitoring + alerts'],
-    ['gas', 'Gas prices & cost estimates'],
+    ['gas', 'Gas prices, estimates & monitor'],
+    ['scan', 'Token security scanner'],
     ['trade', 'Swap tokens, snipe, trading'],
     ['arb', 'Cross-DEX arbitrage scanner'],
     ['auto', 'Autonomous trader strategies'],
@@ -2074,11 +2626,16 @@ function showCommandList() {
     ['mail', 'AgentMail - email for your agent'],
     ['facilitator', 'x402 payment facilitator'],
     ['approvals', 'Token approval manager'],
+    ['privacy', 'Privacy, RAILGUN shield/unshield'],
+    ['lightning', '⚡ Lightning Network — BTC payments'],
+    ['pay', '⚡ Universal pay (Lightning + EVM)'],
     ['skills', 'Agent skill directory'],
     ['browser', 'Playwright browser automation'],
     ['daemon', 'Background service daemon'],
     ['telegram', 'Telegram bot - AI chat'],
     ['serve', 'Launch web terminal in browser'],
+    ['history', 'Transaction history (alias)'],
+    ['completion', 'Shell tab completion script'],
     ['setup', 'Re-run setup wizard'],
     ['config', 'Terminal configuration'],
   ];
@@ -2089,5 +2646,98 @@ function showCommandList() {
 
   console.log('');
   console.log(theme.dim('  Run any command: darksol <command> --help'));
+  console.log(theme.dim('  Tab completion: eval "$(darksol completion)"'));
   console.log('');
+}
+
+// ═══════════════════════════════════════
+// TAB COMPLETION GENERATORS
+// ═══════════════════════════════════════
+
+function generateBashCompletion() {
+  const commands = [
+    'wallet', 'trade', 'bridge', 'dca', 'arb', 'auto', 'market', 'oracle',
+    'casino', 'poker', 'cards', 'builders', 'facilitator', 'approvals',
+    'privacy', 'mail', 'serve', 'browser', 'scan', 'gas', 'price', 'watch',
+    'chat', 'soul', 'memory', 'setup', 'ai', 'keys', 'agent', 'skills',
+    'daemon', 'telegram', 'lightning', 'ln', 'pay', 'tips', 'networks',
+    'quickstart', 'lookup', 'script', 'config', 'dashboard', 'health',
+    'dash', 'portfolio', 'send', 'receive', 'balance', 'swap', 'history',
+    'completion',
+  ];
+
+  const subcommands = {
+    wallet: 'create import list balance use send receive export portfolio history export-history',
+    trade: 'swap snipe watch pairs',
+    bridge: 'send status quote chains compare',
+    dca: 'create list cancel run',
+    arb: 'scan monitor stats config add-endpoint add-pair remove-pair info ai discover tune learn',
+    auto: 'start stop status log list',
+    market: 'top token compare',
+    oracle: 'flip dice number shuffle health',
+    casino: 'status bet tables stats receipt verify',
+    cards: 'catalog order status',
+    builders: 'leaderboard lookup feed',
+    facilitator: 'health verify settle',
+    approvals: 'list revoke check',
+    privacy: 'score shield router railgun-shield railgun-unshield',
+    mail: 'setup status create inboxes use send inbox read reply forward threads stats delete',
+    browser: 'launch navigate screenshot click type eval close status install',
+    ai: 'chat ask execute strategy analyze',
+    keys: 'list add remove',
+    agent: 'task plan status start docs',
+    skills: 'list install info uninstall',
+    daemon: 'start stop status restart',
+    telegram: 'setup start stop status send',
+    lightning: 'init start stop info balance pay invoice offer decode channels open close force-close peers connect liquidity jit-channel history',
+    ln: 'init start stop info balance pay invoice offer decode channels open close force-close peers connect liquidity jit-channel history',
+    soul: 'show reset',
+    memory: 'show search clear export',
+    script: 'create list run show edit delete clone templates',
+    config: 'show model set rpc',
+    gas: 'monitor',
+  };
+
+  return `# darksol bash completion — generated by darksol completion
+_darksol_completions() {
+  local cur prev commands
+  cur="\${COMP_WORDS[COMP_CWORD]}"
+  prev="\${COMP_WORDS[COMP_CWORD-1]}"
+  commands="${commands.join(' ')}"
+
+  case "\${prev}" in
+${Object.entries(subcommands).map(([cmd, subs]) => `    ${cmd}) COMPREPLY=( $(compgen -W "${subs}" -- "\${cur}") ); return 0 ;;`).join('\n')}
+  esac
+
+  if [[ \${COMP_CWORD} -eq 1 ]]; then
+    COMPREPLY=( $(compgen -W "\${commands}" -- "\${cur}") )
+  fi
+}
+complete -F _darksol_completions darksol`;
+}
+
+function generateZshCompletion() {
+  const commands = [
+    'wallet', 'trade', 'bridge', 'dca', 'arb', 'auto', 'market', 'oracle',
+    'casino', 'poker', 'cards', 'builders', 'facilitator', 'approvals',
+    'privacy', 'mail', 'serve', 'browser', 'scan', 'gas', 'price', 'watch',
+    'chat', 'soul', 'memory', 'setup', 'ai', 'keys', 'agent', 'skills',
+    'daemon', 'telegram', 'tips', 'networks', 'quickstart', 'lookup',
+    'script', 'config', 'dashboard', 'health', 'dash', 'portfolio',
+    'send', 'receive', 'balance', 'swap', 'history', 'completion',
+  ];
+
+  return `# darksol zsh completion — generated by darksol completion --shell zsh
+compdef _darksol darksol
+
+_darksol() {
+  local -a commands
+  commands=(
+${commands.map(c => `    '${c}'`).join('\n')}
+  )
+
+  if (( CURRENT == 2 )); then
+    _describe 'command' commands
+  fi
+}`;
 }
