@@ -15,7 +15,7 @@ A unified CLI for market intel, trading, AI-powered analysis, on-chain oracle, c
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-gold.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
 
-- Current release: **0.12.0**
+- Current release: **0.17.0**
 - Changelog: `CHANGELOG.md`
 
 ## Install
@@ -53,8 +53,38 @@ darksol trade swap -i ETH -o USDC -a 0.1
 
 # Cross-chain bridge (60+ chains via LI.FI)
 darksol bridge send --from base --to arbitrum --token ETH -a 0.1
+darksol bridge quote --from base --to arbitrum -a 0.5
+darksol bridge compare --from base --to arbitrum,optimism,polygon -a 0.1
 darksol bridge status 0xTxHash...
 darksol bridge chains
+
+# Privacy — RAILGUN shield/unshield
+darksol privacy railgun-shield -t ETH -a 0.1        # shield ETH into private pool
+darksol privacy railgun-unshield -t ETH -a 0.1 --to 0xRecipient  # unshield to address
+darksol privacy score 0xYourAddress                  # analyze privacy posture
+
+# Gas monitor with alerts
+darksol gas base                                     # current gas prices
+darksol gas --all                                    # all chains at once
+darksol gas monitor --below 0.01 --interval 15       # alert when gas is cheap
+
+# Transaction history export
+darksol wallet export-history -f csv                 # export as CSV
+darksol wallet export-history -f json --since 2026-01-01 --type out
+
+# Quick aliases
+darksol balance                                      # = wallet balance
+darksol swap -i ETH -o USDC -a 0.1                   # = trade swap
+darksol history                                      # = wallet history
+
+# Tab completion (bash/zsh)
+eval "$(darksol completion)"
+
+# Token security scanner
+darksol scan 0x1234...5678                          # scan a token on Base (default)
+darksol scan 0x1234...5678 --chain ethereum         # scan on a specific chain
+darksol scan 0x1234...5678 --json                   # JSON output for automation
+darksol scan 0x1234...5678 --quick                  # skip slow checks (honeypot sim)
 
 # Cross-DEX arbitrage
 darksol arb scan --chain base                       # AI-scored DEX price comparison
@@ -161,6 +191,7 @@ ai <prompt>   # chat with trading assistant
 | `wallet` | Create/import/manage encrypted EVM wallets | Free |
 | `send` | Send ETH or ERC-20 tokens | Gas only |
 | `receive` | Show receive address + chain safety hints | Free |
+| `scan` | Token security scanner — honeypot, rug pull, red flag detection | Free |
 | `trade` | Swap via LI.FI (31 DEXs) + Uniswap V3 fallback, snipe | Gas only |
 | `bridge` | Cross-chain bridge via LI.FI (60 chains, 27 bridges) | Gas only |
 | `dca` | Dollar-cost averaging engine | Gas only |
@@ -176,7 +207,7 @@ ai <prompt>   # chat with trading assistant
 | `script` | Execution scripts & automated strategies | Free |
 | `skills` | Agent skill directory & installer | Free |
 | `portfolio` | Multi-chain balance view (5 EVM chains) | Free |
-| `history` | Transaction history via block explorers | Free |
+| `history` | Transaction history + CSV/JSON export | Free |
 | `gas` | Gas prices & cost estimates | Free |
 | `price` | Quick token price check (DexScreener) | Free |
 | `watch` | Live price monitoring with alerts | Free |
@@ -192,6 +223,85 @@ ai <prompt>   # chat with trading assistant
 | `browser` | Playwright-powered browser automation | Free |
 | `serve` | Local interactive web terminal (xterm.js) | Free |
 | `config` | Terminal configuration | Free |
+
+---
+
+## ⚡ Lightning
+
+Bitcoin Lightning Network — send and receive sats instantly. BIP39 mnemonics, BOLT11/12, JIT channels, and full channel management.
+
+```bash
+# Initialize and start
+darksol lightning init                    # generate or import BIP39 mnemonic
+darksol lightning start                  # start the node
+darksol lightning stop                  # stop gracefully
+
+# Info and balance
+darksol lightning info                   # node info, pubkey, alias, channels
+darksol lightning balance                # on-chain + Lightning + inbound liquidity
+
+# Payments
+darksol lightning invoice 10000          # create BOLT11 invoice for 10,000 sats
+darksol lightning offer 5000            # create reusable BOLT12 offer (any amount)
+darksol lightning pay lnbc100n1p0...    # pay a BOLT11 invoice or BOLT12 offer
+darksol lightning decode lnbc1...        # decode an invoice or offer
+darksol lightning history               # payment history
+darksol lightning history <payment_id>  # single payment details
+
+# Channel management
+darksol lightning channels              # list all channels
+darksol lightning open 02abc...@host:9735 100000  # open channel (min 20k sats)
+darksol lightning close <channel_id>    # cooperative close
+darksol lightning force-close <channel_id>  # force close (data loss risk)
+
+# Peers
+darksol lightning peers                 # list connected peers
+darksol lightning connect 02abc...@host:9735  # connect to a peer
+
+# Liquidity
+darksol lightning liquidity             # inbound/outbound liquidity
+darksol lightning jit-channel           # request JIT channel from LSP (instant inbound)
+
+# Shortcut
+darksol ln                               # alias for: darksol lightning
+```
+
+**Architecture:** LDK (managed mode) with Esplora chain source. BIP39 mnemonic → m/535' derivation → LDK seed. All data encrypted with AES-256-GCM.
+
+**JIT Channels:** Request instant inbound liquidity from LSPs (Olympus, Voltage, Megalith) — channel opens automatically when you receive your first payment.
+
+**Supported networks:** bitcoin (mainnet), testnet, signet, regtest.
+
+---
+
+## 🔒 Privacy
+
+On-chain privacy analysis and RAILGUN shielded transactions. Move tokens into a private pool where they cannot be traced by address clustering or tx graph analysis.
+
+```bash
+# Privacy posture analysis
+darksol privacy score 0xYourAddress                    # score + findings (0-100)
+darksol privacy score 0xYourAddress --chain ethereum  # analyze on a specific chain
+darksol privacy score 0xYourAddress --json            # structured JSON output
+
+# DarkLabzRouter shield status
+darksol privacy shield-status 0xYourAddress           # check if address has active shield
+darksol privacy router-info                          # DarkLabzRouter contract info
+
+# RAILGUN shielded pool — move tokens in/out of private pool
+darksol privacy railgun-shield -t ETH -a 0.1        # shield 0.1 ETH into RAILGUN pool
+darksol privacy railgun-shield -t USDC -a 100 -c base  # shield USDC on Base
+darksol privacy railgun-shield -t 0xToken -a 50     # shield by ERC-20 contract address
+
+darksol privacy railgun-unshield -t ETH -a 0.1 --to 0xRecipient  # unshield to address
+darksol privacy railgun-unshield -t USDC -a 50 --to 0xRecipient -c base  # on Base
+```
+
+**Privacy Score** analyzes your on-chain footprint using tx history from Etherscan — counterparty count, direct transfer ratio, token diversity, contract vs EOA calls. Results: HIGH (≥80), MODERATE (60-79), LOW (40-59), EXPOSED (<40).
+
+**RAILGUN** moves tokens into a shielded pool — once shielded, tokens cannot be linked to your public address via on-chain analysis. Unshield to any address when ready.
+
+**Supported chains:** Base, Ethereum, Arbitrum, Polygon (ETH, USDC, and ERC-20 by address).
 
 ---
 
@@ -491,7 +601,7 @@ darksol ai analyze AERO
 darksol ai chat --provider ollama --model llama3
 ```
 
-**Supported providers:** OpenAI, Anthropic, OpenRouter, Bankr LLM Gateway, Ollama (local = free)
+**Supported providers:** OpenAI, Anthropic, OpenRouter, NVIDIA NIM, Bankr LLM Gateway, MiniMax, Ollama (local = free)
 
 The AI gets live market context (prices from DexScreener), knows your config (chain, slippage, wallet), and returns structured intents with confidence scores and risk warnings.
 
@@ -517,12 +627,48 @@ darksol keys remove openai
 **Supported services:**
 | Category | Services |
 |----------|----------|
-| LLM | OpenAI, Anthropic, OpenRouter, Bankr LLM Gateway, Ollama |
+| LLM | OpenAI, Anthropic, OpenRouter, NVIDIA NIM, Bankr LLM Gateway, MiniMax, Ollama |
 | Data | CoinGecko Pro, DexScreener, DefiLlama |
 | RPC | Alchemy, Infura, QuickNode |
 | Trading | 1inch, ParaSwap |
 
 Keys can also come from environment variables (e.g., `OPENAI_API_KEY`).
+
+---
+
+## 🔍 Token Scanner
+
+Scan any ERC-20 token for security red flags before trading.
+
+```bash
+# Full scan on Base (default)
+darksol scan 0x1234...5678
+
+# Scan on a specific chain
+darksol scan 0x1234...5678 --chain ethereum
+
+# Quick scan (skip honeypot simulation)
+darksol scan 0x1234...5678 --quick
+
+# JSON output for automation
+darksol scan 0x1234...5678 --json
+```
+
+**8 security checks:**
+- **Contract Verification** — is source code verified on the block explorer?
+- **Ownership Status** — is ownership renounced or still active?
+- **Honeypot Detection** — simulates buy+sell via Uniswap V3 Quoter
+- **Liquidity Analysis** — finds Uniswap V3 pools, estimates USD depth
+- **Holder Concentration** — top holder analysis, flags concentrated supply
+- **Proxy Detection** — checks for EIP-1967 upgradeable proxy pattern
+- **Mint Function** — scans bytecode for mint capability
+- **Token Info** — name, symbol, decimals, total supply, deployer
+
+**Risk levels:** LOW / MEDIUM / HIGH / CRITICAL with actionable recommendations.
+
+**AI integration:** Ask "is this token safe?" or "scan 0x..." in `darksol chat`.
+
+**Chains:** Base, Ethereum, Arbitrum, Optimism, Polygon.
 
 ---
 
@@ -625,10 +771,12 @@ darksol skills uninstall darksol-terminal
 ## 🎲 Services
 
 ```bash
-# Oracle — on-chain randomness
-darksol oracle flip
-darksol oracle dice 20
-darksol oracle number 1 100
+# Oracle — on-chain randomness (x402, $0.05 USDC on Base)
+darksol oracle flip                        # coin flip
+darksol oracle dice 20                     # roll a d20
+darksol oracle number 1 100               # random integer in range
+darksol oracle shuffle A B C D            # random shuffle
+darksol oracle health                     # check oracle status + signer
 
 # Casino — on-chain betting
 darksol casino bet coin-flip heads
@@ -636,9 +784,9 @@ darksol casino tables
 darksol casino stats
 
 # Prepaid Cards — crypto to Visa/MC
-darksol cards catalog
-darksol cards order -p swype -a 50
-darksol cards status <id>
+darksol cards catalog                     # browse available card providers
+darksol cards order swype 50 --email you@example.com  # order a $50 card
+darksol cards status <trade_id>           # check order status
 
 # Builder Index — ERC-8021 rankings
 darksol builders leaderboard

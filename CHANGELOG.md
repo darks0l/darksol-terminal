@@ -7,6 +7,123 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.17.1] - 2026-04-08
+
+### Added — Lightning, Oracle, Cards, Privacy Full Documentation
+
+- **README maintenance sweep** — documented all previously undocumented modules:
+  - **Lightning module** — full CLI docs for all commands: init, start, stop, info, balance, pay, invoice, offer, decode, channels, open, close, force-close, peers, connect, liquidity, jit-channel, history
+  - **Oracle CLI** — documented flip, dice, number, shuffle, health commands
+  - **Cards CLI** — documented catalog, order, status commands
+  - **Privacy module** — expanded from partial railgun-shield/unshield mention to full docs covering privacy score, shield-status, router-info, and full railgun-shield/railgun-unshield CLI surface
+- No source code changes — documentation only
+
+## [0.17.0] - 2026-04-03
+
+### Added — RAILGUN Privacy, Gas Monitor, History Export, Command Aliases
+
+- **RAILGUN Shield/Unshield** — private token transfers via RAILGUN Relay Adapt:
+  - `darksol privacy railgun-shield` (alias `rs`) — deposit tokens into the RAILGUN shielded pool
+  - `darksol privacy railgun-unshield` (alias `ru`) — withdraw from shielded pool to any public address
+  - Supports native ETH and ERC-20 tokens on Base, Ethereum, Arbitrum, Polygon
+  - Automatic token approval handling for ERC-20 shield operations
+  - Balance checks, gas validation, interactive prompts with non-interactive flags
+  - `--json` output for automation
+
+- **Multi-chain Gas Monitor** — real-time gas price tracking with alerts:
+  - `darksol gas monitor` — live polling across all chains with configurable interval
+  - `--below <gwei>` — alert when gas drops below threshold
+  - `--chain <chains...>` — monitor specific chains
+  - `-d, --duration <min>` — auto-stop after N minutes
+  - Color-coded output with swap cost estimates
+
+- **Transaction History Export** — CSV/JSON export with filtering:
+  - `darksol wallet export-history` — export transaction history to file
+  - `--format csv|json` — choose output format
+  - `--since <date>` / `--until <date>` — date range filtering
+  - `--type in|out|contract|transfer` — filter by transaction type
+  - `--limit <n>` — control number of transactions fetched
+
+- **Bridge Compare** — compare quotes across multiple destination chains:
+  - `darksol bridge compare --from base --to arbitrum,optimism,polygon -a 0.1`
+  - Side-by-side route, receive amount, time, and gas cost comparison
+  - `--json` output for automation
+
+- **Wallet Portfolio JSON** — `darksol portfolio --json` now outputs structured data with per-chain balances, ETH/USDC amounts, and USD totals
+
+- **Command Aliases** — common shortcuts for faster workflow:
+  - `darksol balance` → `wallet balance`
+  - `darksol swap` → `trade swap` (full interactive + flags)
+  - `darksol history` → `wallet history`
+
+- **Tab Completion** — shell autocomplete for bash and zsh:
+  - `darksol completion` — output bash completion script
+  - `darksol completion --shell zsh` — output zsh completion script
+  - Supports all commands and subcommands
+  - Install: `eval "$(darksol completion)"`
+
+- **`--json` flag added** to commands that were missing it:
+  - `wallet history`, `wallet portfolio`, `bridge status`, `bridge chains`, `bridge compare`
+  - `dca list`, `arb stats`, `whale list`, `whale activity`, `health`
+  - All new privacy/gas/export commands include `--json` by default
+
+- **LLM Intent Wiring** — AI assistant can now execute `privacy` and `bridge_quote` actions via natural language
+
+### Changed
+- `gas` command restructured as command group: `darksol gas [chain]` (existing) + `darksol gas monitor` (new)
+- `privacy` command group expanded with RAILGUN subcommands alongside existing score/shield/router
+- `bridge` command group expanded with `compare` subcommand for multi-destination quotes
+- Dashboard command list updated with new aliases and descriptions
+- Command count: 85+ commands across 25+ groups
+
+## [0.16.0] - 2026-04-01
+
+### Added -- Token Estimation, x402 Local Signing, Structured Compaction
+- **`src/llm/tokens.js`** -- offline token estimation and cost prediction. `roughTokenCount`, `estimateFileTokens`, `estimateMessageTokens`, `estimateCost`, `checkBudget`. Pricing catalog for 30+ models (OpenAI, Anthropic, Google, DeepSeek, MiniMax, NVIDIA NIM, Ollama). Pre-call budget check: estimate cost before spending it.
+- **`src/utils/x402.js`** -- local x402 payment signing. Decodes 402 `payment-required` headers, signs EIP-3009 `transferWithAuthorization` locally via Node.js `crypto` (no external deps), falls back to agent signer at `127.0.0.1:18790`. USDC contracts for Base, Polygon, Ethereum, Arbitrum, Optimism. Retries original request with `X-PAYMENT` header.
+- **Structured compaction** -- updated `src/memory/index.js` and `src/llm/engine.js` with 9-section compaction prompt and auto-compact threshold logic.
+
+## [0.15.1] - 2026-03-26
+
+### Added
+- **NVIDIA NIM LLM provider** — cloud inference via [build.nvidia.com](https://build.nvidia.com). Access Llama, Nemotron, Mistral models through NVIDIA's OpenAI-compatible API. Run `darksol setup` to select NVIDIA NIM as your AI provider, or `darksol keys add nvidia <key>`.
+- **Model catalog:** Nemotron 70B, Llama 3.1 8B/70B, Mistral Large 2, Nemotron Mini 4B.
+- **Key management:** `NVIDIA_API_KEY` env var support, encrypted vault storage via `darksol keys add nvidia`.
+
+## [0.15.0] - 2026-03-25
+
+### Added — 🔍 Token Security Scanner
+- `darksol scan <address>` — comprehensive on-chain token security scanner
+- **8 security checks** run in parallel for fast results:
+  - **Contract Verification** — checks if source code is verified on the block explorer (Basescan/Etherscan APIs)
+  - **Ownership Status** — detects if contract has an active owner or if ownership is renounced
+  - **Honeypot Detection** — simulates a buy+sell via Uniswap V3 Quoter to detect blocked sells or extreme tax
+  - **Liquidity Analysis** — checks for Uniswap V3 pools (WETH/USDC pairs), estimates USD depth
+  - **Holder Concentration** — top holder analysis via explorer API, flags concentrated supply
+  - **Token Info** — name, symbol, decimals, total supply, deployer address
+  - **Proxy Detection** — checks EIP-1967 implementation slot for upgradeable proxy patterns
+  - **Mint Function** — scans bytecode for mint(address,uint256) selector
+- **Risk scoring system** — LOW / MEDIUM / HIGH / CRITICAL with actionable recommendations
+- **Multi-chain support** — Base (default), Ethereum, Arbitrum, Optimism, Polygon
+- **Options:**
+  - `--chain <chain>` — target chain (default: base)
+  - `--json` — machine-readable JSON output
+  - `--quick` — skip slow checks (honeypot simulation)
+- **AI intent integration** — "is this token safe?", "scan 0x...", "check if 0x... is a honeypot" triggers the scanner via `darksol chat`
+- **Explorer API support** — uses existing Etherscan key from the vault (`darksol keys add etherscan`)
+- **Gold/dark DARKSOL aesthetic** — color-coded check results (✅/⚠️/❌), risk level indicators
+- Graceful degradation when APIs are unreachable (individual checks report errors without crashing)
+- Added scanner tests (risk scoring, recommendation logic, number formatting)
+
+## [0.14.2] - 2026-03-25
+
+### Added — 🏥 Service Health Check
+- `darksol health` — check status of all configured DARKSOL services in one command
+- Pings Facilitator, Casino, Oracle, Cards, LI.FI, and Agent Signer endpoints
+- 5-second timeout per service with latency measurement
+- Color-coded status table (UP/DOWN/TIMEOUT) with response times
+- Summary line showing healthy service count
+
 ## [0.14.1] - 2026-03-21
 
 ### Changed — 🔧 Maintenance
