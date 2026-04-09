@@ -131,7 +131,7 @@ test('DCA create/cancel/run CRUD in temp directory', async () => {
   active.nextExecution = new Date(Date.now() - 1000).toISOString();
   writeFileSync(ordersPath, JSON.stringify(orders, null, 2));
 
-  await dca.runDCA({ password: 'unused-in-simulated-run' });
+  await dca.runDCA({ password: 'unused-in-simulated-run' }); // nosec
   orders = JSON.parse(readFileSync(ordersPath, 'utf8'));
   const ran = orders.find((o) => o.id === active.id);
   assert.equal(ran.executedOrders, 1);

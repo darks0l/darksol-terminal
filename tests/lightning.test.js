@@ -17,7 +17,7 @@ import { tmpdir } from 'os';
 describe('Lightning Key Management', () => {
   it('should generate a valid BIP39 mnemonic', async () => {
     const { generateMnemonic, validateMnemonic } = await import('../src/lightning/keys.js');
-    const mnemonic = await generateMnemonic();
+    const mnemonic = await generateMnemonic(); // nosec
 
     assert.ok(mnemonic, 'Mnemonic should be generated');
     const words = mnemonic.split(' ');
@@ -29,7 +29,7 @@ describe('Lightning Key Management', () => {
 
   it('should validate known good mnemonic', async () => {
     const { validateMnemonic } = await import('../src/lightning/keys.js');
-    const good = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+    const good = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'; // nosec
     assert.ok(await validateMnemonic(good), 'Known good mnemonic should validate');
   });
 
@@ -41,7 +41,7 @@ describe('Lightning Key Management', () => {
 
   it('should derive 32-byte LDK seed from mnemonic at m/535\'', async () => {
     const { deriveLdkSeed } = await import('../src/lightning/keys.js');
-    const mnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+    const mnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'; // nosec
     const seed = await deriveLdkSeed(mnemonic);
 
     assert.ok(Buffer.isBuffer(seed), 'Seed should be a Buffer');
@@ -50,7 +50,7 @@ describe('Lightning Key Management', () => {
 
   it('should derive deterministic seed (same mnemonic = same seed)', async () => {
     const { deriveLdkSeed } = await import('../src/lightning/keys.js');
-    const mnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+    const mnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'; // nosec
 
     const seed1 = await deriveLdkSeed(mnemonic);
     const seed2 = await deriveLdkSeed(mnemonic);

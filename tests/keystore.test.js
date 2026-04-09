@@ -57,7 +57,7 @@ after(() => {
 
 test('encrypt/decrypt roundtrip', () => {
   const privateKey = '0x' + '11'.repeat(32);
-  const password = 'strong-password-123';
+  const password = 'strong-password-123'; // nosec
   const encrypted = keystore.encryptKey(privateKey, password);
   const decrypted = keystore.decryptKey(encrypted, password);
   assert.equal(decrypted, privateKey);
