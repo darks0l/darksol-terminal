@@ -48,10 +48,11 @@ describe('Lightning Key Management', () => {
     assert.equal(seed.length, 32, 'Seed should be 32 bytes');
   });
 
-  it('should derive deterministic seed (same mnemonic = same seed)', async () => {
+  it('should derive deterministic seed (same mnemonic = same seed)', async () => { // nosec
     const { deriveLdkSeed } = await import('../src/lightning/keys.js');
     const mnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about'; // nosec
 
+    // nosec: test vector
     const seed1 = await deriveLdkSeed(mnemonic);
     const seed2 = await deriveLdkSeed(mnemonic);
 
