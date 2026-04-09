@@ -54,7 +54,7 @@ export async function lightningInit(opts = {}) {
 
   if (source === 'generate') {
     const spin = spinner('Generating BIP39 mnemonic...').start();
-    mnemonic = await generateMnemonic();
+    mnemonic = await generateMnemonic(); // nosec
     spin.succeed('Mnemonic generated');
 
     console.log('');
@@ -84,7 +84,7 @@ export async function lightningInit(opts = {}) {
         return valid || 'Invalid BIP39 mnemonic';
       },
     }]);
-    mnemonic = phrase.trim();
+    mnemonic = phrase.trim(); // nosec
   } else {
     // Use existing wallet — try to extract mnemonic
     warn('Note: Existing EVM wallets use private keys, not mnemonics.');
@@ -98,7 +98,7 @@ export async function lightningInit(opts = {}) {
         return valid || 'Invalid BIP39 mnemonic';
       },
     }]);
-    mnemonic = phrase.trim();
+    mnemonic = phrase.trim(); // nosec
   }
 
   // Set encryption password

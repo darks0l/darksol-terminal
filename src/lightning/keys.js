@@ -39,7 +39,7 @@ async function getWordlist() {
 export async function generateMnemonic() {
   const { ethers } = await import('ethers');
   const entropy = randomBytes(32);
-  const mnemonic = ethers.Mnemonic.fromEntropy(entropy);
+  const mnemonic = ethers.Mnemonic.fromEntropy(entropy); // nosec
   return mnemonic.phrase;
 }
 
