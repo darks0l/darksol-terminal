@@ -69,6 +69,9 @@ ACTIONS (use the most specific one):
 - "arb_scan" — scan for cross-DEX arbitrage opportunities (e.g. "find arb opportunities", "scan for price differences", "check arb on base")
 - "arb_monitor" — start real-time arbitrage monitoring (e.g. "monitor arb", "watch for arb opportunities")
 - "approvals" — check or revoke ERC-20 token approvals (e.g. "check my approvals", "revoke approvals", "what tokens have I approved", "show unlimited approvals")
+- "scan" — run a token security scan (e.g. "is this token safe?", "scan 0x...", "check if 0x... is a honeypot", "is 0x... a rug pull?", "security check on 0x...")
+- "privacy" — check wallet privacy score or shield status (e.g. "check my privacy", "privacy score for 0x...", "how exposed is my wallet?", "shield status")
+- "bridge_quote" — get a cross-chain bridge quote (e.g. "how much to bridge ETH from base to arbitrum?", "bridge quote 1 ETH base to optimism")
 - "unknown" — can't determine what the user wants
 
 CASINO GAMES:
@@ -102,7 +105,7 @@ If they mention AgentMail or "my email", suggest using their configured agent em
 
 When parsing, respond with ONLY valid JSON:
 {
-  "action": "swap|send|snipe|dca|price|balance|info|analyze|gas|cards|casino|unknown",
+  "action": "swap|send|snipe|dca|price|balance|info|analyze|gas|cards|casino|privacy|bridge_quote|unknown",
   "tokenIn": "symbol or address (for swaps)",
   "tokenOut": "symbol or address (for swaps)",
   "token": "symbol (for send/price/analyze)",
@@ -161,7 +164,10 @@ COMMAND MAPPING:
 - gas → darksol gas <chain>
 - cards → darksol cards order -p <provider> -a <amount> -e <email> --ticker <crypto>
 - casino → darksol casino bet <game> -c <choice>
-- analyze → darksol ai analyze <token>`;
+- analyze → darksol ai analyze <token>
+- scan → darksol scan <address> --chain <chain>
+- privacy → darksol privacy score <address> --chain <chain>
+- bridge_quote → darksol bridge quote --from <chain> --to <chain> --token <token> -a <amount>`;
 
 // ──────────────────────────────────────────────────
 // INTENT PARSER
@@ -306,7 +312,7 @@ export async function startChat(opts = {}) {
       }
 
       // Try to detect actionable intent
-      const actionKeywords = /\b(swap|send|transfer|buy|sell|snipe|dca|price|balance|gas|card|cards|order|prepaid|visa|mastercard|casino|bet|coinflip|coin|flip|dice|slots|hilo|gamble|play)\b/i;
+      const actionKeywords = /\b(swap|send|transfer|buy|sell|snipe|dca|price|balance|gas|card|cards|order|prepaid|visa|mastercard|casino|bet|coinflip|coin|flip|dice|slots|hilo|gamble|play|scan|honeypot|rug|rugpull|safe|scam|security)\b/i;
       const isActionable = actionKeywords.test(input);
 
       let result;
@@ -681,6 +687,19 @@ export async function executeIntent(intent, opts = {}) {
         return { success: false, reason: 'Tell me which token to look at.' };
       }
 
+      case 'scan': {
+        const token = intent.token || intent.tokenOut || intent.tokenIn;
+        if (!token || !token.startsWith('0x')) {
+          info('I need a token contract address to scan. Example: "scan 0x1234..."');
+          return { success: false, reason: 'Provide a contract address to scan.' };
+        }
+        const { scanToken: doScan, displayScanResult } = await import('../services/scanner.js');
+        const scanChain = intent.chain || getConfig('chain') || 'base';
+        const scanResult = await doScan(token, scanChain, { quick: false });
+        displayScanResult(scanResult);
+        return { success: true, action: 'scan' };
+      }
+
       case 'approvals': {
         const { listApprovals, revokeApproval } = await import('../services/approvals.js');
         const chain = intent.chain || opts.chain || 'base';
@@ -691,6 +710,28 @@ export async function executeIntent(intent, opts = {}) {
           await listApprovals({ chain });
         }
         return { success: true, action: 'approvals' };
+      }
+
+      case 'privacy': {
+        const address = intent.to || intent.token || intent.tokenIn;
+        if (!address || !address.startsWith('0x')) {
+          info('I need a wallet address to check privacy. Example: "privacy score 0x..."');
+          return { success: false, reason: 'Provide a wallet address.' };
+        }
+        const { privacyScore: doScore } = await import('../services/privacy.js');
+        const chain = intent.chain || getConfig('chain') || 'base';
+        await doScore(address, { chain });
+        return { success: true, action: 'privacy' };
+      }
+
+      case 'bridge_quote': {
+        const { showBridgeQuote } = await import('../services/lifi.js');
+        const fromChain = intent.fromChain || intent.chain || getConfig('chain') || 'base';
+        const toChain = intent.toChain || 'arbitrum';
+        const token = intent.token || intent.tokenIn || 'ETH';
+        const amount = intent.amount || '0.1';
+        await showBridgeQuote({ fromChain, toChain, token, amount });
+        return { success: true, action: 'bridge_quote' };
       }
 
       default:

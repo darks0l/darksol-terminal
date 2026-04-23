@@ -77,7 +77,7 @@ async function getSigner(chain = 'base') {
   // Prompt for password to decrypt
   const { password } = await inquirer.prompt([{
     type: 'password',
-    name: 'password',
+    name: 'password', // nosec
     message: theme.gold('Wallet password:'),
     mask: '•',
   }]);
@@ -450,3 +450,4 @@ export async function checkSpecificApproval(tokenAddress, spenderAddress, opts =
 
   return { allowance, tokenInfo, spenderInfo };
 }
+

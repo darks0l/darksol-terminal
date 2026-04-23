@@ -82,7 +82,7 @@ export async function fetchPortfolioSnapshot(walletName) {
   return { name, address, chains, totalUSD, ethPrice };
 }
 
-export async function showPortfolio(walletName) {
+export async function showPortfolio(walletName, opts = {}) {
   const name = walletName || getConfig('activeWallet');
   if (!name) {
     error('No wallet specified. Use: darksol wallet portfolio <name>');
@@ -97,6 +97,26 @@ export async function showPortfolio(walletName) {
     const snapshot = await fetchPortfolioSnapshot(name);
     const { address, chains, totalUSD, ethPrice } = snapshot;
     spin.succeed('Scan complete');
+
+    if (opts.json) {
+      console.log(JSON.stringify({
+        wallet: name,
+        address,
+        chains: chains.map((item) => ({
+          chain: item.chain,
+          chainId: item.chainId,
+          eth: item.eth,
+          usdc: item.usdc,
+          ethUSD: item.ethUSD,
+          total: item.total,
+          error: item.error || null,
+        })),
+        totalUSD,
+        ethPrice,
+        timestamp: new Date().toISOString(),
+      }, null, 2));
+      return { address, chains, totalUSD, ethPrice };
+    }
 
     console.log(theme.dim(`  ${address}`));
     console.log('');

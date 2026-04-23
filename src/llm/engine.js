@@ -4,6 +4,7 @@ import { getConfig } from '../config/store.js';
 import { SessionMemory, extractMemories, searchMemories } from '../memory/index.js';
 import { formatSystemPrompt as formatSoulSystemPrompt } from '../soul/index.js';
 import { getProviderDefaultModel } from './models.js';
+import { estimateCost } from './tokens.js';
 
 const PROVIDERS = {
   openai: {
@@ -43,6 +44,13 @@ const PROVIDERS = {
   minimax: {
     url: 'https://api.minimax.io/v1/chat/completions',
     defaultModel: getProviderDefaultModel('minimax'),
+    authHeader: (key) => ({ Authorization: `Bearer ${key}` }),
+    parseResponse: (data) => data.choices?.[0]?.message?.content,
+    parseUsage: (data) => data.usage,
+  },
+  nvidia: {
+    url: 'https://integrate.api.nvidia.com/v1/chat/completions',
+    defaultModel: getProviderDefaultModel('nvidia'),
     authHeader: (key) => ({ Authorization: `Bearer ${key}` }),
     parseResponse: (data) => data.choices?.[0]?.message?.content,
     parseUsage: (data) => data.usage,
@@ -223,11 +231,13 @@ export class LLMEngine {
   }
 
   getUsage() {
+    const { costUsd, found } = estimateCost(this.totalInputTokens, this.totalOutputTokens, this.model);
     return {
       calls: this.totalCalls,
       inputTokens: this.totalInputTokens,
       outputTokens: this.totalOutputTokens,
       totalTokens: this.totalInputTokens + this.totalOutputTokens,
+      estimatedCostUsd: found ? costUsd : undefined,
       provider: this.provider,
       model: this.model,
     };

@@ -28,6 +28,7 @@ function setTempEnv(tempRoot) {
     OLLAMA_HOST: process.env.OLLAMA_HOST,
     BANKR_LLM_KEY: process.env.BANKR_LLM_KEY,
     MINIMAX_API_KEY: process.env.MINIMAX_API_KEY,
+    NVIDIA_API_KEY: process.env.NVIDIA_API_KEY,
   };
 
   process.env.HOME = home;
@@ -40,6 +41,7 @@ function setTempEnv(tempRoot) {
   delete process.env.OLLAMA_HOST;
   delete process.env.BANKR_LLM_KEY;
   delete process.env.MINIMAX_API_KEY;
+  delete process.env.NVIDIA_API_KEY;
 
   return prev;
 }
@@ -108,6 +110,43 @@ test('web AI status and keys menu include MiniMax', async () => {
   const keysMenu = menus.find((menu) => menu.id === 'keys_provider');
   assert.ok(keysMenu);
   assert.ok(keysMenu.items.some((item) => item.value === 'minimax'));
+});
+
+test('NVIDIA NIM is registered as an LLM provider', () => {
+  assert.equal(llm.PROVIDERS.nvidia.url, 'https://integrate.api.nvidia.com/v1/chat/completions');
+  assert.equal(llm.PROVIDERS.nvidia.defaultModel, 'nvidia/llama-3.1-nemotron-70b-instruct');
+  assert.equal(keys.SERVICES.nvidia.envVar, 'NVIDIA_API_KEY');
+  assert.equal(keys.SERVICES.nvidia.category, 'llm');
+});
+
+test('NVIDIA NIM authHeader returns Bearer token', () => {
+  const headers = llm.PROVIDERS.nvidia.authHeader('nvapi-test-key');
+  assert.deepEqual(headers, { Authorization: 'Bearer nvapi-test-key' });
+});
+
+test('NVIDIA NIM parseResponse extracts content from OpenAI format', () => {
+  const data = { choices: [{ message: { role: 'assistant', content: 'Hello from NIM' } }] };
+  assert.equal(llm.PROVIDERS.nvidia.parseResponse(data), 'Hello from NIM');
+});
+
+test('NVIDIA NIM parseResponse handles empty response', () => {
+  assert.equal(llm.PROVIDERS.nvidia.parseResponse({}), undefined);
+  assert.equal(llm.PROVIDERS.nvidia.parseResponse({ choices: [] }), undefined);
+});
+
+test('NVIDIA NIM parseUsage extracts token usage', () => {
+  const data = { usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 } };
+  const usage = llm.PROVIDERS.nvidia.parseUsage(data);
+  assert.equal(usage.prompt_tokens, 10);
+  assert.equal(usage.completion_tokens, 20);
+});
+
+test('NVIDIA NIM env key counts toward hasAnyLLM', () => {
+  assert.equal(keys.hasAnyLLM(), false);
+  process.env.NVIDIA_API_KEY = 'nvapi-test-key-12345';
+  assert.equal(keys.hasKey('nvidia'), true);
+  assert.equal(keys.hasAnyLLM(), true);
+  delete process.env.NVIDIA_API_KEY;
 });
 
 test('setup wizard source includes MiniMax and llm.provider config writes', () => {

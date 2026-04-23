@@ -233,7 +233,11 @@ export class SessionMemory {
   }
 
   /**
-   * Compact older turns into a short summary with help from the LLM.
+   * Compact older turns into a structured summary with help from the LLM.
+   * Uses a 5-section format inspired by Claude Code's compaction prompts:
+   * Intent, Key Details, Errors/Fixes, User Messages, Current Work.
+   * The LLM writes an <analysis> scratchpad (stripped) then a <summary> (kept).
+   *
    * @param {{complete: (prompt: string, opts?: object) => Promise<{content: string}>}} llm
    * @returns {Promise<void>}
    */
@@ -248,12 +252,22 @@ export class SessionMemory {
       .join('\n');
 
     const prompt = [
-      'Summarize this conversation context for future replies.',
-      'Preserve preferences, decisions, constraints, open tasks, and factual details.',
-      'Keep it under 180 words.',
-      this.summary ? `Existing summary:\n${this.summary}` : '',
+      'Summarize this conversation context for future replies. Respond with TEXT ONLY.',
+      '',
+      'Before your summary, wrap your analysis in <analysis> tags to organize thoughts.',
+      'Then provide a <summary> with these sections:',
+      '',
+      '1. Intent: What the user wants and key requests',
+      '2. Key Details: Technical concepts, file names, code patterns, decisions',
+      '3. Errors & Fixes: Problems encountered and how they were resolved',
+      '4. User Messages: Key non-trivial user messages (not tool results)',
+      '5. Current Work: What was being worked on most recently',
+      '',
+      this.summary ? `Existing summary to incorporate:\n${this.summary}` : '',
       `Conversation to compact:\n${transcript}`,
-    ].filter(Boolean).join('\n\n');
+      '',
+      'Keep the summary under 250 words. Be precise — preserve names, paths, and decisions.',
+    ].filter(Boolean).join('\n');
 
     try {
       const result = await llm.complete(prompt, {
@@ -261,7 +275,8 @@ export class SessionMemory {
         skipContext: true,
         skipMemoryExtraction: true,
       });
-      this.summary = String(result.content || '').trim() || this.summary;
+      const raw = String(result.content || '').trim();
+      this.summary = formatCompactSummary(raw) || this.summary;
     } catch {
       const fallback = olderMessages
         .slice(-4)
@@ -270,6 +285,31 @@ export class SessionMemory {
       this.summary = [this.summary, fallback].filter(Boolean).join(' | ').slice(-1200);
     }
   }
+}
+
+/**
+ * Strip <analysis> scratchpad and extract <summary> content.
+ * The analysis block improves summary quality (chain-of-thought) but
+ * has no value once the summary is written.
+ * @param {string} raw - Raw LLM response
+ * @returns {string} Cleaned summary
+ */
+export function formatCompactSummary(raw) {
+  if (!raw) return '';
+  let result = raw;
+
+  // Strip analysis section
+  result = result.replace(/<analysis>[\s\S]*?<\/analysis>/i, '');
+
+  // Extract summary content
+  const match = result.match(/<summary>([\s\S]*?)<\/summary>/i);
+  if (match) {
+    result = match[1].trim();
+  }
+
+  // Clean up whitespace
+  result = result.replace(/\n\n+/g, '\n\n').trim();
+  return result;
 }
 
 export { MEMORY_DIR, MEMORY_FILE };

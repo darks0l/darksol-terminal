@@ -25,7 +25,7 @@ export async function createWallet(name, opts = {}) {
 
   const { password } = await inquirer.prompt([{
     type: 'password',
-    name: 'password',
+    name: 'password', // nosec
     message: theme.gold('Encryption password:'),
     mask: '●',
     validate: (v) => v.length >= 8 || 'Minimum 8 characters',
@@ -110,7 +110,7 @@ export async function importWallet(name, opts = {}) {
 
   const { password } = await inquirer.prompt([{
     type: 'password',
-    name: 'password',
+    name: 'password', // nosec
     message: theme.gold('Encryption password:'),
     mask: '●',
     validate: (v) => v.length >= 8 || 'Minimum 8 characters',
@@ -338,7 +338,7 @@ export async function sendFunds(opts = {}) {
   if (!password) {
     const prompted = await inquirer.prompt([{
       type: 'password',
-      name: 'password',
+      name: 'password', // nosec
       message: theme.gold('Wallet password:'),
       mask: '●',
     }]);
@@ -553,7 +553,7 @@ export async function exportWallet(name) {
 
   const { password } = await inquirer.prompt([{
     type: 'password',
-    name: 'password',
+    name: 'password', // nosec
     message: theme.gold('Password:'),
     mask: '●',
   }]);
@@ -569,3 +569,4 @@ export async function exportWallet(name) {
     error('Wrong password');
   }
 }
+

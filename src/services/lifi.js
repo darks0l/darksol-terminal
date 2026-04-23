@@ -583,6 +583,7 @@ export async function executeLifiBridge(opts = {}) {
  * Check bridge transfer status
  */
 export async function checkBridgeStatus(txHash, opts = {}) {
+  const json = opts.json || false;
   const spin = spinner('Checking bridge status...').start();
 
   try {
@@ -593,10 +594,24 @@ export async function checkBridgeStatus(txHash, opts = {}) {
 
     spin.succeed('Status retrieved');
 
-    showSection('BRIDGE STATUS');
-
     const sending = status.sending || {};
     const receiving = status.receiving || {};
+
+    if (json) {
+      console.log(JSON.stringify({
+        status: status.status,
+        substatus: status.substatus || null,
+        sourceTx: sending.txHash || txHash,
+        sourceChain: sending.chainId ? resolveChainName(sending.chainId) : null,
+        destTx: receiving.txHash || null,
+        destChain: receiving.chainId ? resolveChainName(receiving.chainId) : null,
+        bridge: status.tool || null,
+        timestamp: new Date().toISOString(),
+      }, null, 2));
+      return status;
+    }
+
+    showSection('BRIDGE STATUS');
 
     kvDisplay([
       ['Status', formatBridgeStatus(status.status)],
@@ -613,6 +628,7 @@ export async function checkBridgeStatus(txHash, opts = {}) {
       info('Bridge is still in progress. Check again in a few minutes.');
     }
 
+    return status;
   } catch (err) {
     spin.fail('Status check failed');
     error(err.message);
@@ -633,12 +649,23 @@ function formatBridgeStatus(status) {
 /**
  * Show supported chains
  */
-export async function showSupportedChains() {
+export async function showSupportedChains(opts = {}) {
+  const json = opts.json || false;
   const spin = spinner('Fetching supported chains...').start();
 
   try {
     const chains = await getChains();
     spin.succeed(`${chains.length} chains supported`);
+
+    if (json) {
+      console.log(JSON.stringify({
+        count: chains.length,
+        configured: Object.keys(CHAIN_IDS),
+        chains: chains.map(c => ({ name: c.name, id: c.id, key: c.key, type: c.chainType, configured: !!CHAIN_IDS[c.key] })),
+        timestamp: new Date().toISOString(),
+      }, null, 2));
+      return chains;
+    }
 
     showSection('LI.FI SUPPORTED CHAINS');
 
@@ -673,6 +700,7 @@ export async function showSupportedChains() {
     info(`Your configured chains: ${Object.keys(CHAIN_IDS).join(', ')}`);
     console.log('');
 
+    return chains;
   } catch (err) {
     spin.fail('Failed to fetch chains');
     error(err.message);
@@ -708,6 +736,234 @@ function showKeyNudge() {
   console.log(theme.dim('  💡 Want cross-chain bridges & faster routing? Add a free LI.FI API key:'));
   console.log(theme.dim('     https://docs.li.fi/api-reference/rate-limits → ') + theme.label('darksol keys add lifi'));
   console.log('');
+}
+
+// ──────────────────────────────────────────────────
+// BRIDGE QUOTE (read-only)
+// ──────────────────────────────────────────────────
+
+/**
+ * Show a bridge quote without executing — read-only price check.
+ */
+export async function showBridgeQuote(opts = {}) {
+  const {
+    fromChain: fromChainName,
+    toChain: toChainName,
+    token: tokenSymbol = 'ETH',
+    amount,
+    json: jsonOutput,
+  } = opts;
+
+  const fromChainId = resolveChainId(fromChainName);
+  const toChainId = resolveChainId(toChainName);
+
+  if (!fromChainId) { error(`Unknown source chain: ${fromChainName}. Supported: ${Object.keys(CHAIN_IDS).join(', ')}`); return; }
+  if (!toChainId) { error(`Unknown destination chain: ${toChainName}. Supported: ${Object.keys(CHAIN_IDS).join(', ')}`); return; }
+  if (fromChainId === toChainId) { error('Source and destination chains must be different. Use `trade swap` for same-chain.'); return; }
+
+  const spin = spinner('Getting bridge quote from LI.FI...').start();
+
+  try {
+    const fromToken = tokenSymbol.toUpperCase();
+    const isNative = ['ETH', 'MATIC', 'POL'].includes(fromToken);
+
+    let fromAmount;
+    if (isNative) {
+      fromAmount = ethers.parseEther(amount.toString()).toString();
+    } else {
+      const isStable = ['USDC', 'USDT', 'DAI', 'USDB'].includes(fromToken);
+      fromAmount = ethers.parseUnits(amount.toString(), isStable ? 6 : 18).toString();
+    }
+
+    const quote = await getQuote({
+      fromChain: fromChainId,
+      toChain: toChainId,
+      fromToken,
+      toToken: fromToken,
+      fromAmount,
+      fromAddress: '0x0000000000000000000000000000000000000000',
+      slippage: 0.5,
+    });
+
+    if (!quote?.estimate) {
+      spin.fail('No bridge route found');
+      error('LI.FI could not find a route. Try a different token, amount, or chain pair.');
+      return;
+    }
+
+    spin.succeed('Quote received');
+
+    const action = quote.action || {};
+    const estimate = quote.estimate || {};
+    const toolName = quote.toolDetails?.name || quote.tool || 'Unknown Bridge';
+    const estTime = estimate.executionDuration ? `~${Math.ceil(estimate.executionDuration / 60)} min` : 'varies';
+    const gasCost = estimate.gasCosts?.[0]?.amountUSD || null;
+    const toAmount = estimate.toAmountMin
+      ? ethers.formatUnits(estimate.toAmountMin, estimate.toToken?.decimals || 18)
+      : null;
+
+    const result = {
+      fromChain: fromChainName,
+      toChain: toChainName,
+      fromToken,
+      fromAmount: amount,
+      toToken: action.toToken?.symbol || fromToken,
+      toAmountMin: toAmount,
+      bridge: toolName,
+      estimatedTime: estTime,
+      gasCostUSD: gasCost,
+      timestamp: new Date().toISOString(),
+    };
+
+    if (jsonOutput) {
+      console.log(JSON.stringify(result, null, 2));
+      return result;
+    }
+
+    showSection('BRIDGE QUOTE (LI.FI)');
+    kvDisplay([
+      ['From', `${amount} ${fromToken} on ${fromChainName}`],
+      ['To', `~${toAmount || '?'} ${result.toToken} on ${toChainName}`],
+      ['Bridge', toolName],
+      ['Est. Time', estTime],
+      ['Gas Est.', gasCost ? `$${gasCost}` : 'N/A'],
+    ]);
+    console.log('');
+    info(`Execute: darksol bridge send --from ${fromChainName} --to ${toChainName} --token ${fromToken} -a ${amount}`);
+    console.log('');
+
+    showKeyNudge();
+
+    return result;
+  } catch (err) {
+    spin.fail('Quote failed');
+    error(err.message);
+    if (err.message.includes('Rate limited')) {
+      info('Add a free LI.FI API key: darksol keys add lifi');
+    }
+  }
+}
+
+// ──────────────────────────────────────────────────
+// BRIDGE COMPARE (multi-route comparison)
+// ──────────────────────────────────────────────────
+
+/**
+ * Compare bridge quotes across multiple destination chains for the same token/amount.
+ */
+export async function compareBridgeQuotes(opts = {}) {
+  const {
+    fromChain: fromChainName,
+    toChains: toChainNames = [],
+    token: tokenSymbol = 'ETH',
+    amount,
+    json: jsonOutput,
+  } = opts;
+
+  const fromChainId = resolveChainId(fromChainName);
+  if (!fromChainId) { error(`Unknown source chain: ${fromChainName}. Supported: ${Object.keys(CHAIN_IDS).join(', ')}`); return; }
+  if (!toChainNames.length) { error('Provide at least one destination chain with --to.'); return; }
+  if (!amount) { error('Amount is required.'); return; }
+
+  const spin = spinner('Getting bridge quotes from LI.FI...').start();
+
+  try {
+    const fromToken = tokenSymbol.toUpperCase();
+    const isNative = ['ETH', 'MATIC', 'POL'].includes(fromToken);
+
+    let fromAmount;
+    if (isNative) {
+      fromAmount = ethers.parseEther(amount.toString()).toString();
+    } else {
+      const isStable = ['USDC', 'USDT', 'DAI', 'USDB'].includes(fromToken);
+      fromAmount = ethers.parseUnits(amount.toString(), isStable ? 6 : 18).toString();
+    }
+
+    const results = [];
+    for (const toChainName of toChainNames) {
+      const toChainId = resolveChainId(toChainName);
+      if (!toChainId) {
+        results.push({ toChain: toChainName, error: `Unknown chain: ${toChainName}` });
+        continue;
+      }
+      if (fromChainId === toChainId) {
+        results.push({ toChain: toChainName, error: 'Same as source chain' });
+        continue;
+      }
+
+      try {
+        const quote = await getQuote({
+          fromChain: fromChainId,
+          toChain: toChainId,
+          fromToken,
+          toToken: fromToken,
+          fromAmount,
+          fromAddress: '0x0000000000000000000000000000000000000000',
+          slippage: 0.5,
+        });
+
+        const estimate = quote.estimate || {};
+        const toolName = quote.toolDetails?.name || quote.tool || 'Unknown';
+        const estTime = estimate.executionDuration ? `~${Math.ceil(estimate.executionDuration / 60)} min` : 'varies';
+        const gasCost = estimate.gasCosts?.[0]?.amountUSD || null;
+        const toAmount = estimate.toAmountMin
+          ? ethers.formatUnits(estimate.toAmountMin, estimate.toToken?.decimals || 18)
+          : null;
+
+        results.push({
+          toChain: toChainName,
+          bridge: toolName,
+          toAmountMin: toAmount,
+          estimatedTime: estTime,
+          gasCostUSD: gasCost,
+        });
+      } catch (err) {
+        results.push({ toChain: toChainName, error: err.message?.slice(0, 80) });
+      }
+    }
+
+    spin.succeed('Quotes received');
+
+    const output = {
+      fromChain: fromChainName,
+      fromToken,
+      fromAmount: amount,
+      quotes: results,
+      timestamp: new Date().toISOString(),
+    };
+
+    if (jsonOutput) {
+      console.log(JSON.stringify(output, null, 2));
+      return output;
+    }
+
+    showSection('BRIDGE COMPARISON (LI.FI)');
+    console.log(`  ${theme.dim('From:')} ${amount} ${fromToken} on ${fromChainName}`);
+    console.log('');
+    console.log(`  ${theme.dim('Dest'.padEnd(14))} ${theme.dim('Bridge'.padEnd(18))} ${theme.dim('Receive'.padEnd(18))} ${theme.dim('Time'.padEnd(12))} ${theme.dim('Gas')}`);
+    console.log(`  ${theme.dim('─'.repeat(70))}`);
+
+    for (const r of results) {
+      if (r.error) {
+        console.log(`  ${theme.gold(r.toChain.padEnd(14))} ${theme.error(r.error)}`);
+        continue;
+      }
+      const recv = r.toAmountMin ? `~${parseFloat(r.toAmountMin).toFixed(6)}` : '?';
+      const gas = r.gasCostUSD ? `$${r.gasCostUSD}` : 'N/A';
+      console.log(`  ${theme.gold(r.toChain.padEnd(14))} ${(r.bridge || '?').padEnd(18)} ${recv.padEnd(18)} ${(r.estimatedTime || '?').padEnd(12)} ${gas}`);
+    }
+
+    console.log('');
+    info(`Execute: darksol bridge send --from ${fromChainName} --to <chain> --token ${fromToken} -a ${amount}`);
+    console.log('');
+
+    showKeyNudge();
+
+    return output;
+  } catch (err) {
+    spin.fail('Comparison failed');
+    error(err.message);
+  }
 }
 
 export { CHAIN_IDS, CHAIN_NAMES };

@@ -39,6 +39,16 @@ export const MODEL_CATALOG = {
       { value: 'MiniMax-M2', label: 'MiniMax-M2', desc: 'agentic, advanced reasoning' },
     ],
   },
+  nvidia: {
+    defaultModel: 'nvidia/llama-3.1-nemotron-70b-instruct',
+    choices: [
+      { value: 'nvidia/llama-3.1-nemotron-70b-instruct', label: 'Nemotron 70B', desc: 'high reasoning + tool calling' },
+      { value: 'meta/llama-3.1-8b-instruct', label: 'Llama 3.1 8B', desc: 'fast, free tier friendly' },
+      { value: 'meta/llama-3.1-70b-instruct', label: 'Llama 3.1 70B', desc: 'strong general purpose' },
+      { value: 'mistralai/mistral-large-2-instruct', label: 'Mistral Large 2', desc: 'multilingual, coding' },
+      { value: 'nvidia/nemotron-mini-4b-instruct', label: 'Nemotron Mini 4B', desc: 'ultra-fast, lightweight' },
+    ],
+  },
   ollama: {
     defaultModel: 'llama3.1',
     textInput: true,

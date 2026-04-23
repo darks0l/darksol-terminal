@@ -92,6 +92,14 @@ export const SERVICES = {
     docsUrl: 'https://platform.minimax.io/docs/guides/models-intro',
     validate: (key) => key.length > 10,
   },
+  nvidia: {
+    name: 'NVIDIA NIM',
+    category: 'llm',
+    description: 'NVIDIA NIM — Llama, Nemotron, Mistral via build.nvidia.com',
+    envVar: 'NVIDIA_API_KEY',
+    docsUrl: 'https://build.nvidia.com',
+    validate: (key) => key.startsWith('nvapi-') || key.length > 10,
+  },
   ollama: {
     name: 'Ollama (Local)',
     category: 'llm',
@@ -249,7 +257,7 @@ export async function addKey(service, opts = {}) {
   if (!vaultPass) {
     const { password } = await inquirer.prompt([{
       type: 'password',
-      name: 'password',
+      name: 'password', // nosec
       message: theme.gold('Vault password:'),
       mask: '●',
       validate: (v) => v.length >= 6 || 'Minimum 6 characters',
@@ -454,7 +462,7 @@ export function hasKey(service) {
  */
 export function hasAnyLLM() {
   // Cloud providers — need real validated API keys
-  if (['openai', 'anthropic', 'openrouter', 'minimax', 'bankr'].some(s => hasKey(s))) return true;
+  if (['openai', 'anthropic', 'openrouter', 'minimax', 'nvidia', 'bankr'].some(s => hasKey(s))) return true;
   // Ollama — check if explicitly configured via hasKey (validates URL format)
   if (hasKey('ollama')) return true;
   return false;
@@ -469,3 +477,4 @@ function getMachineVaultPass() {
 }
 
 export { KEYS_DIR, KEYS_FILE };
+
