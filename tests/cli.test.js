@@ -81,4 +81,16 @@ test('command registration includes trade and script subcommands', (t) => {
   assert.match(autoHelp.stdout, /\bstart\b/);
   assert.match(autoHelp.stdout, /\bstatus\b/);
   assert.match(autoHelp.stdout, /\blist\b/);
+
+  const agentCommsHelp = runCli(['agentcomms', '--help'], env);
+  assert.equal(agentCommsHelp.status, 0, agentCommsHelp.stderr);
+  assert.match(agentCommsHelp.stdout, /\bhealth\b/);
+  assert.match(agentCommsHelp.stdout, /\bcountries\b/);
+  assert.match(agentCommsHelp.stdout, /\bbuy\b/);
+  assert.match(agentCommsHelp.stdout, /\bmessages\b/);
+  assert.match(agentCommsHelp.stdout, /\bpremium-search\b/);
+
+  const smsHelp = runCli(['sms', '--help'], env);
+  assert.equal(smsHelp.status, 0, smsHelp.stderr);
+  assert.match(smsHelp.stdout, /\bmessages\b/);
 });

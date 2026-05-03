@@ -216,6 +216,7 @@ ai <prompt>   # chat with trading assistant
 | `oracle` | On-chain random number oracle | $0.05–$0.25 |
 | `casino` | The Clawsino — on-chain betting | $1 flat bets |
 | `cards` | Crypto → prepaid Visa/MC cards | Service fees |
+| `agentcomms` / `sms` | x402-gated phone numbers + SMS checks for agents | x402 micropayments |
 | `builders` | ERC-8021 builder directory + leaderboard | Free |
 | `facilitator` | x402 payment verification & settlement | Free |
 | `telegram` | Telegram bot — AI chat via Telegram Bot API | Provider dependent |
@@ -764,7 +765,7 @@ darksol skills info darksol-terminal     # Skill details
 darksol skills uninstall darksol-terminal
 ```
 
-**Available skills:** darksol-terminal, darksol-facilitator, darksol-prepaid-cards, random-oracle, the-clawsino
+**Available skills:** darksol-terminal, darksol-facilitator, darksol-prepaid-cards, darksol-agentcomms, random-oracle, the-clawsino
 
 ---
 
@@ -787,6 +788,13 @@ darksol casino stats
 darksol cards catalog                     # browse available card providers
 darksol cards order swype 50 --email you@example.com  # order a $50 card
 darksol cards status <trade_id>           # check order status
+
+# AgentComms — x402 SMS rails for autonomous agents
+darksol agentcomms health                 # service status
+darksol agentcomms countries              # available disposable-number countries
+darksol agentcomms buy --country US       # request a disposable number
+darksol agentcomms messages <number_id>   # check incoming SMS
+darksol sms premium-search --area-code 317 # durable-line inventory shortcut
 
 # Builder Index — ERC-8021 rankings
 darksol builders leaderboard

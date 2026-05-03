@@ -91,6 +91,7 @@ const config = new Conf({
         oracle: 'https://acp.darksol.net/api/oracle',
         casino: 'https://casino.darksol.net',
         cards: 'https://acp.darksol.net',
+        agentcomms: 'https://acp.darksol.net',
         facilitator: 'https://facilitator.darksol.net',
         builders: 'https://builders.darksol.net',
         market: 'https://acp.darksol.net/market',

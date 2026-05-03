@@ -25,6 +25,7 @@ import { oracleFlip, oracleDice, oracleNumber, oracleShuffle, oracleHealth } fro
 import { casinoBet, casinoTables, casinoStats, casinoReceipt, casinoHealth, casinoVerify } from './services/casino.js';
 import { pokerNewGame, pokerAction, pokerStatus, pokerHistory } from './services/poker.js';
 import { cardsCatalog, cardsOrder, cardsStatus } from './services/cards.js';
+import { agentCommsBuyNumber, agentCommsCountries, agentCommsHealth, agentCommsMessages, agentCommsPremiumSearch } from './services/agentcomms.js';
 import { facilitatorHealth, facilitatorVerify, facilitatorSettle } from './services/facilitator.js';
 import { healthCommand } from './services/health.js';
 import { scanToken, displayScanResult, scanResultToJSON } from './services/scanner.js';
@@ -837,6 +838,52 @@ export function cli(argv) {
     .command('status <tradeId>')
     .description('Check order status by trade ID')
     .action((id) => cardsStatus(id));
+
+  // ═══════════════════════════════════════
+  // AGENTCOMMS COMMANDS
+  // ═══════════════════════════════════════
+  const agentcomms = program
+    .command('agentcomms')
+    .alias('sms')
+    .description('AgentComms - x402-gated phone numbers and SMS for agents');
+
+  agentcomms
+    .command('health')
+    .description('Check AgentComms service status')
+    .option('--json', 'Output as JSON')
+    .action((opts) => agentCommsHealth(opts));
+
+  agentcomms
+    .command('countries')
+    .description('List disposable number countries')
+    .option('--json', 'Output as JSON')
+    .action((opts) => agentCommsCountries(opts));
+
+  agentcomms
+    .command('buy')
+    .description('Request a disposable agent phone number')
+    .option('-c, --country <code>', 'Country code', 'US')
+    .option('--agent-id <id>', 'Agent identifier to attach to the number')
+    .option('--callback-url <url>', 'Webhook/callback URL for incoming messages')
+    .option('--label <label>', 'Human-readable label')
+    .option('--json', 'Output as JSON')
+    .action((opts) => agentCommsBuyNumber(opts));
+
+  agentcomms
+    .command('messages [numberId]')
+    .description('Check incoming SMS messages for a number')
+    .option('--phone-number <number>', 'Phone number when numberId is unavailable')
+    .option('--json', 'Output as JSON')
+    .action((numberId, opts) => agentCommsMessages(numberId, opts));
+
+  agentcomms
+    .command('premium-search')
+    .description('Search premium durable US agent lines')
+    .option('-c, --country <code>', 'Country code', 'US')
+    .option('-a, --area-code <code>', 'US area code')
+    .option('-l, --limit <n>', 'Number of results', '10')
+    .option('--json', 'Output as JSON')
+    .action((opts) => agentCommsPremiumSearch(opts));
 
   // ═══════════════════════════════════════
   // BUILDERS COMMANDS
@@ -2622,6 +2669,7 @@ function showCommandList() {
     ['casino', 'The Clawsino - betting'],
     ['poker', 'GTO Poker Arena — heads-up holdem'],
     ['cards', 'Prepaid Visa/MC cards'],
+    ['agentcomms', 'x402 SMS rails for agents'],
     ['builders', 'ERC-8021 builder index'],
     ['mail', 'AgentMail - email for your agent'],
     ['facilitator', 'x402 payment facilitator'],
@@ -2657,7 +2705,7 @@ function showCommandList() {
 function generateBashCompletion() {
   const commands = [
     'wallet', 'trade', 'bridge', 'dca', 'arb', 'auto', 'market', 'oracle',
-    'casino', 'poker', 'cards', 'builders', 'facilitator', 'approvals',
+    'casino', 'poker', 'cards', 'agentcomms', 'sms', 'builders', 'facilitator', 'approvals',
     'privacy', 'mail', 'serve', 'browser', 'scan', 'gas', 'price', 'watch',
     'chat', 'soul', 'memory', 'setup', 'ai', 'keys', 'agent', 'skills',
     'daemon', 'telegram', 'lightning', 'ln', 'pay', 'tips', 'networks',
@@ -2677,6 +2725,8 @@ function generateBashCompletion() {
     oracle: 'flip dice number shuffle health',
     casino: 'status bet tables stats receipt verify',
     cards: 'catalog order status',
+    agentcomms: 'health countries buy messages premium-search',
+    sms: 'health countries buy messages premium-search',
     builders: 'leaderboard lookup feed',
     facilitator: 'health verify settle',
     approvals: 'list revoke check',
@@ -2719,7 +2769,7 @@ complete -F _darksol_completions darksol`;
 function generateZshCompletion() {
   const commands = [
     'wallet', 'trade', 'bridge', 'dca', 'arb', 'auto', 'market', 'oracle',
-    'casino', 'poker', 'cards', 'builders', 'facilitator', 'approvals',
+    'casino', 'poker', 'cards', 'agentcomms', 'sms', 'builders', 'facilitator', 'approvals',
     'privacy', 'mail', 'serve', 'browser', 'scan', 'gas', 'price', 'watch',
     'chat', 'soul', 'memory', 'setup', 'ai', 'keys', 'agent', 'skills',
     'daemon', 'telegram', 'tips', 'networks', 'quickstart', 'lookup',

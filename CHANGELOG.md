@@ -7,16 +7,26 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
-## [0.17.1] - 2026-04-08
+## [0.17.1] - 2026-05-03
 
-### Added — Lightning, Oracle, Cards, Privacy Full Documentation
+### Added — AgentComms CLI
 
-- **README maintenance sweep** — documented all previously undocumented modules:
-  - **Lightning module** — full CLI docs for all commands: init, start, stop, info, balance, pay, invoice, offer, decode, channels, open, close, force-close, peers, connect, liquidity, jit-channel, history
-  - **Oracle CLI** — documented flip, dice, number, shuffle, health commands
-  - **Cards CLI** — documented catalog, order, status commands
-  - **Privacy module** — expanded from partial railgun-shield/unshield mention to full docs covering privacy score, shield-status, router-info, and full railgun-shield/railgun-unshield CLI surface
-- No source code changes — documentation only
+- **AgentComms/SMS command group** — terminal access to DARKSOL AgentComms x402 SMS rails:
+  - `darksol agentcomms health` — check live service status
+  - `darksol agentcomms countries` — list disposable-number countries
+  - `darksol agentcomms buy --country US` — request a disposable agent phone number
+  - `darksol agentcomms messages <numberId>` — check incoming SMS
+  - `darksol agentcomms premium-search --area-code 317` — search durable US agent lines
+  - `darksol sms ...` — shortcut alias for the same command group
+- **AgentComms service client** — added `src/services/agentcomms.js` with JSON output support, readable tables, and graceful errors.
+- **Config default** — added `services.agentcomms` defaulting to `https://acp.darksol.net`.
+- **Shell completion** — added `agentcomms` and `sms` command/subcommand completions.
+- **CLI tests** — command registration coverage for AgentComms and SMS alias.
+
+### Changed
+
+- README service list and examples now include AgentComms alongside cards, oracle, casino, builders, and facilitator.
+- AgentComms client strips legacy `/cards` service base paths so older installs still resolve the live ACP API root correctly.
 
 ## [0.17.0] - 2026-04-03
 

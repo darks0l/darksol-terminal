@@ -1,6 +1,6 @@
 {
   "name": "@darksol/terminal",
-  "version": "0.17.0",
+  "version": "0.17.1",
   "description": "DARKSOL Terminal — unified CLI for all DARKSOL services. Market intel, trading, oracle, casino, and more.",
   "type": "module",
   "bin": {
@@ -53,4 +53,3 @@
     "node": ">=18.0.0"
   }
 }
-
