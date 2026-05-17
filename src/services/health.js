@@ -27,6 +27,11 @@ const SERVICES = [
     desc: 'Prepaid crypto cards',
   },
   {
+    name: 'Wiretap',
+    url: () => (getServiceURL('aim') || 'https://acp.darksol.net') + '/api/aim/health',
+    desc: 'AIM / Wiretap agent messaging',
+  },
+  {
     name: 'LI.FI',
     url: () => 'https://li.quest/v1/status',
     desc: 'Cross-chain swaps & bridges',

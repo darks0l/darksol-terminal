@@ -201,7 +201,7 @@ export async function fetchWithX402(url, opts = {}, x402Opts = {}) {
       paid: false,
       x402: true,
       paymentInfo: paymentReq,
-      error: 'Agent signer not running. Start it: darksol signer start',
+      error: 'Agent signer not running. Start it: darksol agent start <wallet-name>',
     };
   }
 

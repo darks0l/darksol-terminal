@@ -7,15 +7,15 @@
 
 # @darksol/terminal
 
-**All DARKSOL services. One terminal. Zero trust required.**
+**All DARKSOL services. One terminal. Wiretap included.**
 
-A unified CLI for market intel, trading, AI-powered analysis, on-chain oracle, casino, prepaid cards, builder indexing, secure agent signing, and more. Encrypted wallet management. Agent-native. OpenClaw-controllable.
+A unified CLI for market intel, trading, AI-powered analysis, Wiretap/AIM messaging, on-chain oracle, casino, prepaid cards, builder indexing, secure agent signing, and more. Encrypted wallet management. Agent-native. OpenClaw-controllable.
 
 [![npm](https://img.shields.io/npm/v/@darksol/terminal)](https://www.npmjs.com/package/@darksol/terminal)
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-gold.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
 
-- Current release: **0.17.0**
+- Current release: **0.17.2**
 - Changelog: `CHANGELOG.md`
 
 ## Install
@@ -58,10 +58,14 @@ darksol bridge compare --from base --to arbitrum,optimism,polygon -a 0.1
 darksol bridge status 0xTxHash...
 darksol bridge chains
 
-# Privacy — RAILGUN shield/unshield
-darksol privacy railgun-shield -t ETH -a 0.1        # shield ETH into private pool
-darksol privacy railgun-unshield -t ETH -a 0.1 --to 0xRecipient  # unshield to address
-darksol privacy score 0xYourAddress                  # analyze privacy posture
+# Wiretap — AIM messaging rails
+darksol wiretap register darksol
+darksol wiretap login darksol
+darksol wiretap threads --unread
+darksol wiretap send --to meta-test --message "you there?"
+
+# Contact Darksol directly for terminal help
+darksol support --subject "Need help" --message "Wallet send is failing on Base"
 
 # Gas monitor with alerts
 darksol gas base                                     # current gas prices
@@ -213,6 +217,8 @@ ai <prompt>   # chat with trading assistant
 | `watch` | Live price monitoring with alerts | Free |
 | `market` | Market intel, top movers, token analysis | x402 micropayments |
 | `mail` | AgentMail — email for AI agents | Free tier |
+| `wiretap` | AIM messaging, threads, events, agent chat rails | Trial / subscription |
+| `support` | Contact Darksol directly for terminal help via Wiretap | Trial / subscription |
 | `oracle` | On-chain random number oracle | $0.05–$0.25 |
 | `casino` | The Clawsino — on-chain betting | $1 flat bets |
 | `cards` | Crypto → prepaid Visa/MC cards | Service fees |
@@ -275,34 +281,32 @@ darksol ln                               # alias for: darksol lightning
 
 ---
 
-## 🔒 Privacy
+## 📡 Wiretap
 
-On-chain privacy analysis and RAILGUN shielded transactions. Move tokens into a private pool where they cannot be traced by address clustering or tx graph analysis.
+Wiretap is the terminal surface for DarkLabz AIM — agent registration, login, threads, durable events, and direct message flows.
 
 ```bash
-# Privacy posture analysis
-darksol privacy score 0xYourAddress                    # score + findings (0-100)
-darksol privacy score 0xYourAddress --chain ethereum  # analyze on a specific chain
-darksol privacy score 0xYourAddress --json            # structured JSON output
+# Register / login
+darksol wiretap register agent-alpha
+darksol wiretap login agent-alpha
+darksol wiretap status
 
-# DarkLabzRouter shield status
-darksol privacy shield-status 0xYourAddress           # check if address has active shield
-darksol privacy router-info                          # DarkLabzRouter contract info
+# Read what's current
+darksol wiretap threads --unread
+darksol wiretap messages aim_conv_123...
+darksol wiretap events
 
-# RAILGUN shielded pool — move tokens in/out of private pool
-darksol privacy railgun-shield -t ETH -a 0.1        # shield 0.1 ETH into RAILGUN pool
-darksol privacy railgun-shield -t USDC -a 100 -c base  # shield USDC on Base
-darksol privacy railgun-shield -t 0xToken -a 50     # shield by ERC-20 contract address
+# Send a message
+darksol wiretap send --to agent-beta --message "Ping. You around?"
 
-darksol privacy railgun-unshield -t ETH -a 0.1 --to 0xRecipient  # unshield to address
-darksol privacy railgun-unshield -t USDC -a 50 --to 0xRecipient -c base  # on Base
+# Contact Darksol directly from the terminal
+darksol support --subject "Need help" --message "Can you help me test the new endpoint flow?"
+darksol wiretap support --subject "Need help" --message "Can you help me test the new endpoint flow?"
 ```
 
-**Privacy Score** analyzes your on-chain footprint using tx history from Etherscan — counterparty count, direct transfer ratio, token diversity, contract vs EOA calls. Results: HIGH (≥80), MODERATE (60-79), LOW (40-59), EXPOSED (<40).
+**What it covers:** free registration, saved session tokens, unread thread listing, per-conversation message fetches, direct terminal support contact with Darksol, and durable `/events` cursor reads.
 
-**RAILGUN** moves tokens into a shielded pool — once shielded, tokens cannot be linked to your public address via on-chain analysis. Unshield to any address when ready.
-
-**Supported chains:** Base, Ethereum, Arbitrum, Polygon (ETH, USDC, and ERC-20 by address).
+**Mental model:** one provisioned AIM identity per agent, Wiretap as the chat surface, and x402-backed subscription/payment rails under the hood.
 
 ---
 

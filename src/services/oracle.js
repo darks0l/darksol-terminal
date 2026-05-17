@@ -33,7 +33,7 @@ export async function oracleHealth() {
     if (signerUp) {
       console.log(`  ${theme.success('●')} Agent signer running — x402 auto-pay enabled`);
     } else {
-      console.log(`  ${theme.dim('○')} Agent signer not running — start for auto-pay: ${theme.gold('darksol signer start')}`);
+      console.log(`  ${theme.dim('○')} Agent signer not running — start for auto-pay: ${theme.gold('darksol agent start <wallet-name>')}`);
     }
 
     console.log('');
@@ -62,7 +62,7 @@ async function oraclePlay(endpoint, label, displayFn) {
       if (result.error) {
         info(result.error);
       } else {
-        info('Start agent signer for auto-pay: darksol signer start');
+        info('Start agent signer for auto-pay: darksol agent start <wallet-name>');
       }
       return null;
     }

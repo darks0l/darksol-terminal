@@ -9,7 +9,7 @@ import { showSection } from '../ui/banner.js';
 // INTENT SYSTEM PROMPT
 // ──────────────────────────────────────────────────
 
-const INTENT_SYSTEM_PROMPT = `You are DARKSOL Terminal's trading AI assistant. You help users execute trades, send/receive tokens, analyze markets, manage DCA strategies, order prepaid cards, and navigate the DARKSOL ecosystem.
+const INTENT_SYSTEM_PROMPT = `You are DARKSOL Terminal's trading AI assistant. You help users execute trades, send/receive tokens, analyze markets, manage DCA strategies, order prepaid cards, use Wiretap/AIM messaging, and navigate the DARKSOL ecosystem.
 
 You are embedded in a CLI/web terminal. Your responses become actions — when you output structured JSON, the terminal executes real on-chain transactions, card orders, and wallet operations. Be precise. Be careful. Real money is at stake.
 
@@ -19,6 +19,7 @@ CAPABILITIES:
 - Send ETH and ERC-20 tokens to any address
 - Snipe tokens via Uniswap V2 (Base, Ethereum)
 - Order prepaid Visa/Mastercard cards with crypto (via Trocador)
+- Register/login to Wiretap and handle AIM messaging flows
 - Analyze token prices, liquidity, and market conditions
 - Suggest DCA strategies based on user goals
 - Explain transaction results and gas costs
@@ -70,7 +71,7 @@ ACTIONS (use the most specific one):
 - "arb_monitor" — start real-time arbitrage monitoring (e.g. "monitor arb", "watch for arb opportunities")
 - "approvals" — check or revoke ERC-20 token approvals (e.g. "check my approvals", "revoke approvals", "what tokens have I approved", "show unlimited approvals")
 - "scan" — run a token security scan (e.g. "is this token safe?", "scan 0x...", "check if 0x... is a honeypot", "is 0x... a rug pull?", "security check on 0x...")
-- "privacy" — check wallet privacy score or shield status (e.g. "check my privacy", "privacy score for 0x...", "how exposed is my wallet?", "shield status")
+- "wiretap" — AIM/Wiretap messaging (e.g. "log into wiretap", "show my wiretap threads", "send meta-test a message on wiretap")
 - "bridge_quote" — get a cross-chain bridge quote (e.g. "how much to bridge ETH from base to arbitrum?", "bridge quote 1 ETH base to optimism")
 - "unknown" — can't determine what the user wants
 
@@ -105,7 +106,7 @@ If they mention AgentMail or "my email", suggest using their configured agent em
 
 When parsing, respond with ONLY valid JSON:
 {
-  "action": "swap|send|snipe|dca|price|balance|info|analyze|gas|cards|casino|privacy|bridge_quote|unknown",
+  "action": "swap|send|snipe|dca|price|balance|info|analyze|gas|cards|casino|wiretap|bridge_quote|unknown",
   "tokenIn": "symbol or address (for swaps)",
   "tokenOut": "symbol or address (for swaps)",
   "token": "symbol (for send/price/analyze)",
@@ -166,7 +167,7 @@ COMMAND MAPPING:
 - casino → darksol casino bet <game> -c <choice>
 - analyze → darksol ai analyze <token>
 - scan → darksol scan <address> --chain <chain>
-- privacy → darksol privacy score <address> --chain <chain>
+- wiretap → darksol wiretap <register|login|threads|messages|send|support|events> ...
 - bridge_quote → darksol bridge quote --from <chain> --to <chain> --token <token> -a <amount>`;
 
 // ──────────────────────────────────────────────────
@@ -712,16 +713,43 @@ export async function executeIntent(intent, opts = {}) {
         return { success: true, action: 'approvals' };
       }
 
-      case 'privacy': {
-        const address = intent.to || intent.token || intent.tokenIn;
-        if (!address || !address.startsWith('0x')) {
-          info('I need a wallet address to check privacy. Example: "privacy score 0x..."');
-          return { success: false, reason: 'Provide a wallet address.' };
+      case 'wiretap': {
+        const raw = String(intent.raw || '').toLowerCase();
+        const wantsThreads = /thread|inbox|unread|conversation/.test(raw);
+        const wantsEvents = /event|cursor|notification/.test(raw);
+        const wantsMessages = /message(s)?\s+.*aim_conv_|conversation/.test(raw);
+        const wantsLogin = /login|sign in|log in/.test(raw);
+        const wantsRegister = /register|sign up|create account/.test(raw);
+        const wantsSend = /send|message\s+/.test(raw) && (intent.to || intent.followUp || raw.includes(' to '));
+
+        if (wantsRegister) {
+          info('Use: darksol wiretap register <username>');
+          return { success: true, action: 'wiretap' };
         }
-        const { privacyScore: doScore } = await import('../services/privacy.js');
-        const chain = intent.chain || getConfig('chain') || 'base';
-        await doScore(address, { chain });
-        return { success: true, action: 'privacy' };
+        if (wantsLogin) {
+          info('Use: darksol wiretap login <username>');
+          return { success: true, action: 'wiretap' };
+        }
+        if (wantsEvents) {
+          const { wiretapEvents } = await import('../services/wiretap.js');
+          await wiretapEvents({});
+          return { success: true, action: 'wiretap' };
+        }
+        if (wantsMessages) {
+          const { wiretapMessages } = await import('../services/wiretap.js');
+          await wiretapMessages(intent.conversationId || intent.to || null, {});
+          return { success: true, action: 'wiretap' };
+        }
+        if (wantsSend) {
+          const { wiretapSend } = await import('../services/wiretap.js');
+          await wiretapSend({ to: intent.to, message: intent.followUp || intent.reasoning || intent.raw });
+          return { success: true, action: 'wiretap' };
+        }
+        if (wantsThreads || true) {
+          const { wiretapThreads } = await import('../services/wiretap.js');
+          await wiretapThreads({ unreadOnly: /unread/.test(raw) });
+          return { success: true, action: 'wiretap' };
+        }
       }
 
       case 'bridge_quote': {

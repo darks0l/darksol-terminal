@@ -7,6 +7,35 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.17.2] - 2026-05-16
+
+### Added — Wiretap CLI
+
+- **Wiretap command group** — terminal access to DarkLabz AIM / Wiretap:
+  - `darksol wiretap register <username>` — create a new AIM account
+  - `darksol wiretap login [username]` — save a local AIM session token
+  - `darksol wiretap status` — inspect current profile/session state
+  - `darksol wiretap contacts` — list saved contacts
+  - `darksol wiretap threads --unread` — list active/unread conversations
+  - `darksol wiretap messages <conversationId>` — inspect a thread
+  - `darksol wiretap send --to <username> --message "..."` — send direct AIM messages
+  - `darksol wiretap support --subject "..." --message "..."` — contact Darksol through the built-in terminal support path
+  - `darksol support --subject "..." --message "..."` — top-level shortcut for terminal support
+  - `darksol wiretap events` — reconcile durable AIM event cursor state
+- **Wiretap config defaults** — added `services.aim` plus persisted `wiretap` session/cursor state.
+- **Health check** — `darksol health` now probes `GET /api/aim/health` as Wiretap.
+
+### Removed
+
+- Removed the entire `privacy` / RAILGUN surface from the terminal CLI.
+- Removed `src/services/privacy.js` and all help/completion/AI intent wiring that exposed the old privacy commands.
+
+### Changed
+
+- README now positions Wiretap/AIM as a first-class terminal surface.
+- Terminal support copy now consistently points users to Darksol via Wiretap instead of vague concierge wording.
+- AI intent prompt now steers messaging asks toward `darksol wiretap ...` instead of the old privacy branch.
+
 ## [0.17.1] - 2026-05-03
 
 ### Added — AgentComms CLI

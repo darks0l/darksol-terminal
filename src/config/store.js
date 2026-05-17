@@ -88,6 +88,7 @@ const config = new Conf({
     services: {
       type: 'object',
       default: {
+        aim: 'https://acp.darksol.net',
         oracle: 'https://acp.darksol.net/api/oracle',
         casino: 'https://casino.darksol.net',
         cards: 'https://acp.darksol.net',
@@ -95,6 +96,15 @@ const config = new Conf({
         facilitator: 'https://facilitator.darksol.net',
         builders: 'https://builders.darksol.net',
         market: 'https://acp.darksol.net/market',
+      },
+    },
+    wiretap: {
+      type: 'object',
+      default: {
+        username: '',
+        sessionToken: '',
+        conversationId: '',
+        lastCursor: '',
       },
     },
   },

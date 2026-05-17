@@ -7,7 +7,7 @@ description: "DARKSOL Terminal — unified CLI + x402 platform for trading, wall
 
 **All DARKSOL services. One terminal. Zero trust required. 🌑**
 
-`@darksol/terminal` v0.8.0 | npm: `npm install -g @darksol/terminal`
+`@darksol/terminal` v0.17.2 | npm: `npm install -g @darksol/terminal`
 
 ---
 
@@ -27,8 +27,8 @@ The agent signer is your secure wallet interface. It runs as a local HTTP server
 
 ```bash
 # Start the signer with a wallet
-darksol signer start <wallet-name>
-darksol signer start <wallet-name> --max-value 0.5 --daily-limit 2.0
+darksol agent start <wallet-name>
+darksol agent start <wallet-name> --max-value 0.5 --daily-limit 2.0
 
 # Or set env vars for non-interactive use
 export DARKSOL_WALLET_PASSWORD=<password>

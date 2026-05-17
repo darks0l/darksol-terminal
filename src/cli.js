@@ -26,6 +26,7 @@ import { casinoBet, casinoTables, casinoStats, casinoReceipt, casinoHealth, casi
 import { pokerNewGame, pokerAction, pokerStatus, pokerHistory } from './services/poker.js';
 import { cardsCatalog, cardsOrder, cardsStatus } from './services/cards.js';
 import { agentCommsBuyNumber, agentCommsCountries, agentCommsHealth, agentCommsMessages, agentCommsPremiumSearch } from './services/agentcomms.js';
+import { wiretapRegister, wiretapLogin, wiretapStatus, wiretapContacts, wiretapThreads, wiretapMessages, wiretapSend, wiretapSupport, wiretapEvents } from './services/wiretap.js';
 import { facilitatorHealth, facilitatorVerify, facilitatorSettle } from './services/facilitator.js';
 import { healthCommand } from './services/health.js';
 import { scanToken, displayScanResult, scanResultToJSON } from './services/scanner.js';
@@ -36,7 +37,6 @@ import {
   lightningConnect, lightningLiquidity, lightningJitChannel, lightningHistory,
 } from './lightning/commands.js';
 import { detectLightningPayment } from './lightning/bolt11.js';
-import { privacyScore, shieldStatus, routerInfo, railgunShield, railgunUnshield } from './services/privacy.js';
 import { buildersLeaderboard, buildersLookup, buildersFeed } from './services/builders.js';
 import { createScript, listScripts, runScript, showScript, editScript, deleteScript, cloneScript, listTemplates } from './scripts/engine.js';
 import {
@@ -886,6 +886,81 @@ export function cli(argv) {
     .action((opts) => agentCommsPremiumSearch(opts));
 
   // ═══════════════════════════════════════
+  // WIRETAP COMMANDS
+  // ═══════════════════════════════════════
+  const wiretap = program
+    .command('wiretap')
+    .description('Wiretap - AIM messaging and payment rails for agents');
+
+  wiretap
+    .command('register <username>')
+    .description('Create a new Wiretap account')
+    .option('--display-name <name>', 'Display name')
+    .option('--password <pw>', 'Password (otherwise prompt)')
+    .option('--private', 'Set discoverable=false')
+    .action((username, opts) => wiretapRegister(username, {
+      displayName: opts.displayName,
+      password: opts.password,
+      discoverable: !opts.private,
+    }));
+
+  wiretap
+    .command('login [username]')
+    .description('Log into Wiretap and save the session token locally')
+    .option('--password <pw>', 'Password (otherwise prompt)')
+    .action((username, opts) => wiretapLogin(username, opts));
+
+  wiretap
+    .command('status')
+    .description('Show current Wiretap session/profile status')
+    .option('--json', 'Output as JSON')
+    .action((opts) => wiretapStatus(opts));
+
+  wiretap
+    .command('contacts')
+    .description('List Wiretap contacts')
+    .option('-u, --username <username>', 'Username override')
+    .option('--json', 'Output as JSON')
+    .action((opts) => wiretapContacts(opts));
+
+  wiretap
+    .command('threads')
+    .description('List Wiretap threads')
+    .option('--unread', 'Only show unread threads')
+    .option('--json', 'Output as JSON')
+    .action((opts) => wiretapThreads({ unreadOnly: opts.unread, json: opts.json }));
+
+  wiretap
+    .command('messages [conversationId]')
+    .description('Show messages from a Wiretap conversation')
+    .option('-l, --limit <n>', 'Message limit', '20')
+    .option('--json', 'Output as JSON')
+    .action((conversationId, opts) => wiretapMessages(conversationId, { limit: opts.limit, json: opts.json }));
+
+  wiretap
+    .command('send')
+    .description('Send a Wiretap message')
+    .option('--from <username>', 'Sender username override')
+    .option('--to <username>', 'Recipient username')
+    .option('--message <text>', 'Message body')
+    .action((opts) => wiretapSend(opts));
+
+  wiretap
+    .command('support')
+    .description('Contact Darksol directly through the built-in Wiretap support path')
+    .option('--subject <text>', 'Support subject line')
+    .option('--message <text>', 'Initial support message')
+    .option('--json', 'Output as JSON')
+    .action((opts) => wiretapSupport(opts));
+
+  wiretap
+    .command('events')
+    .description('Fetch durable Wiretap events using the saved cursor')
+    .option('--cursor <cursor>', 'Cursor override')
+    .option('--json', 'Output as JSON')
+    .action((opts) => wiretapEvents(opts));
+
+  // ═══════════════════════════════════════
   // BUILDERS COMMANDS
   // ═══════════════════════════════════════
   const builders = program
@@ -1001,144 +1076,6 @@ export function cli(argv) {
     .description('Check specific token + spender approval')
     .option('-c, --chain <chain>', 'Target chain', 'base')
     .action((token, spender, opts) => checkSpecificApproval(token, spender, opts));
-
-  // ═══════════════════════════════════════
-  // PRIVACY COMMANDS
-  // ═══════════════════════════════════════
-  const privacy = program
-    .command('privacy')
-    .description('🛡️ Privacy tools — score, shield status, DarkLabzRouter');
-
-  privacy
-    .command('score <address>')
-    .description('Analyze wallet privacy posture via on-chain activity')
-    .option('-c, --chain <chain>', 'Target chain (base, ethereum, arbitrum, optimism, polygon)', 'base')
-    .option('--json', 'Output as JSON')
-    .action(async (address, opts) => {
-      const { showMiniBanner } = await import('./ui/banner.js');
-      showMiniBanner();
-
-      const spin = spinner('Analyzing privacy posture...').start();
-      try {
-        spin.succeed('Analysis complete');
-        await privacyScore(address, { chain: opts.chain, json: opts.json });
-      } catch (err) {
-        spin.fail('Privacy analysis failed');
-        error(err.message);
-        if (err.message.includes('Invalid address')) {
-          info('Provide a valid 0x Ethereum address (42 characters).');
-        }
-        if (err.message.includes('Unsupported chain')) {
-          info('Supported chains: base, ethereum, arbitrum, optimism, polygon');
-        }
-      }
-    });
-
-  privacy
-    .command('shield <address>')
-    .description('Check DarkLabzRouter shield status on Base')
-    .option('--json', 'Output as JSON')
-    .action(async (address, opts) => {
-      const { showMiniBanner } = await import('./ui/banner.js');
-      showMiniBanner();
-
-      const spin = spinner('Checking shield status...').start();
-      try {
-        spin.succeed('Shield status retrieved');
-        await shieldStatus(address, { json: opts.json });
-      } catch (err) {
-        spin.fail('Shield check failed');
-        error(err.message);
-        if (err.message.includes('No RPC')) {
-          info('Set a Base RPC: darksol config rpc base <url>');
-        }
-      }
-    });
-
-  privacy
-    .command('router')
-    .description('Show DarkLabzRouter contract info')
-    .option('--json', 'Output as JSON')
-    .action(async (opts) => {
-      const { showMiniBanner } = await import('./ui/banner.js');
-      showMiniBanner();
-
-      const spin = spinner('Fetching router info...').start();
-      try {
-        spin.succeed('Router info retrieved');
-        await routerInfo({ json: opts.json });
-      } catch (err) {
-        spin.fail('Router info failed');
-        error(err.message);
-        if (err.message.includes('No RPC')) {
-          info('Set a Base RPC: darksol config rpc base <url>');
-        }
-      }
-    });
-
-  privacy
-    .command('railgun-shield')
-    .alias('rs')
-    .description('Shield tokens via RAILGUN — deposit into private pool')
-    .option('-t, --token <token>', 'Token to shield (ETH or 0x address)', 'ETH')
-    .option('-a, --amount <amount>', 'Amount to shield')
-    .option('-c, --chain <chain>', 'Chain (base, ethereum, arbitrum, polygon)', 'base')
-    .option('-w, --wallet <name>', 'Wallet to use')
-    .option('-p, --password <pw>', 'Wallet password (non-interactive)')
-    .option('--json', 'Output as JSON')
-    .action(async (opts) => {
-      if (!opts.amount) {
-        const inquirer = (await import('inquirer')).default;
-        const answers = await inquirer.prompt([
-          { type: 'input', name: 'token', message: 'Token to shield:', default: opts.token || 'ETH' },
-          { type: 'input', name: 'amount', message: 'Amount:', default: '0.1' },
-        ]);
-        opts.token = answers.token;
-        opts.amount = answers.amount;
-      }
-      await railgunShield({
-        token: opts.token,
-        amount: opts.amount,
-        chain: opts.chain,
-        wallet: opts.wallet,
-        password: opts.password,
-        json: opts.json,
-      });
-    });
-
-  privacy
-    .command('railgun-unshield')
-    .alias('ru')
-    .description('Unshield tokens from RAILGUN — withdraw to public address')
-    .option('-t, --token <token>', 'Token to unshield (ETH or 0x address)', 'ETH')
-    .option('-a, --amount <amount>', 'Amount to unshield')
-    .option('--to <address>', 'Recipient address')
-    .option('-c, --chain <chain>', 'Chain (base, ethereum, arbitrum, polygon)', 'base')
-    .option('-w, --wallet <name>', 'Wallet to use')
-    .option('-p, --password <pw>', 'Wallet password (non-interactive)')
-    .option('--json', 'Output as JSON')
-    .action(async (opts) => {
-      if (!opts.amount || !opts.to) {
-        const inquirer = (await import('inquirer')).default;
-        const answers = await inquirer.prompt([
-          { type: 'input', name: 'token', message: 'Token to unshield:', default: opts.token || 'ETH' },
-          { type: 'input', name: 'amount', message: 'Amount:', default: opts.amount || '0.1' },
-          { type: 'input', name: 'to', message: 'Recipient address:', default: opts.to || '' },
-        ]);
-        opts.token = answers.token;
-        opts.amount = answers.amount;
-        opts.to = answers.to;
-      }
-      await railgunUnshield({
-        token: opts.token,
-        amount: opts.amount,
-        recipient: opts.to,
-        chain: opts.chain,
-        wallet: opts.wallet,
-        password: opts.password,
-        json: opts.json,
-      });
-    });
 
   // ═══════════════════════════════════════
   // MAIL COMMANDS
@@ -1294,6 +1231,14 @@ export function cli(argv) {
         error(err.message);
       }
     });
+
+  program
+    .command('support')
+    .description('Contact Darksol for terminal help via Wiretap')
+    .option('--subject <text>', 'Support subject line')
+    .option('--message <text>', 'Initial support message')
+    .option('--json', 'Output as JSON')
+    .action((opts) => wiretapSupport(opts));
 
   // ═══════════════════════════════════════
   // PORTFOLIO SHORTCUT
@@ -2352,7 +2297,7 @@ export function cli(argv) {
     } else {
       const { error: showError, info } = await import('./ui/components.js');
       showError(`Unknown command: ${input}`);
-      info('Available commands: wallet, trade, bridge, gas, price, scan, arb, privacy, ai, ...');
+      info('Available commands: wallet, trade, bridge, gas, price, scan, arb, wiretap, ai, ...');
       info('Run "darksol --help" for the full list, or "darksol setup" to enable AI-powered natural language.');
     }
   });
@@ -2670,11 +2615,11 @@ function showCommandList() {
     ['poker', 'GTO Poker Arena — heads-up holdem'],
     ['cards', 'Prepaid Visa/MC cards'],
     ['agentcomms', 'x402 SMS rails for agents'],
+    ['wiretap', 'AIM messaging + payment rails'],
     ['builders', 'ERC-8021 builder index'],
     ['mail', 'AgentMail - email for your agent'],
     ['facilitator', 'x402 payment facilitator'],
     ['approvals', 'Token approval manager'],
-    ['privacy', 'Privacy, RAILGUN shield/unshield'],
     ['lightning', '⚡ Lightning Network — BTC payments'],
     ['pay', '⚡ Universal pay (Lightning + EVM)'],
     ['skills', 'Agent skill directory'],
@@ -2683,6 +2628,7 @@ function showCommandList() {
     ['telegram', 'Telegram bot - AI chat'],
     ['serve', 'Launch web terminal in browser'],
     ['history', 'Transaction history (alias)'],
+    ['support', 'Contact Darksol for terminal help'],
     ['completion', 'Shell tab completion script'],
     ['setup', 'Re-run setup wizard'],
     ['config', 'Terminal configuration'],
@@ -2705,8 +2651,8 @@ function showCommandList() {
 function generateBashCompletion() {
   const commands = [
     'wallet', 'trade', 'bridge', 'dca', 'arb', 'auto', 'market', 'oracle',
-    'casino', 'poker', 'cards', 'agentcomms', 'sms', 'builders', 'facilitator', 'approvals',
-    'privacy', 'mail', 'serve', 'browser', 'scan', 'gas', 'price', 'watch',
+    'casino', 'poker', 'cards', 'agentcomms', 'sms', 'wiretap', 'support', 'builders', 'facilitator', 'approvals',
+    'mail', 'serve', 'browser', 'scan', 'gas', 'price', 'watch',
     'chat', 'soul', 'memory', 'setup', 'ai', 'keys', 'agent', 'skills',
     'daemon', 'telegram', 'lightning', 'ln', 'pay', 'tips', 'networks',
     'quickstart', 'lookup', 'script', 'config', 'dashboard', 'health',
@@ -2727,10 +2673,11 @@ function generateBashCompletion() {
     cards: 'catalog order status',
     agentcomms: 'health countries buy messages premium-search',
     sms: 'health countries buy messages premium-search',
+    wiretap: 'register login status contacts threads messages send support events',
+    support: '',
     builders: 'leaderboard lookup feed',
     facilitator: 'health verify settle',
     approvals: 'list revoke check',
-    privacy: 'score shield router railgun-shield railgun-unshield',
     mail: 'setup status create inboxes use send inbox read reply forward threads stats delete',
     browser: 'launch navigate screenshot click type eval close status install',
     ai: 'chat ask execute strategy analyze',
@@ -2769,12 +2716,12 @@ complete -F _darksol_completions darksol`;
 function generateZshCompletion() {
   const commands = [
     'wallet', 'trade', 'bridge', 'dca', 'arb', 'auto', 'market', 'oracle',
-    'casino', 'poker', 'cards', 'agentcomms', 'sms', 'builders', 'facilitator', 'approvals',
-    'privacy', 'mail', 'serve', 'browser', 'scan', 'gas', 'price', 'watch',
+    'casino', 'poker', 'cards', 'agentcomms', 'sms', 'wiretap', 'support', 'builders', 'facilitator', 'approvals',
+    'mail', 'serve', 'browser', 'scan', 'gas', 'price', 'watch',
     'chat', 'soul', 'memory', 'setup', 'ai', 'keys', 'agent', 'skills',
     'daemon', 'telegram', 'tips', 'networks', 'quickstart', 'lookup',
     'script', 'config', 'dashboard', 'health', 'dash', 'portfolio',
-    'send', 'receive', 'balance', 'swap', 'history', 'completion',
+    'lightning', 'ln', 'support', 'send', 'receive', 'balance', 'swap', 'history', 'completion',
   ];
 
   return `# darksol zsh completion — generated by darksol completion --shell zsh
