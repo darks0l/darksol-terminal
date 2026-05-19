@@ -2,6 +2,10 @@ import fetch from 'node-fetch';
 import { ethers } from 'ethers';
 import { getConfig, getRPC } from '../config/store.js';
 import { loadWallet } from '../wallet/keystore.js';
+import { getRecentMemories, searchMemories } from '../memory/index.js';
+import { listScripts, runScript, showScript } from '../scripts/engine.js';
+import { wiretapContacts, wiretapEvents, wiretapMessages, wiretapStatus, wiretapThreads } from '../services/wiretap.js';
+import { buildBatchPlan, createSessionPolicy, getAAStatus, listSessionPolicies, removeSessionPolicy, simulateWalletCalls } from '../services/aa.js';
 
 const DEXSCREENER_API = 'https://api.dexscreener.com/latest/dex/search?q=';
 const USDC_ADDRESSES = {
@@ -40,6 +44,29 @@ function summarizeResult(result) {
   if (result.error) return result.error;
   if (result.token && result.priceUsd) return `${result.token} at $${result.priceUsd}`;
   return JSON.stringify(result).slice(0, 240);
+}
+
+async function captureStdout(fn) {
+  const originalLog = console.log;
+  const originalWarn = console.warn;
+  const originalError = console.error;
+  const chunks = [];
+  const capture = (...args) => {
+    chunks.push(args.map((value) => String(value)).join(' '));
+  };
+
+  console.log = capture;
+  console.warn = capture;
+  console.error = capture;
+
+  try {
+    const value = await fn();
+    return { value, output: chunks.join('\n').trim() };
+  } finally {
+    console.log = originalLog;
+    console.warn = originalWarn;
+    console.error = originalError;
+  }
 }
 
 async function fetchBestPair(query, fetchImpl = fetch) {
@@ -240,9 +267,161 @@ function defaultRegistry(deps = {}) {
       description: 'Execute a saved automation script',
       mutating: true,
       handler: deps.scriptRunHandler || (async (args) => {
-        const { runScript } = await import('../scripts/engine.js');
         return runScript(args.name, args);
       }),
+    },
+    'memory-search': {
+      description: 'Search persistent memories by query',
+      mutating: false,
+      handler: async ({ query }) => {
+        if (!query) throw new Error('memory-search requires query');
+        const memories = await searchMemories(query);
+        return {
+          ok: true,
+          query,
+          count: memories.length,
+          memories,
+          summary: memories.length ? `Found ${memories.length} memory matches for "${query}"` : `No memories found for "${query}"`,
+        };
+      },
+    },
+    'memory-recent': {
+      description: 'Get recent persistent memories',
+      mutating: false,
+      handler: async ({ limit }) => {
+        const count = Number.isFinite(Number(limit)) && Number(limit) > 0 ? Number(limit) : 5;
+        const memories = await getRecentMemories(count);
+        return {
+          ok: true,
+          count: memories.length,
+          memories,
+          summary: memories.length ? `Loaded ${memories.length} recent memories` : 'No recent memories',
+        };
+      },
+    },
+    'script-list': {
+      description: 'List saved execution scripts',
+      mutating: false,
+      handler: async () => {
+        const { output } = await captureStdout(async () => listScripts());
+        return {
+          ok: true,
+          output,
+          summary: output ? 'Listed saved scripts' : 'No saved scripts found',
+        };
+      },
+    },
+    'script-show': {
+      description: 'Inspect a saved execution script',
+      mutating: false,
+      handler: async ({ name }) => {
+        if (!name) throw new Error('script-show requires name');
+        const { output } = await captureStdout(async () => showScript(name));
+        return {
+          ok: true,
+          name,
+          output,
+          summary: output ? `Loaded script ${name}` : `Script ${name} not found`,
+        };
+      },
+    },
+    'wiretap-status': {
+      description: 'Inspect current Wiretap/AIM session status',
+      mutating: false,
+      handler: async () => {
+        const data = await wiretapStatus({ json: true });
+        return {
+          ok: Boolean(data),
+          data,
+          summary: data ? `Wiretap user ${data?.user?.username || data?.profile?.handle || 'ready'}` : 'Wiretap status unavailable',
+        };
+      },
+    },
+    'wiretap-threads': {
+      description: 'List Wiretap/AIM threads',
+      mutating: false,
+      handler: async ({ unreadOnly = false } = {}) => {
+        const threads = await wiretapThreads({ json: true, unreadOnly });
+        return {
+          ok: Boolean(threads),
+          unreadOnly: Boolean(unreadOnly),
+          threads,
+          summary: Array.isArray(threads) ? `Loaded ${threads.length} Wiretap threads` : 'Wiretap threads unavailable',
+        };
+      },
+    },
+    'wiretap-messages': {
+      description: 'Load messages for a Wiretap/AIM conversation',
+      mutating: false,
+      handler: async ({ conversationId, limit = 20 } = {}) => {
+        if (!conversationId) throw new Error('wiretap-messages requires conversationId');
+        const messages = await wiretapMessages(conversationId, { json: true, limit });
+        return {
+          ok: Boolean(messages),
+          conversationId,
+          messages,
+          summary: Array.isArray(messages) ? `Loaded ${messages.length} messages from ${conversationId}` : `Wiretap messages unavailable for ${conversationId}`,
+        };
+      },
+    },
+    'wiretap-events': {
+      description: 'Fetch recent Wiretap/AIM events',
+      mutating: false,
+      handler: async ({ cursor } = {}) => {
+        const data = await wiretapEvents({ json: true, cursor });
+        const events = data?.events || data?.items || data || [];
+        return {
+          ok: Boolean(data),
+          cursor: data?.nextCursor || cursor || null,
+          events,
+          summary: Array.isArray(events) ? `Loaded ${events.length} Wiretap events` : 'Wiretap events unavailable',
+        };
+      },
+    },
+    'wiretap-contacts': {
+      description: 'List Wiretap/AIM contacts',
+      mutating: false,
+      handler: async ({ username } = {}) => {
+        const contacts = await wiretapContacts({ json: true, username });
+        return {
+          ok: Boolean(contacts),
+          contacts,
+          summary: Array.isArray(contacts) ? `Loaded ${contacts.length} Wiretap contacts` : 'Wiretap contacts unavailable',
+        };
+      },
+    },
+    'aa-status': {
+      description: 'Inspect account-abstraction readiness, config, and live chain fee context',
+      mutating: false,
+      handler: async (args = {}) => getAAStatus(args),
+    },
+    'aa-simulate': {
+      description: 'Simulate one or more wallet calls for a smart-account style flow',
+      mutating: false,
+      handler: async (args = {}) => simulateWalletCalls(args),
+    },
+    'aa-batch-build': {
+      description: 'Build a structured multi-call batch plan for smart-account execution',
+      mutating: false,
+      handler: async (args = {}) => buildBatchPlan(args),
+    },
+    'aa-session-create': {
+      description: 'Create or update a scoped session-key style policy',
+      mutating: true,
+      handler: async (args = {}) => createSessionPolicy(args),
+    },
+    'aa-session-list': {
+      description: 'List configured AA session policies',
+      mutating: false,
+      handler: async () => listSessionPolicies(),
+    },
+    'aa-session-remove': {
+      description: 'Remove a configured AA session policy',
+      mutating: true,
+      handler: async ({ id } = {}) => {
+        if (!id) throw new Error('aa-session-remove requires id');
+        return removeSessionPolicy(id);
+      },
     },
   };
 }
@@ -308,4 +487,19 @@ export const AGENT_TOOL_NAMES = [
   'swap',
   'send',
   'script-run',
+  'memory-search',
+  'memory-recent',
+  'script-list',
+  'script-show',
+  'wiretap-status',
+  'wiretap-threads',
+  'wiretap-messages',
+  'wiretap-events',
+  'wiretap-contacts',
+  'aa-status',
+  'aa-simulate',
+  'aa-batch-build',
+  'aa-session-create',
+  'aa-session-list',
+  'aa-session-remove',
 ];

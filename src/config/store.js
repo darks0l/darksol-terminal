@@ -98,6 +98,19 @@ const config = new Conf({
         market: 'https://acp.darksol.net/market',
       },
     },
+    aa: {
+      type: 'object',
+      default: {
+        enabled: false,
+        chain: 'base',
+        accountType: 'unspecified',
+        bundlerUrl: '',
+        paymasterUrl: '',
+        entryPoint: '',
+        factory: '',
+        sessionPolicies: [],
+      },
+    },
     wiretap: {
       type: 'object',
       default: {

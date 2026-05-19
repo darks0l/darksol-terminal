@@ -54,19 +54,29 @@ import { showTradingTips, showScriptTips, showNetworkReference, showQuickStart, 
 import { addKey, removeKey, listKeys } from './config/keys.js';
 import { parseIntent, startChat, adviseStrategy, analyzeToken, executeIntent } from './llm/intent.js';
 import { startAgentSigner, showAgentDocs } from './wallet/agent-signer.js';
+import { createSessionPolicy, getAAStatus, listSessionPolicies, removeSessionPolicy, setAAConfig, simulateWalletCalls, buildBatchPlan } from './services/aa.js';
 import { listSkills, installSkill, skillInfo, uninstallSkill } from './services/skills.js';
 import { runSetupWizard } from './setup/wizard.js';
 import { displaySoul, hasSoul, resetSoul, runSoulSetup } from './soul/index.js';
 import { clearMemories, exportMemories, getRecentMemories, searchMemories } from './memory/index.js';
 import { getAgentStatus, planAgentGoal, runAgentTask } from './agent/index.js';
+import { callHarnessTool, exportHarnessSession, getHarnessEventStream, getHarnessManifest, getHarnessStatus, getHarnessTools, invokeHarnessRpc, listHarnessSessions, planHarnessGoal, runHarnessGoal } from './agent/harness.js';
 import { getAuditLog, getStatus as getAutoStatus, listStrategies as listAutoStrategies, startAutonomous, stopAutonomous } from './agent/autonomous.js';
 import { daemonStart, daemonStop, daemonStatus, daemonRestart } from './daemon/index.js';
 import { telegramSetup, telegramStartForeground, telegramStopCommand, telegramStatusCommand, telegramSendCommand } from './services/telegram.js';
+import { installLatestVersion, reinstallCurrentVersion, showUpdateStatus } from './services/update.js';
 import { createRequire } from 'module';
 import { resolve } from 'path';
 import { getConfiguredModel, getProviderDefaultModel } from './llm/models.js';
 const require = createRequire(import.meta.url);
 const { version: PKG_VERSION } = require('../package.json');
+
+function compactValue(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '-';
+  if (raw.length <= 18) return raw;
+  return `${raw.slice(0, 8)}…${raw.slice(-6)}`;
+}
 
 export function cli(argv) {
   const program = new Command();
@@ -1657,6 +1667,455 @@ export function cli(argv) {
     .description('Show agent signer security documentation')
     .action(() => showAgentDocs());
 
+  const agentAA = agent
+    .command('aa')
+    .description('Account-abstraction and smart-wallet tools');
+
+  agentAA
+    .command('status')
+    .description('Show AA readiness, bundler/paymaster config, and live chain fee context')
+    .option('--wallet <name>', 'Wallet name override')
+    .option('--chain <chain>', 'Chain override')
+    .option('--json', 'Output raw JSON')
+    .action(async (opts) => {
+      const payload = await getAAStatus(opts);
+      if (opts.json) {
+        console.log(JSON.stringify(payload, null, 2));
+        return;
+      }
+      showMiniBanner();
+      showSection('AGENT AA STATUS');
+      kvDisplay([
+        ['Wallet', `${payload.wallet.name} (${payload.wallet.address})`],
+        ['Chain', payload.chain],
+        ['Account Type', payload.accountType || '-'],
+        ['Enabled', payload.enabled ? 'yes' : 'no'],
+        ['Ready', payload.ready ? 'yes' : 'no'],
+        ['Bundler', payload.readiness.bundlerConfigured ? 'configured' : 'missing'],
+        ['Paymaster', payload.readiness.paymasterConfigured ? 'configured' : 'missing'],
+        ['EntryPoint', payload.readiness.entryPointConfigured ? compactValue(payload.entryPoint) : 'missing'],
+        ['Factory', payload.readiness.factoryConfigured ? compactValue(payload.factory) : 'missing'],
+        ['Session Policies', String(payload.sessionPolicyCount)],
+      ]);
+      console.log('');
+      info(payload.summary);
+      console.log('');
+    });
+
+  agentAA
+    .command('configure')
+    .description('Configure AA runtime endpoints and account metadata')
+    .option('--enable', 'Enable AA mode')
+    .option('--disable', 'Disable AA mode')
+    .option('--chain <chain>', 'AA chain')
+    .option('--account-type <type>', 'Account type label, e.g. erc4337-simple')
+    .option('--bundler-url <url>', 'Bundler RPC URL')
+    .option('--paymaster-url <url>', 'Paymaster URL')
+    .option('--entry-point <address>', 'EntryPoint address')
+    .option('--factory <address>', 'Account factory address')
+    .option('--json', 'Output raw JSON')
+    .action((opts) => {
+      const patch = {};
+      if (opts.enable) patch.enabled = true;
+      if (opts.disable) patch.enabled = false;
+      if (opts.chain) patch.chain = opts.chain;
+      if (opts.accountType) patch.accountType = opts.accountType;
+      if (opts.bundlerUrl) patch.bundlerUrl = opts.bundlerUrl;
+      if (opts.paymasterUrl) patch.paymasterUrl = opts.paymasterUrl;
+      if (opts.entryPoint) patch.entryPoint = opts.entryPoint;
+      if (opts.factory) patch.factory = opts.factory;
+      const payload = setAAConfig(patch);
+      if (opts.json) {
+        console.log(JSON.stringify(payload, null, 2));
+        return;
+      }
+      showMiniBanner();
+      showSection('AGENT AA CONFIG');
+      success('AA configuration updated');
+      console.log('');
+    });
+
+  agentAA
+    .command('simulate')
+    .description('Simulate one or more smart-wallet style calls')
+    .requiredOption('--calls <json>', 'JSON array of calls: [{"to":"0x...","data":"0x...","value":"0"}]')
+    .option('--wallet <name>', 'Wallet name override')
+    .option('--chain <chain>', 'Chain override')
+    .option('--json', 'Output raw JSON')
+    .action(async (opts) => {
+      const calls = JSON.parse(opts.calls);
+      const payload = await simulateWalletCalls({ wallet: opts.wallet, chain: opts.chain, calls });
+      if (opts.json) {
+        console.log(JSON.stringify(payload, null, 2));
+        return;
+      }
+      showMiniBanner();
+      showSection('AGENT AA SIMULATION');
+      kvDisplay([
+        ['Chain', payload.chain],
+        ['Wallet', payload.wallet.address],
+        ['Calls', String(payload.totals.callCount)],
+        ['Success', `${payload.totals.okCount}/${payload.totals.callCount}`],
+        ['Value', `${payload.totals.totalValueEth} ETH`],
+        ['Est. Gas', payload.totals.totalEstimatedGas],
+      ]);
+      console.log('');
+    });
+
+  agentAA
+    .command('batch-build')
+    .description('Build a structured multi-call AA batch plan')
+    .requiredOption('--calls <json>', 'JSON array of calls')
+    .option('--wallet <name>', 'Wallet name override')
+    .option('--chain <chain>', 'Chain override')
+    .option('--json', 'Output raw JSON')
+    .action((opts) => {
+      const calls = JSON.parse(opts.calls);
+      const payload = buildBatchPlan({ wallet: opts.wallet, chain: opts.chain, calls });
+      console.log(JSON.stringify(payload, null, 2));
+    });
+
+  agentAA
+    .command('session-create')
+    .description('Create or update a scoped session policy')
+    .requiredOption('--name <name>', 'Policy name')
+    .option('--id <id>', 'Policy id')
+    .option('--expires-at <iso>', 'Expiry timestamp')
+    .option('--max-value-eth <value>', 'Per-call max native value', '0')
+    .option('--max-daily-value-eth <value>', 'Daily max native value', '0')
+    .option('--targets <list>', 'Comma-separated allowed target addresses')
+    .option('--selectors <list>', 'Comma-separated allowed selectors')
+    .option('--tokens <list>', 'Comma-separated token allowlist addresses')
+    .option('--json', 'Output raw JSON')
+    .action((opts) => {
+      const payload = createSessionPolicy({
+        id: opts.id,
+        name: opts.name,
+        expiresAt: opts.expiresAt,
+        maxValueEth: opts.maxValueEth,
+        maxDailyValueEth: opts.maxDailyValueEth,
+        allowedTargets: opts.targets ? opts.targets.split(',').map((v) => v.trim()).filter(Boolean) : [],
+        allowedSelectors: opts.selectors ? opts.selectors.split(',').map((v) => v.trim()).filter(Boolean) : [],
+        spendingTokenAllowlist: opts.tokens ? opts.tokens.split(',').map((v) => v.trim()).filter(Boolean) : [],
+      });
+      console.log(JSON.stringify(payload, null, 2));
+    });
+
+  agentAA
+    .command('session-list')
+    .description('List configured AA session policies')
+    .option('--json', 'Output raw JSON')
+    .action((opts) => {
+      const payload = listSessionPolicies();
+      if (opts.json) {
+        console.log(JSON.stringify(payload, null, 2));
+        return;
+      }
+      showMiniBanner();
+      showSection('AGENT AA SESSION POLICIES');
+      if (!payload.policies.length) {
+        warn('No session policies configured.');
+        console.log('');
+        return;
+      }
+      payload.policies.forEach((policy) => {
+        console.log(`  ${theme.gold(policy.name)} ${theme.dim(`(${policy.id})`)}`);
+      });
+      console.log('');
+    });
+
+  agentAA
+    .command('session-remove <id>')
+    .description('Remove a configured AA session policy')
+    .option('--json', 'Output raw JSON')
+    .action((id, opts) => {
+      const payload = removeSessionPolicy(id);
+      console.log(JSON.stringify(payload, null, 2));
+    });
+
+  const agentHarness = agent
+    .command('harness')
+    .description('First-class agent harness surface for automation and orchestration');
+
+  agentHarness
+    .command('manifest')
+    .description('Show harness manifest, capabilities, and tool catalog')
+    .option('--json', 'Output raw JSON')
+    .action((opts) => {
+      const manifest = getHarnessManifest();
+      if (opts.json) {
+        console.log(JSON.stringify(manifest, null, 2));
+        return;
+      }
+
+      showMiniBanner();
+      showSection('AGENT HARNESS');
+      kvDisplay([
+        ['Package', `${manifest.name}@${manifest.version}`],
+        ['Kind', manifest.harness.kind],
+        ['Entrypoint', manifest.harness.entrypoint],
+        ['Planning', manifest.capabilities.planning ? 'yes' : 'no'],
+        ['Tool Use', manifest.capabilities.toolUse ? 'yes' : 'no'],
+        ['Safe Mode', manifest.capabilities.safeModeByDefault ? 'default' : 'off'],
+      ]);
+      console.log('');
+      info(`Tools: ${manifest.tools.map((tool) => tool.name).join(', ')}`);
+      console.log('');
+    });
+
+  agentHarness
+    .command('tools')
+    .description('List harness tools and whether they mutate state')
+    .option('--json', 'Output raw JSON')
+    .action((opts) => {
+      const tools = getHarnessTools();
+      if (opts.json) {
+        console.log(JSON.stringify(tools, null, 2));
+        return;
+      }
+
+      showMiniBanner();
+      showSection('HARNESS TOOLS');
+      tools.forEach((tool) => {
+        console.log(`  ${theme.gold(tool.name)}${tool.mutating ? theme.red(' [mutating]') : theme.dim(' [read-only]')} ${theme.dim('- ' + tool.description)}`);
+      });
+      console.log('');
+    });
+
+  agentHarness
+    .command('plan <goal...>')
+    .description('Create a harness plan for a goal')
+    .option('--json', 'Output raw JSON')
+    .action(async (goalParts, opts) => {
+      const goal = goalParts.join(' ').trim();
+      const payload = await planHarnessGoal(goal);
+      if (opts.json) {
+        console.log(JSON.stringify(payload, null, 2));
+        return;
+      }
+
+      showMiniBanner();
+      showSection('HARNESS PLAN');
+      info(payload.plan.summary);
+      console.log('');
+      payload.plan.steps.forEach((step, index) => console.log(`  ${theme.gold(String(index + 1).padStart(2, ' '))}. ${step}`));
+      console.log('');
+    });
+
+  agentHarness
+    .command('run <goal...>')
+    .description('Run the harness against a goal with structured status output')
+    .option('--max-steps <n>', 'Maximum loop steps', '10')
+    .option('--allow-actions', 'Allow mutating tools such as swap/send/script-run')
+    .option('--provider <provider>', 'Override LLM provider')
+    .option('--model <model>', 'Override LLM model')
+    .option('--session-id <id>', 'Explicit harness session id')
+    .option('--resume', 'Resume/update an existing harness session id')
+    .option('--stream-json', 'Emit progress/tool events as JSON lines while running')
+    .option('--json', 'Output raw JSON')
+    .action(async (goalParts, opts) => {
+      const goal = goalParts.join(' ').trim();
+      const payload = await runHarnessGoal(goal, {
+        maxSteps: parseInt(opts.maxSteps, 10),
+        allowActions: opts.allowActions,
+        provider: opts.provider,
+        model: opts.model,
+        sessionId: opts.sessionId,
+        resume: opts.resume,
+        onProgress: (event) => {
+          if (opts.streamJson) {
+            console.log(JSON.stringify({ channel: 'progress', event }));
+            return;
+          }
+          if (opts.json) return;
+          if (event.type === 'thought') {
+            info(`Step ${event.step}: ${event.action}`);
+            if (event.thought) console.log(`  ${theme.dim(event.thought)}`);
+          }
+          if (event.type === 'observation') {
+            const summary = event.observation?.summary || event.observation?.error || '';
+            if (summary) console.log(`  ${theme.dim(summary)}`);
+            console.log('');
+          }
+        },
+        onToolEvent: (event) => {
+          if (opts.streamJson) {
+            console.log(JSON.stringify({ channel: 'tool', event }));
+          }
+        },
+      });
+
+      if (opts.json) {
+        console.log(JSON.stringify(payload, null, 2));
+        return;
+      }
+
+      showMiniBanner();
+      showSection('HARNESS RESULT');
+      kvDisplay([
+        ['Status', payload.result.status],
+        ['Session', payload.sessionId],
+        ['Steps', `${payload.result.stepsTaken}/${payload.result.maxSteps}`],
+        ['Stop Reason', payload.result.stopReason],
+        ['Actions', opts.allowActions ? 'enabled' : 'safe mode'],
+      ]);
+      console.log('');
+      if (payload.result.final) success(payload.result.final);
+      console.log('');
+    });
+
+  agentHarness
+    .command('call-tool <tool>')
+    .description('Execute a single harness tool directly')
+    .option('--input <json>', 'JSON object tool input', '{}')
+    .option('--allow-actions', 'Allow mutating tools')
+    .option('--json', 'Output raw JSON')
+    .action(async (tool, opts) => {
+      let input = {};
+      try {
+        input = JSON.parse(opts.input || '{}');
+      } catch {
+        throw new Error('Invalid JSON for --input');
+      }
+      const payload = await callHarnessTool(tool, input, { allowActions: opts.allowActions });
+      if (opts.json) {
+        console.log(JSON.stringify(payload, null, 2));
+        return;
+      }
+
+      showMiniBanner();
+      showSection('HARNESS TOOL');
+      kvDisplay([
+        ['Tool', payload.tool],
+        ['OK', payload.ok ? 'yes' : 'no'],
+        ['Summary', payload.result?.summary || payload.result?.error || '-'],
+      ]);
+      console.log('');
+    });
+
+  agentHarness
+    .command('status')
+    .description('Show the latest harness status payload')
+    .option('--session-id <id>', 'Inspect a specific harness session id')
+    .option('--json', 'Output raw JSON')
+    .action((opts) => {
+      const payload = getHarnessStatus(opts.sessionId);
+      if (opts.json) {
+        console.log(JSON.stringify(payload, null, 2));
+        return;
+      }
+
+      showMiniBanner();
+      showSection('HARNESS STATUS');
+      const status = payload.status;
+      if (!status || !status.status) {
+        warn('No harness runs recorded yet.');
+        console.log('');
+        return;
+      }
+
+      kvDisplay([
+        ['Status', status.status || '-'],
+        ['Goal', status.goal || '-'],
+        ['Summary', status.summary || '-'],
+        ['Steps', status.maxSteps ? `${status.stepsTaken || 0}/${status.maxSteps}` : String(status.stepsTaken || 0)],
+        ['Actions', status.allowActions ? 'enabled' : 'safe mode'],
+        ['Updated', status.updatedAt || '-'],
+      ]);
+      console.log('');
+    });
+
+  agentHarness
+    .command('sessions')
+    .description('List persisted harness sessions')
+    .option('--json', 'Output raw JSON')
+    .action((opts) => {
+      const sessions = listHarnessSessions();
+      if (opts.json) {
+        console.log(JSON.stringify(sessions, null, 2));
+        return;
+      }
+
+      showMiniBanner();
+      showSection('HARNESS SESSIONS');
+      if (!sessions.length) {
+        warn('No persisted harness sessions yet.');
+        console.log('');
+        return;
+      }
+      sessions.forEach((session) => {
+        console.log(`  ${theme.gold(session.id)} ${theme.dim(session.status || 'unknown')} ${theme.dim('- ' + (session.goal || '(no goal)'))}`);
+      });
+      console.log('');
+    });
+
+  agentHarness
+    .command('events')
+    .description('Show recorded events for a harness session')
+    .requiredOption('--session-id <id>', 'Harness session id')
+    .option('--jsonl', 'Output JSONL instead of JSON')
+    .option('--json', 'Output raw JSON')
+    .action((opts) => {
+      const payload = getHarnessEventStream(opts.sessionId, { jsonl: opts.jsonl });
+      if (opts.jsonl) {
+        console.log(payload);
+        return;
+      }
+      if (opts.json) {
+        console.log(JSON.stringify(payload, null, 2));
+        return;
+      }
+
+      showMiniBanner();
+      showSection('HARNESS EVENTS');
+      const events = Array.isArray(payload) ? payload : [];
+      if (!events.length) {
+        warn('No events recorded for that session.');
+        console.log('');
+        return;
+      }
+      events.forEach((event) => {
+        console.log(`  ${theme.gold(event.type || 'event')} ${theme.dim(event.timestamp || '')}`);
+      });
+      console.log('');
+    });
+
+  agentHarness
+    .command('export')
+    .description('Export a harness session replay payload')
+    .requiredOption('--session-id <id>', 'Harness session id')
+    .option('--output <file>', 'Write export payload to file')
+    .option('--json', 'Output raw JSON')
+    .action((opts) => {
+      const payload = exportHarnessSession(opts.sessionId, opts.output);
+      if (opts.json || !opts.output) {
+        console.log(JSON.stringify(payload, null, 2));
+        return;
+      }
+
+      showMiniBanner();
+      showSection('HARNESS EXPORT');
+      success(`Exported harness session to ${opts.output}`);
+      console.log('');
+    });
+
+  agentHarness
+    .command('rpc')
+    .description('Invoke the harness through a JSON-RPC style method surface')
+    .requiredOption('--method <method>', 'Method name, e.g. harness.manifest')
+    .option('--params <json>', 'JSON object params', '{}')
+    .option('--id <id>', 'Request id')
+    .action(async (opts) => {
+      let params = {};
+      try {
+        params = JSON.parse(opts.params || '{}');
+      } catch {
+        throw new Error('Invalid JSON for --params');
+      }
+      const response = await invokeHarnessRpc(opts.method, params, { id: opts.id });
+      console.log(JSON.stringify(response, null, 2));
+    });
+
   // ═══════════════════════════════════════
   // SKILLS COMMANDS
   // ═══════════════════════════════════════
@@ -1687,6 +2146,29 @@ export function cli(argv) {
   // ═══════════════════════════════════════
   // DAEMON COMMANDS
   // ═══════════════════════════════════════
+  const update = program
+    .command('update')
+    .description('Check for and install the latest DARKSOL Terminal release');
+
+  update
+    .command('status')
+    .description('Check the installed version against the latest npm release')
+    .option('--json', 'Output raw JSON')
+    .action((opts) => showUpdateStatus(opts));
+
+  update
+    .command('install')
+    .description('Install the latest release globally from npm')
+    .option('--version <version>', 'Install a specific version instead of latest')
+    .option('--force', 'Pass --force to npm install')
+    .action((opts) => installLatestVersion({ version: opts.version || 'latest', force: opts.force }));
+
+  update
+    .command('reinstall')
+    .description('Reinstall the currently packaged version globally from npm')
+    .option('--force', 'Pass --force to npm install')
+    .action((opts) => reinstallCurrentVersion({ force: opts.force }));
+
   const daemon = program
     .command('daemon')
     .description('Background daemon - manage persistent services');
@@ -2654,7 +3136,7 @@ function generateBashCompletion() {
     'casino', 'poker', 'cards', 'agentcomms', 'sms', 'wiretap', 'support', 'builders', 'facilitator', 'approvals',
     'mail', 'serve', 'browser', 'scan', 'gas', 'price', 'watch',
     'chat', 'soul', 'memory', 'setup', 'ai', 'keys', 'agent', 'skills',
-    'daemon', 'telegram', 'lightning', 'ln', 'pay', 'tips', 'networks',
+    'daemon', 'update', 'telegram', 'lightning', 'ln', 'pay', 'tips', 'networks',
     'quickstart', 'lookup', 'script', 'config', 'dashboard', 'health',
     'dash', 'portfolio', 'send', 'receive', 'balance', 'swap', 'history',
     'completion',
@@ -2685,6 +3167,7 @@ function generateBashCompletion() {
     agent: 'task plan status start docs',
     skills: 'list install info uninstall',
     daemon: 'start stop status restart',
+    update: 'status install reinstall',
     telegram: 'setup start stop status send',
     lightning: 'init start stop info balance pay invoice offer decode channels open close force-close peers connect liquidity jit-channel history',
     ln: 'init start stop info balance pay invoice offer decode channels open close force-close peers connect liquidity jit-channel history',

@@ -2,6 +2,7 @@ import { ethers } from 'ethers';
 import { createServer } from 'http';
 import { randomBytes } from 'crypto';
 import { decryptKey, loadWallet, walletExists } from './keystore.js';
+import { buildBatchPlan, createSessionPolicy, getAAConfig, listSessionPolicies, simulateWalletCalls } from '../services/aa.js';
 import { getConfig, getRPC } from '../config/store.js';
 import { theme } from '../ui/theme.js';
 import { spinner, kvDisplay, success, error, warn, info } from '../ui/components.js';
@@ -325,6 +326,44 @@ export class AgentSigner {
           confirmAbove: this.policy.confirmAbove,
         };
 
+      case '/aa/status': {
+        const aa = getAAConfig();
+        return {
+          enabled: Boolean(aa.enabled),
+          accountType: aa.accountType,
+          bundlerUrl: aa.bundlerUrl || null,
+          paymasterUrl: aa.paymasterUrl || null,
+          entryPoint: aa.entryPoint || null,
+          factory: aa.factory || null,
+          sessionPolicies: aa.sessionPolicies || [],
+          address: this.address,
+          chain: this.chain,
+        };
+      }
+
+      case '/aa/simulate': {
+        return simulateWalletCalls({
+          wallet: this.walletName,
+          chain: body.chain || this.chain,
+          calls: body.calls,
+        });
+      }
+
+      case '/aa/batch-build': {
+        return buildBatchPlan({
+          wallet: this.walletName,
+          chain: body.chain || this.chain,
+          calls: body.calls,
+        });
+      }
+
+      case '/aa/session-policies': {
+        if ((body && body.action) === 'create') {
+          return createSessionPolicy(body.policy || {});
+        }
+        return listSessionPolicies();
+      }
+
       case '/audit':
         return { log: this.auditLog.slice(-50) };
 
@@ -467,6 +506,10 @@ export async function startAgentSigner(walletName, opts = {}) {
       ['POST /sign-message', 'Sign EIP-191 message'],
       ['POST /sign-typed-data', 'Sign EIP-712 typed data'],
       ['GET  /policy', 'View spending policy'],
+      ['POST /aa/status', 'View AA runtime and session-policy status'],
+      ['POST /aa/simulate', 'Simulate AA-style wallet calls'],
+      ['POST /aa/batch-build', 'Build AA multi-call batch payload'],
+      ['POST /aa/session-policies', 'Create/list AA session policies'],
       ['GET  /audit', 'View audit log'],
       ['GET  /health', 'Health check'],
     ];

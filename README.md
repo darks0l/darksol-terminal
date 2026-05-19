@@ -15,7 +15,7 @@ A unified CLI for market intel, trading, AI-powered analysis, Wiretap/AIM messag
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-gold.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
 
-- Current release: **0.17.2**
+- Current release: **0.18.0**
 - Changelog: `CHANGELOG.md`
 
 ## Install
@@ -121,6 +121,24 @@ darksol agent task "analyze my portfolio" --max-steps 5
 darksol agent task "swap 0.1 ETH for USDC" --allow-actions
 darksol agent plan "DCA strategy for AERO"
 
+# Agent harness (machine-usable runtime surface)
+darksol agent harness manifest --json
+darksol agent harness call-tool price --input '{"token":"ETH"}' --json
+darksol agent harness run "analyze my wallet and summarize risks" --stream-json
+darksol agent harness rpc --method harness.callTool --params '{"tool":"memory-recent","input":{"limit":3}}'
+
+# Agent AA / smart-wallet flows
+darksol agent aa status
+darksol agent aa batch-build --calls '[{"to":"0x1111111111111111111111111111111111111111","data":"0x","value":"0"}]' --json
+darksol agent aa session-create --name trader --targets 0x1111111111111111111111111111111111111111 --selectors 0xa9059cbb
+
+# Install / update
+
+darksol update status
+darksol update install
+darksol update install --version 0.17.2
+darksol update reinstall
+
 # Agent email
 darksol mail setup
 darksol mail send --to user@example.com --subject "Hello"
@@ -205,6 +223,8 @@ ai <prompt>   # chat with trading assistant
 | `dash` | Live TUI dashboard — portfolio, prices, gas, whale feed | Free |
 | `auto` | Autonomous Trader — goal-based automated execution | Provider dependent |
 | `agent task` | Autonomous ReAct agent loop with tool use | Provider dependent |
+| `agent harness` | Machine-callable harness with RPC, sessions, events, replay export | Provider dependent |
+| `agent aa` | Smart-wallet / AA readiness, simulation, batching, session policies | Free |
 | `ai` | LLM-powered trading assistant & intent execution | Provider dependent |
 | `agent` | Secure agent signer (PK-isolated proxy) | Free |
 | `keys` | Encrypted API key vault (LLMs/data/RPCs) | Free |
@@ -526,6 +546,133 @@ darksol agent docs
 | `/sign` | POST | Sign transaction (return raw) |
 | `/sign-message` | POST | Sign EIP-191 message |
 | `/sign-typed-data` | POST | Sign EIP-712 typed data (x402) |
+
+## Agent Harness RPC + Replay
+
+`darksol agent harness` is the machine surface on top of the bounded agent loop.
+
+### Core capabilities
+
+- JSON-RPC style method surface
+- direct single-tool invocation
+- persisted resumable sessions
+- recorded step/tool events
+- replay/export payloads for demos, debugging, and orchestration
+
+### Copy-paste examples
+
+```bash
+# Discover the machine contract
+darksol agent harness manifest --json
+darksol agent harness tools --json
+
+# Call one tool directly
+darksol agent harness call-tool memory-recent --input '{"limit":5}' --json
+
+# Run a goal with live event streaming
+darksol agent harness run "check wallet balances and summarize" --stream-json
+
+# Use JSON-RPC style methods
+darksol agent harness rpc --method harness.manifest
+darksol agent harness rpc --method harness.callTool --params '{"tool":"price","input":{"token":"ETH"}}'
+darksol agent harness rpc --method harness.run --params '{"goal":"analyze my portfolio","maxSteps":4}'
+
+# Inspect replay data
+darksol agent harness sessions --json
+darksol agent harness events --session-id <id> --json
+darksol agent harness export --session-id <id> --output harness-run.json
+```
+
+### RPC methods
+
+- `harness.manifest`
+- `harness.tools`
+- `harness.plan`
+- `harness.run`
+- `harness.callTool`
+- `harness.status`
+- `harness.sessions`
+- `harness.events`
+- `harness.export`
+
+### Current harness tool surface
+
+- market: `price`, `gas`, `wallet-balance`, `portfolio`, `market`, `watch`
+- action: `swap`, `send`, `script-run`
+- memory: `memory-search`, `memory-recent`
+- scripts: `script-list`, `script-show`
+- Wiretap/AIM: `wiretap-status`, `wiretap-threads`, `wiretap-messages`, `wiretap-events`, `wiretap-contacts`
+
+Mutating tools stay blocked unless you pass `--allow-actions`.
+
+## Account Abstraction / Smart-Wallet Toolkit
+
+This repo now has a first real AA surface instead of fake marketing labels.
+
+### What it does today
+
+- AA readiness/config inspection
+- multi-call batch planning
+- live call simulation against RPC
+- scoped session-policy storage for session-key style flows
+- signer endpoints for AA status + simulate + batch planning
+- harness tools for AA workflows inside agent runs
+
+### Commands
+
+```bash
+# Inspect readiness
+darksol agent aa status --json
+
+# Configure runtime endpoints
+darksol agent aa configure \
+  --enable \
+  --chain base \
+  --account-type erc4337-simple \
+  --bundler-url https://your-bundler.example/rpc \
+  --paymaster-url https://your-paymaster.example/api \
+  --entry-point 0x0000000071727De22E5E9d8BAf0edAc6f37da032 \
+  --factory 0xYourFactory
+
+# Simulate one or more calls
+darksol agent aa simulate --calls '[{"to":"0x1111111111111111111111111111111111111111","data":"0x","value":"0"}]' --json
+
+# Build a batch plan
+darksol agent aa batch-build --calls '[{"to":"0x1111111111111111111111111111111111111111","data":"0x","value":"0"}]' --json
+
+# Create a session policy
+darksol agent aa session-create \
+  --name trader \
+  --targets 0x1111111111111111111111111111111111111111 \
+  --selectors 0xa9059cbb,0x095ea7b3 \
+  --max-value-eth 0.05 \
+  --max-daily-value-eth 0.25
+```
+
+### Harness tools
+
+- `aa-status`
+- `aa-simulate`
+- `aa-batch-build`
+- `aa-session-create`
+- `aa-session-list`
+- `aa-session-remove`
+
+### Important honesty
+
+This is a real **AA control surface**, but not a fake claim that raw EOAs are suddenly ERC-4337 wallets.
+
+Current scope:
+- planning
+- simulation
+- policying
+- bundler/paymaster config surface
+
+Next scope for live execution:
+- actual UserOperation assembly
+- bundler submission
+- paymaster sponsorship flows
+- smart-account deployment/factory wiring
 | `/policy` | GET | View spending policy |
 | `/audit` | GET | Operation audit log |
 | `/health` | GET | Health check |

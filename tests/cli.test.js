@@ -75,6 +75,25 @@ test('command registration includes trade and script subcommands', (t) => {
   assert.match(agentHelp.stdout, /\btask\b/);
   assert.match(agentHelp.stdout, /\bplan\b/);
   assert.match(agentHelp.stdout, /\bstatus\b/);
+  assert.match(agentHelp.stdout, /\bharness\b/);
+
+  const updateHelp = runCli(['update', '--help'], env);
+  assert.equal(updateHelp.status, 0, updateHelp.stderr);
+  assert.match(updateHelp.stdout, /\bstatus\b/);
+  assert.match(updateHelp.stdout, /\binstall\b/);
+  assert.match(updateHelp.stdout, /\breinstall\b/);
+
+  const harnessHelp = runCli(['agent', 'harness', '--help'], env);
+  assert.equal(harnessHelp.status, 0, harnessHelp.stderr);
+  assert.match(harnessHelp.stdout, /\bmanifest\b/);
+  assert.match(harnessHelp.stdout, /\btools\b/);
+  assert.match(harnessHelp.stdout, /\brun\b/);
+  assert.match(harnessHelp.stdout, /\bstatus\b/);
+  assert.match(harnessHelp.stdout, /\bsessions\b/);
+  assert.match(harnessHelp.stdout, /\brpc\b/);
+  assert.match(harnessHelp.stdout, /call-tool/);
+  assert.match(harnessHelp.stdout, /\bevents\b/);
+  assert.match(harnessHelp.stdout, /\bexport\b/);
 
   const autoHelp = runCli(['auto', '--help'], env);
   assert.equal(autoHelp.status, 0, autoHelp.stderr);

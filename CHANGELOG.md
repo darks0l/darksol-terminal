@@ -7,6 +7,42 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.18.0] - 2026-05-19
+
+### Added — Agent harness, AA toolkit, and self-update commands
+
+- **Agent harness** — first-class machine-usable runtime surface for automation and orchestration:
+  - `darksol agent harness manifest`
+  - `darksol agent harness tools`
+  - `darksol agent harness plan <goal>`
+  - `darksol agent harness run <goal>`
+  - `darksol agent harness call-tool <tool>`
+  - `darksol agent harness status`
+  - `darksol agent harness sessions`
+  - `darksol agent harness events`
+  - `darksol agent harness export`
+  - `darksol agent harness rpc --method ...`
+- **AA / smart-wallet toolkit** — terminal surface for smart-wallet readiness, simulation, batching, and scoped session policies:
+  - `darksol agent aa status`
+  - `darksol agent aa configure`
+  - `darksol agent aa simulate`
+  - `darksol agent aa batch-build`
+  - `darksol agent aa session-create`
+  - `darksol agent aa session-list`
+  - `darksol agent aa session-remove`
+- **Agent signer AA endpoints** — added `/aa/status`, `/aa/simulate`, `/aa/batch-build`, and `/aa/session-policies`.
+- **Self-update commands** — added:
+  - `darksol update status`
+  - `darksol update install`
+  - `darksol update reinstall`
+- **Config support** — added persisted `aa` config defaults for bundler/paymaster/session-policy state.
+- **Tests** — added CLI coverage for update + harness flows, plus dedicated AA and harness tests.
+
+### Changed
+
+- README now documents the agent harness, AA toolkit, and update/install command surface.
+- Bash completion now includes the new `update` command.
+
 ## [0.17.2] - 2026-05-16
 
 ### Added — Wiretap CLI
