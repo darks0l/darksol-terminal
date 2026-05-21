@@ -26,7 +26,7 @@ import { casinoBet, casinoTables, casinoStats, casinoReceipt, casinoHealth, casi
 import { pokerNewGame, pokerAction, pokerStatus, pokerHistory } from './services/poker.js';
 import { cardsCatalog, cardsOrder, cardsStatus } from './services/cards.js';
 import { agentCommsBuyNumber, agentCommsCountries, agentCommsHealth, agentCommsMessages, agentCommsPremiumSearch } from './services/agentcomms.js';
-import { wiretapRegister, wiretapLogin, wiretapStatus, wiretapContacts, wiretapDiscover, wiretapAddContact, wiretapAcceptContact, wiretapThreads, wiretapMessages, wiretapRead, wiretapSend, wiretapReply, wiretapSupport, wiretapEvents } from './services/wiretap.js';
+import { wiretapRegister, wiretapLogin, wiretapStatus, wiretapContacts, wiretapPendingContacts, wiretapDiscover, wiretapAddContact, wiretapAcceptContact, wiretapBlockContact, wiretapThreads, wiretapUseThread, wiretapMessages, wiretapInbox, wiretapRead, wiretapSend, wiretapReply, wiretapSupport, wiretapEvents } from './services/wiretap.js';
 import { facilitatorHealth, facilitatorVerify, facilitatorSettle } from './services/facilitator.js';
 import { healthCommand } from './services/health.js';
 import { scanToken, displayScanResult, scanResultToJSON } from './services/scanner.js';
@@ -934,6 +934,12 @@ export function cli(argv) {
     .action((opts) => wiretapContacts(opts));
 
   wiretap
+    .command('pending')
+    .description('List pending Wiretap contact requests')
+    .option('--json', 'Output as JSON')
+    .action((opts) => wiretapPendingContacts(opts));
+
+  wiretap
     .command('discover [query]')
     .description('Discover public Wiretap agents by username or handle')
     .option('--json', 'Output as JSON')
@@ -953,6 +959,12 @@ export function cli(argv) {
     .action((username, opts) => wiretapAcceptContact({ username, json: opts.json }));
 
   wiretap
+    .command('block-contact [username]')
+    .description('Block a Wiretap contact')
+    .option('--json', 'Output as JSON')
+    .action((username, opts) => wiretapBlockContact({ username, json: opts.json }));
+
+  wiretap
     .command('threads')
     .description('List Wiretap threads')
     .option('--unread', 'Only show unread threads')
@@ -960,11 +972,27 @@ export function cli(argv) {
     .action((opts) => wiretapThreads({ unreadOnly: opts.unread, json: opts.json }));
 
   wiretap
+    .command('use [conversationId]')
+    .description('Select the active Wiretap conversation by id or handle')
+    .option('--to <username>', 'Recipient username / handle')
+    .option('--json', 'Output as JSON')
+    .action((conversationId, opts) => wiretapUseThread({ conversationId, to: opts.to, json: opts.json }));
+
+  wiretap
     .command('messages [conversationId]')
     .description('Show messages from a Wiretap conversation')
     .option('-l, --limit <n>', 'Message limit', '20')
     .option('--json', 'Output as JSON')
     .action((conversationId, opts) => wiretapMessages(conversationId, { limit: opts.limit, json: opts.json }));
+
+  wiretap
+    .command('inbox')
+    .description('Show Wiretap inbox summary, threads, and recent messages')
+    .option('-l, --limit <n>', 'Message limit', '20')
+    .option('--thread-limit <n>', 'Thread limit', '20')
+    .option('--unread', 'Only include unread threads')
+    .option('--json', 'Output as JSON')
+    .action((opts) => wiretapInbox({ limit: opts.limit, threadLimit: opts.threadLimit, unreadOnly: opts.unread, json: opts.json }));
 
   wiretap
     .command('read [conversationId]')
@@ -3188,7 +3216,7 @@ function generateBashCompletion() {
     cards: 'catalog order status',
     agentcomms: 'health countries buy messages premium-search',
     sms: 'health countries buy messages premium-search',
-    wiretap: 'register login status contacts discover add-contact accept-contact threads messages read send reply support events',
+    wiretap: 'register login status contacts pending discover add-contact accept-contact block-contact threads use messages inbox read send reply support events',
     support: '',
     builders: 'leaderboard lookup feed',
     facilitator: 'health verify settle',

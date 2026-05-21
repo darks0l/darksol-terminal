@@ -89,6 +89,15 @@ function renderThreads(threads = []) {
   );
 }
 
+function renderMessages(messages = []) {
+  messages.slice().reverse().forEach((m) => {
+    const sender = m.fromUsername || m.fromHandle || m.fromAgentId || 'unknown';
+    console.log(`  ${theme.gold(sender)} ${theme.dim(m.createdAt || '')}`);
+    console.log(`    ${String(m.body || '').trim() || theme.dim('(empty)')}`);
+  });
+  console.log('');
+}
+
 function inferHandleFromThread(thread = {}) {
   const other = Array.isArray(thread.participants)
     ? thread.participants.find((p) => p?.handle && p.handle !== wiretapState().username)
@@ -112,6 +121,20 @@ async function resolveConversationContext(input = {}) {
     conversationId: thread.conversationId || null,
     toUsername: inferHandleFromThread(thread),
   };
+}
+
+async function resolveThreadByConversationOrHandle(input = {}) {
+  const context = await resolveConversationContext(input);
+  const requestedConversationId = context.conversationId;
+  const requestedHandle = String(input.to || input.username || input.handle || context.toUsername || '').trim().toLowerCase();
+  const data = await request('/threads');
+  const threads = data.threads || data.items || data || [];
+  let thread = null;
+  if (requestedConversationId) thread = threads.find((item) => item?.conversationId === requestedConversationId) || null;
+  if (!thread && requestedHandle) {
+    thread = threads.find((item) => inferHandleFromThread(item)?.toLowerCase() === requestedHandle) || null;
+  }
+  return { thread, threads, conversationId: thread?.conversationId || requestedConversationId || null, toUsername: inferHandleFromThread(thread || {}) || requestedHandle || null };
 }
 
 export async function wiretapRegister(username, opts = {}) {
@@ -230,6 +253,28 @@ export async function wiretapContacts(opts = {}) {
     error(err.message);
     return null;
   }
+}
+
+export async function wiretapPendingContacts(opts = {}) {
+  const contacts = await wiretapContacts({ ...opts, json: true });
+  if (!contacts) return null;
+  const pending = contacts.filter((c) => String(c.state || c.status || '').toLowerCase() === 'requested');
+  if (opts.json) {
+    console.log(JSON.stringify(pending, null, 2));
+    return pending;
+  }
+  showSection('WIRETAP PENDING CONTACTS');
+  if (!pending.length) {
+    warn('No pending contacts.');
+    return pending;
+  }
+  table(['Handle', 'State', 'Label', 'Notes'], pending.map((c) => [
+    c.handle || c.username || c.recipientHandle || c.requesterHandle || '-',
+    c.state || c.status || '-',
+    c.label || c.nickname || '-',
+    truncate(c.notes || c.subject || '—', 54),
+  ]));
+  return pending;
 }
 
 export async function wiretapDiscover(opts = {}) {
@@ -353,6 +398,41 @@ export async function wiretapAcceptContact(opts = {}) {
   }
 }
 
+export async function wiretapBlockContact(opts = {}) {
+  let username = String(opts.username || opts.to || opts.handle || '').trim().toLowerCase();
+  if (!username && !opts.json) {
+    const answers = await inquirer.prompt([{ type: 'input', name: 'username', message: theme.gold('Block contact username:'), default: '' }]);
+    username = String(answers.username || '').trim().toLowerCase();
+  }
+  if (!username) throw new Error('Username required. Example: darksol wiretap block-contact concierge');
+
+  const spin = spinner(`Blocking ${username}...`).start();
+  try {
+    const data = await request('/contact/block', {
+      method: 'POST',
+      body: {
+        toUsername: username,
+      },
+    });
+    spin.succeed('Contact blocked');
+    if (opts.json) {
+      console.log(JSON.stringify(data, null, 2));
+      return data;
+    }
+    showSection('WIRETAP CONTACT BLOCKED');
+    kvDisplay([
+      ['Target', username],
+      ['Actor', wiretapState().username || '-'],
+      ['Status', data?.contact?.status || 'blocked'],
+    ]);
+    return data;
+  } catch (err) {
+    spin.fail('Block contact failed');
+    error(err.message);
+    return null;
+  }
+}
+
 export async function wiretapThreads(opts = {}) {
   const params = new URLSearchParams();
   if (opts.unreadOnly) params.set('unreadOnly', 'true');
@@ -375,6 +455,25 @@ export async function wiretapThreads(opts = {}) {
   }
 }
 
+export async function wiretapUseThread(opts = {}) {
+  const resolved = await resolveThreadByConversationOrHandle(opts);
+  if (!resolved.conversationId) throw new Error('Conversation id or handle required. Example: darksol wiretap use aim_conv_...');
+  setWiretapState({ conversationId: resolved.conversationId });
+  if (opts.json) {
+    console.log(JSON.stringify({ conversationId: resolved.conversationId, toUsername: resolved.toUsername, thread: resolved.thread || null }, null, 2));
+    return resolved;
+  }
+  showSection('WIRETAP THREAD SELECTED');
+  kvDisplay([
+    ['Conversation', resolved.conversationId],
+    ['With', resolved.toUsername || '-'],
+    ['Unread', String(resolved.thread?.unreadCount || 0)],
+  ]);
+  console.log('');
+  info('Replies will use this conversation by default until you switch threads.');
+  return resolved;
+}
+
 export async function wiretapMessages(conversationId, opts = {}) {
   const id = conversationId || wiretapState().conversationId;
   if (!id) throw new Error('Conversation id required. Example: darksol wiretap messages aim_conv_...');
@@ -390,15 +489,57 @@ export async function wiretapMessages(conversationId, opts = {}) {
       return messages;
     }
     showSection(`WIRETAP ${id}`);
-    messages.slice().reverse().forEach((m) => {
-      const sender = m.fromUsername || m.fromHandle || m.fromAgentId || 'unknown';
-      console.log(`  ${theme.gold(sender)} ${theme.dim(m.createdAt || '')}`);
-      console.log(`    ${String(m.body || '').trim() || theme.dim('(empty)')}`);
-    });
-    console.log('');
+    renderMessages(messages);
     return messages;
   } catch (err) {
     spin.fail('Messages failed');
+    error(err.message);
+    return null;
+  }
+}
+
+export async function wiretapInbox(opts = {}) {
+  const params = new URLSearchParams();
+  if (opts.limit) params.set('limit', String(opts.limit));
+  if (opts.threadLimit) params.set('threadLimit', String(opts.threadLimit));
+  if (opts.unreadOnly) params.set('unreadOnly', 'true');
+  const spin = spinner('Loading Wiretap inbox...').start();
+  try {
+    const data = await request(`/inbox${params.toString() ? `?${params}` : ''}`);
+    spin.succeed('Inbox loaded');
+    const messages = data.messages || [];
+    const threads = data.threads || [];
+    if (opts.json) {
+      console.log(JSON.stringify(data, null, 2));
+      return data;
+    }
+    showSection(opts.unreadOnly ? 'WIRETAP INBOX — UNREAD' : 'WIRETAP INBOX');
+    kvDisplay([
+      ['Messages', String(data?.count ?? messages.length)],
+      ['Threads', String(threads.length)],
+      ['Unread', String(data?.unreadCount ?? 0)],
+    ]);
+    console.log('');
+    if (threads.length) {
+      table(['Conversation', 'With', 'Unread', 'Last'], threads.map((thread) => [
+        thread.conversationId || '-',
+        inferHandleFromThread(thread) || '-',
+        String(thread.unreadCount || 0),
+        truncate(thread.lastMessagePreview || thread.preview || '—', 64),
+      ]));
+      console.log('');
+    } else {
+      warn('No threads found.');
+    }
+    if (messages.length) {
+      console.log(theme.dim('Recent messages:'));
+      renderMessages(messages.slice(0, Math.min(messages.length, 6)));
+    } else {
+      warn('No messages found.');
+    }
+    return data;
+  } catch (err) {
+    spin.fail('Inbox failed');
     error(err.message);
     return null;
   }
@@ -475,9 +616,9 @@ export async function wiretapSend(opts = {}) {
 }
 
 export async function wiretapReply(opts = {}) {
-  const context = await resolveConversationContext(opts);
-  const conversationId = context.conversationId;
-  let toUsername = String(opts.to || context.toUsername || '').trim().toLowerCase();
+  const resolved = await resolveThreadByConversationOrHandle(opts);
+  const conversationId = resolved.conversationId;
+  let toUsername = String(opts.to || resolved.toUsername || '').trim().toLowerCase();
   let body = String(opts.message || opts.body || '').trim();
   if (!body && !opts.json) {
     const answers = await inquirer.prompt([
@@ -486,12 +627,6 @@ export async function wiretapReply(opts = {}) {
     body = String(answers.body || '').trim();
   }
   if (!body) throw new Error('Reply body required. Example: darksol wiretap reply --message "on it"');
-
-  if (!toUsername && conversationId) {
-    const threads = await request('/threads');
-    const thread = (threads.threads || threads.items || threads || []).find((t) => t?.conversationId === conversationId);
-    toUsername = inferHandleFromThread(thread || {});
-  }
   if (!toUsername) throw new Error('Could not infer recipient. Pass --to <username>.');
 
   const result = await wiretapSend({ from: wiretapState().username, to: toUsername, body: body || opts.body, message: body, json: opts.json });

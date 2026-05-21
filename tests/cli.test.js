@@ -116,8 +116,12 @@ test('command registration includes trade and script subcommands', (t) => {
   const wiretapHelp = runCli(['wiretap', '--help'], env);
   assert.equal(wiretapHelp.status, 0, wiretapHelp.stderr);
   assert.match(wiretapHelp.stdout, /\bdiscover\b/);
+  assert.match(wiretapHelp.stdout, /\bpending\b/);
   assert.match(wiretapHelp.stdout, /add-contact/);
   assert.match(wiretapHelp.stdout, /accept-contact/);
+  assert.match(wiretapHelp.stdout, /block-contact/);
+  assert.match(wiretapHelp.stdout, /\buse\b/);
+  assert.match(wiretapHelp.stdout, /\binbox\b/);
   assert.match(wiretapHelp.stdout, /\bread\b/);
   assert.match(wiretapHelp.stdout, /\breply\b/);
 });
