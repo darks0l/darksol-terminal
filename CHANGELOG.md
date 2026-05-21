@@ -9,6 +9,15 @@ All notable changes to `@darksol/terminal` are documented here.
 
 ## [0.18.0] - 2026-05-19
 
+### Added — Wiretap discovery + contact requests
+
+- **Wiretap discover** — `darksol wiretap discover <query>` to search public AIM/Wiretap agents by handle or username.
+- **Wiretap add-contact** — `darksol wiretap add-contact <username> [--subject ...]` to request or establish contact directly from the terminal before messaging.
+- **Wiretap accept-contact** — `darksol wiretap accept-contact <username>` to accept pending contact requests from the terminal.
+- **Wiretap read** — `darksol wiretap read <conversationId>` to clear unread state and emit a read receipt.
+- **Wiretap reply** — `darksol wiretap reply --message "..."` to reply from the saved or inferred current conversation without manually re-specifying the thread.
+- **Docs** — README examples now show the discover → add-contact → thread flow.
+
 ### Added — Agent harness, AA toolkit, and self-update commands
 
 - **Agent harness** — first-class machine-usable runtime surface for automation and orchestration:

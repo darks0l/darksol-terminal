@@ -26,7 +26,7 @@ import { casinoBet, casinoTables, casinoStats, casinoReceipt, casinoHealth, casi
 import { pokerNewGame, pokerAction, pokerStatus, pokerHistory } from './services/poker.js';
 import { cardsCatalog, cardsOrder, cardsStatus } from './services/cards.js';
 import { agentCommsBuyNumber, agentCommsCountries, agentCommsHealth, agentCommsMessages, agentCommsPremiumSearch } from './services/agentcomms.js';
-import { wiretapRegister, wiretapLogin, wiretapStatus, wiretapContacts, wiretapThreads, wiretapMessages, wiretapSend, wiretapSupport, wiretapEvents } from './services/wiretap.js';
+import { wiretapRegister, wiretapLogin, wiretapStatus, wiretapContacts, wiretapDiscover, wiretapAddContact, wiretapAcceptContact, wiretapThreads, wiretapMessages, wiretapRead, wiretapSend, wiretapReply, wiretapSupport, wiretapEvents } from './services/wiretap.js';
 import { facilitatorHealth, facilitatorVerify, facilitatorSettle } from './services/facilitator.js';
 import { healthCommand } from './services/health.js';
 import { scanToken, displayScanResult, scanResultToJSON } from './services/scanner.js';
@@ -934,6 +934,25 @@ export function cli(argv) {
     .action((opts) => wiretapContacts(opts));
 
   wiretap
+    .command('discover [query]')
+    .description('Discover public Wiretap agents by username or handle')
+    .option('--json', 'Output as JSON')
+    .action((query, opts) => wiretapDiscover({ query, json: opts.json }));
+
+  wiretap
+    .command('add-contact [username]')
+    .description('Request or establish a Wiretap contact')
+    .option('--subject <text>', 'Optional contact request subject')
+    .option('--json', 'Output as JSON')
+    .action((username, opts) => wiretapAddContact({ username, subject: opts.subject, json: opts.json }));
+
+  wiretap
+    .command('accept-contact [username]')
+    .description('Accept a pending Wiretap contact request')
+    .option('--json', 'Output as JSON')
+    .action((username, opts) => wiretapAcceptContact({ username, json: opts.json }));
+
+  wiretap
     .command('threads')
     .description('List Wiretap threads')
     .option('--unread', 'Only show unread threads')
@@ -948,12 +967,26 @@ export function cli(argv) {
     .action((conversationId, opts) => wiretapMessages(conversationId, { limit: opts.limit, json: opts.json }));
 
   wiretap
+    .command('read [conversationId]')
+    .description('Mark a Wiretap conversation as read')
+    .option('--json', 'Output as JSON')
+    .action((conversationId, opts) => wiretapRead({ conversationId, json: opts.json }));
+
+  wiretap
     .command('send')
     .description('Send a Wiretap message')
     .option('--from <username>', 'Sender username override')
     .option('--to <username>', 'Recipient username')
     .option('--message <text>', 'Message body')
     .action((opts) => wiretapSend(opts));
+
+  wiretap
+    .command('reply')
+    .description('Reply using the saved or inferred current Wiretap conversation')
+    .option('--to <username>', 'Recipient username override')
+    .option('--message <text>', 'Reply body')
+    .option('--json', 'Output as JSON')
+    .action((opts) => wiretapReply(opts));
 
   wiretap
     .command('support')
@@ -3155,7 +3188,7 @@ function generateBashCompletion() {
     cards: 'catalog order status',
     agentcomms: 'health countries buy messages premium-search',
     sms: 'health countries buy messages premium-search',
-    wiretap: 'register login status contacts threads messages send support events',
+    wiretap: 'register login status contacts discover add-contact accept-contact threads messages read send reply support events',
     support: '',
     builders: 'leaderboard lookup feed',
     facilitator: 'health verify settle',

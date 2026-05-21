@@ -89,6 +89,31 @@ function renderThreads(threads = []) {
   );
 }
 
+function inferHandleFromThread(thread = {}) {
+  const other = Array.isArray(thread.participants)
+    ? thread.participants.find((p) => p?.handle && p.handle !== wiretapState().username)
+    : null;
+  return other?.handle || other?.username || thread.otherHandle || thread.handle || null;
+}
+
+async function resolveConversationContext(input = {}) {
+  const explicitConversationId = String(input.conversationId || '').trim();
+  const explicitTo = String(input.to || input.username || input.handle || '').trim().toLowerCase();
+  if (explicitConversationId || explicitTo) return { conversationId: explicitConversationId || null, toUsername: explicitTo || null };
+
+  const savedConversationId = String(wiretapState().conversationId || '').trim();
+  if (savedConversationId) return { conversationId: savedConversationId, toUsername: null };
+
+  const data = await request('/threads?unreadOnly=true');
+  const threads = data.threads || data.items || data || [];
+  const thread = threads[0] || null;
+  if (!thread) return { conversationId: null, toUsername: null };
+  return {
+    conversationId: thread.conversationId || null,
+    toUsername: inferHandleFromThread(thread),
+  };
+}
+
 export async function wiretapRegister(username, opts = {}) {
   const handle = String(username || '').trim().toLowerCase();
   if (!handle) throw new Error('Username required. Example: darksol wiretap register darksol');
@@ -207,6 +232,127 @@ export async function wiretapContacts(opts = {}) {
   }
 }
 
+export async function wiretapDiscover(opts = {}) {
+  let query = String(opts.query || opts.q || opts.username || '').trim();
+  if (!query && !opts.json) {
+    const answers = await inquirer.prompt([{ type: 'input', name: 'query', message: theme.gold('Discover username or handle:'), default: '' }]);
+    query = String(answers.query || '').trim();
+  }
+  if (!query) throw new Error('Query required. Example: darksol wiretap discover concierge');
+
+  const spin = spinner(`Searching Wiretap for ${query}...`).start();
+  try {
+    const data = await request(`/discover?q=${encodeURIComponent(query)}`);
+    spin.succeed('Discovery loaded');
+    const profiles = data.profiles || data.items || data.results || data || [];
+    if (opts.json) {
+      console.log(JSON.stringify(profiles, null, 2));
+      return profiles;
+    }
+    showSection('WIRETAP DISCOVER');
+    if (!profiles.length) {
+      warn('No matching agents found.');
+      return profiles;
+    }
+    table(['Handle', 'Display', 'Agent ID', 'Visibility'], profiles.map((p) => [
+      p.handle || p.username || '-',
+      p.displayName || '-',
+      p.agentId || '-',
+      p.profileVisibility || (p.discoverable ? 'public' : 'contacts') || '-',
+    ]));
+    return profiles;
+  } catch (err) {
+    spin.fail('Discovery failed');
+    error(err.message);
+    return null;
+  }
+}
+
+export async function wiretapAddContact(opts = {}) {
+  let recipient = String(opts.username || opts.handle || opts.to || '').trim().toLowerCase();
+  let subject = String(opts.subject || '').trim();
+  if (!recipient && !opts.json) {
+    const answers = await inquirer.prompt([
+      { type: 'input', name: 'recipient', message: theme.gold('Contact username or handle:'), default: '' },
+      { type: 'input', name: 'subject', message: theme.gold('Subject (optional):'), default: subject || '' },
+    ]);
+    recipient = recipient || String(answers.recipient || '').trim().toLowerCase();
+    subject = subject || String(answers.subject || '').trim();
+  }
+  if (!recipient) throw new Error('Recipient required. Example: darksol wiretap add-contact concierge');
+
+  const spin = spinner(`Requesting contact with ${recipient}...`).start();
+  try {
+    const data = await request('/contacts', {
+      method: 'POST',
+      body: {
+        recipientHandle: recipient,
+        recipientUsername: recipient,
+        subject: subject || undefined,
+      },
+    });
+    spin.succeed('Contact request sent');
+    if (opts.json) {
+      console.log(JSON.stringify(data, null, 2));
+      return data;
+    }
+    showSection('WIRETAP CONTACT REQUEST');
+    kvDisplay([
+      ['Recipient', recipient],
+      ['Status', data?.contact?.status || (data?.autoAccepted ? 'accepted' : 'requested')],
+      ['Auto Accepted', data?.autoAccepted ? 'yes' : 'no'],
+      ['Subject', subject || '—'],
+    ]);
+    console.log('');
+    if (data?.autoAccepted) info('You can message them now with: darksol wiretap send --to ' + recipient + ' --message "..."');
+    else info('If they accept, the thread should show up in: darksol wiretap threads --unread');
+    return data;
+  } catch (err) {
+    spin.fail('Contact request failed');
+    error(err.message);
+    return null;
+  }
+}
+
+export async function wiretapAcceptContact(opts = {}) {
+  let requester = String(opts.username || opts.requester || opts.from || '').trim().toLowerCase();
+  if (!requester && !opts.json) {
+    const answers = await inquirer.prompt([{ type: 'input', name: 'requester', message: theme.gold('Accept contact from username:'), default: '' }]);
+    requester = String(answers.requester || '').trim().toLowerCase();
+  }
+  if (!requester) throw new Error('Requester username required. Example: darksol wiretap accept-contact concierge');
+
+  const spin = spinner(`Accepting contact from ${requester}...`).start();
+  try {
+    const data = await request('/contact/accept', {
+      method: 'POST',
+      body: {
+        requesterUsername: requester,
+        recipientUsername: wiretapState().username,
+      },
+    });
+    spin.succeed('Contact accepted');
+    if (opts.json) {
+      console.log(JSON.stringify(data, null, 2));
+      return data;
+    }
+    showSection('WIRETAP CONTACT ACCEPTED');
+    kvDisplay([
+      ['Requester', requester],
+      ['Recipient', wiretapState().username || '-'],
+      ['Status', data?.contact?.status || 'accepted'],
+      ['Conversation', data?.message?.conversationId || data?.conversation?.id || '-'],
+    ]);
+    console.log('');
+    info(`You can reply now with: darksol wiretap send --to ${requester} --message "..."`);
+    return data;
+  } catch (err) {
+    spin.fail('Accept contact failed');
+    error(err.message);
+    return null;
+  }
+}
+
 export async function wiretapThreads(opts = {}) {
   const params = new URLSearchParams();
   if (opts.unreadOnly) params.set('unreadOnly', 'true');
@@ -258,6 +404,38 @@ export async function wiretapMessages(conversationId, opts = {}) {
   }
 }
 
+export async function wiretapRead(opts = {}) {
+  const context = await resolveConversationContext(opts);
+  const conversationId = context.conversationId;
+  if (!conversationId) throw new Error('Conversation id required. Example: darksol wiretap read aim_conv_...');
+
+  const spin = spinner(`Marking ${conversationId} read...`).start();
+  try {
+    const data = await request('/read', {
+      method: 'POST',
+      body: { conversationId },
+    });
+    spin.succeed('Conversation marked read');
+    setWiretapState({ conversationId });
+    if (opts.json) {
+      console.log(JSON.stringify(data, null, 2));
+      return data;
+    }
+    showSection('WIRETAP READ');
+    kvDisplay([
+      ['Conversation', data?.conversationId || conversationId],
+      ['Reader', data?.profile?.handle || data?.profile?.displayName || wiretapState().username || '-'],
+      ['Last Read Message', data?.readState?.lastReadMessageId || data?.readReceipt?.messageId || '-'],
+      ['Newly Read', String((data?.readReceipt?.newlyReadMessageIds || []).length)],
+    ]);
+    return data;
+  } catch (err) {
+    spin.fail('Mark read failed');
+    error(err.message);
+    return null;
+  }
+}
+
 export async function wiretapSend(opts = {}) {
   const fromUsername = opts.from || wiretapState().username;
   let toUsername = opts.to;
@@ -294,6 +472,31 @@ export async function wiretapSend(opts = {}) {
     if (String(err.message).includes('accepted contacts')) info('Add/accept contacts first inside AIM before direct messaging.');
     return null;
   }
+}
+
+export async function wiretapReply(opts = {}) {
+  const context = await resolveConversationContext(opts);
+  const conversationId = context.conversationId;
+  let toUsername = String(opts.to || context.toUsername || '').trim().toLowerCase();
+  let body = String(opts.message || opts.body || '').trim();
+  if (!body && !opts.json) {
+    const answers = await inquirer.prompt([
+      { type: 'input', name: 'body', message: theme.gold('Reply message:'), default: '' },
+    ]);
+    body = String(answers.body || '').trim();
+  }
+  if (!body) throw new Error('Reply body required. Example: darksol wiretap reply --message "on it"');
+
+  if (!toUsername && conversationId) {
+    const threads = await request('/threads');
+    const thread = (threads.threads || threads.items || threads || []).find((t) => t?.conversationId === conversationId);
+    toUsername = inferHandleFromThread(thread || {});
+  }
+  if (!toUsername) throw new Error('Could not infer recipient. Pass --to <username>.');
+
+  const result = await wiretapSend({ from: wiretapState().username, to: toUsername, body: body || opts.body, message: body, json: opts.json });
+  if (result && conversationId && !opts.json) info(`Reply used conversation context: ${conversationId}`);
+  return result;
 }
 
 export async function wiretapSupport(opts = {}) {
