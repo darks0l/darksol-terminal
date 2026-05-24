@@ -96,6 +96,7 @@ const config = new Conf({
         facilitator: 'https://facilitator.darksol.net',
         builders: 'https://builders.darksol.net',
         market: 'https://acp.darksol.net/market',
+        miroshark: 'http://127.0.0.1:5001',
       },
     },
     aa: {

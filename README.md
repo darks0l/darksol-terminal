@@ -15,7 +15,7 @@ A unified CLI for market intel, trading, AI-powered analysis, Wiretap/AIM messag
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-gold.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
 
-- Current release: **0.18.0**
+- Current release: **0.18.1**
 - Changelog: `CHANGELOG.md`
 
 ## Install
@@ -145,8 +145,15 @@ darksol agent aa session-create --name trader --targets 0x1111111111111111111111
 
 darksol update status
 darksol update install
-darksol update install --version 0.17.2
+darksol update install --version 0.18.1
 darksol update reinstall
+
+# ThreatLab / MiroShark
+darksol threatlab install
+darksol threatlab setup --openrouter-key sk-or-v1-...
+darksol threatlab start
+darksol threatlab status
+darksol threatlab run-scan 0x1234...5678 --wait --report
 
 # Agent email
 darksol mail setup

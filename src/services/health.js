@@ -32,6 +32,11 @@ const SERVICES = [
     desc: 'AIM / Wiretap agent messaging',
   },
   {
+    name: 'ThreatLab',
+    url: () => (getServiceURL('miroshark') || 'http://127.0.0.1:5001') + '/api/templates/list',
+    desc: 'MiroShark swarm simulation backend',
+  },
+  {
     name: 'LI.FI',
     url: () => 'https://li.quest/v1/status',
     desc: 'Cross-chain swaps & bridges',

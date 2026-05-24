@@ -30,6 +30,7 @@ import { wiretapRegister, wiretapLogin, wiretapStatus, wiretapContacts, wiretapP
 import { facilitatorHealth, facilitatorVerify, facilitatorSettle } from './services/facilitator.js';
 import { healthCommand } from './services/health.js';
 import { scanToken, displayScanResult, scanResultToJSON } from './services/scanner.js';
+import { threatlabGenerateReport, threatlabInstall, threatlabRunScan, threatlabRunStatus, threatlabSetup, threatlabStart, threatlabStatus } from './services/threatlab.js';
 import {
   lightningInit, lightningStart, lightningStop, lightningInfo, lightningBalance,
   lightningPay, lightningInvoice, lightningOffer, lightningDecode,
@@ -1076,6 +1077,73 @@ export function cli(argv) {
     .command('settle <payment>')
     .description('Settle payment on-chain')
     .action((payment) => facilitatorSettle(payment));
+
+  // ═══════════════════════════════════════
+  // THREATLAB COMMANDS
+  // ═══════════════════════════════════════
+  const threatlab = program
+    .command('threatlab')
+    .description('ThreatLab swarm simulations via MiroShark');
+
+  threatlab
+    .command('install')
+    .description('Clone/fetch the MiroShark repo for local ThreatLab use')
+    .option('--repo <url>', 'Git repo to clone', 'https://github.com/aaronjmars/MiroShark.git')
+    .option('--dir <path>', 'Install directory override')
+    .action((opts) => threatlabInstall(opts));
+
+  threatlab
+    .command('setup')
+    .description('Prepare local MiroShark config and save the service URL')
+    .option('--dir <path>', 'MiroShark directory override')
+    .option('--openrouter-key <key>', 'Write the same OpenRouter key into default .env slots')
+    .option('--api-url <url>', 'Override the saved backend URL', 'http://127.0.0.1:5001')
+    .option('--frontend-url <url>', 'Frontend URL hint', 'http://127.0.0.1:3000')
+    .action((opts) => threatlabSetup(opts));
+
+  threatlab
+    .command('start')
+    .description('Start local MiroShark (or print the exact launcher command on Windows)')
+    .option('--dir <path>', 'MiroShark directory override')
+    .option('--timeout-ms <ms>', 'How long to wait for backend health', '120000')
+    .action((opts) => threatlabStart({ ...opts, timeoutMs: Number(opts.timeoutMs) }));
+
+  threatlab
+    .command('status')
+    .description('Check ThreatLab / MiroShark status')
+    .option('--json', 'Output as JSON')
+    .option('--dir <path>', 'MiroShark directory override')
+    .action((opts) => threatlabStatus(opts));
+
+  threatlab
+    .command('run-scan <address>')
+    .description('Run DARKSOL scan, build ThreatLab sim, and optionally wait/report')
+    .option('-c, --chain <chain>', 'Chain to scan', 'base')
+    .option('--platform <platform>', 'Simulation platform: parallel, twitter, reddit', 'parallel')
+    .option('--rounds <n>', 'Max rounds when starting the sim', '12')
+    .option('--parallel-profiles <n>', 'Parallel profile generation count', '5')
+    .option('--prepare-only', 'Stop after profiles + config are ready')
+    .option('--quick', 'Use quick scanner mode')
+    .option('--wait', 'Wait for the simulation run to finish')
+    .option('--report', 'Generate a report after the run (best with --wait)')
+    .option('--force', 'Force restart the simulation run if needed')
+    .option('--polymarket', 'Enable Polymarket in the sim shell')
+    .option('--json', 'Output as JSON')
+    .action((address, opts) => threatlabRunScan(address, opts));
+
+  threatlab
+    .command('run-status <simulationId>')
+    .description('Check run status for a ThreatLab simulation')
+    .option('--json', 'Output as JSON')
+    .action((simulationId, opts) => threatlabRunStatus(simulationId, opts));
+
+  threatlab
+    .command('report <simulationId>')
+    .description('Generate or fetch a ThreatLab report')
+    .option('--wait', 'Wait for report generation to complete')
+    .option('--force', 'Force report regeneration')
+    .option('--json', 'Output as JSON')
+    .action((simulationId, opts) => threatlabGenerateReport(simulationId, opts));
 
   // ═══════════════════════════════════════
   // TOKEN SCANNER

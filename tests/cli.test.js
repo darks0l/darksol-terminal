@@ -83,6 +83,16 @@ test('command registration includes trade and script subcommands', (t) => {
   assert.match(updateHelp.stdout, /\binstall\b/);
   assert.match(updateHelp.stdout, /\breinstall\b/);
 
+  const threatlabHelp = runCli(['threatlab', '--help'], env);
+  assert.equal(threatlabHelp.status, 0, threatlabHelp.stderr);
+  assert.match(threatlabHelp.stdout, /\binstall\b/);
+  assert.match(threatlabHelp.stdout, /\bsetup\b/);
+  assert.match(threatlabHelp.stdout, /\bstart\b/);
+  assert.match(threatlabHelp.stdout, /\bstatus\b/);
+  assert.match(threatlabHelp.stdout, /run-scan/);
+  assert.match(threatlabHelp.stdout, /run-status/);
+  assert.match(threatlabHelp.stdout, /\breport\b/);
+
   const harnessHelp = runCli(['agent', 'harness', '--help'], env);
   assert.equal(harnessHelp.status, 0, harnessHelp.stderr);
   assert.match(harnessHelp.stdout, /\bmanifest\b/);

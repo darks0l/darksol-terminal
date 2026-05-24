@@ -7,7 +7,7 @@ description: "DARKSOL Terminal — unified CLI + x402 platform for trading, wall
 
 **All DARKSOL services. One terminal. Zero trust required. 🌑**
 
-`@darksol/terminal` v0.17.2 | npm: `npm install -g @darksol/terminal`
+`@darksol/terminal` v0.18.1 | npm: `npm install -g @darksol/terminal`
 
 ---
 

@@ -7,6 +7,36 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.18.1] - 2026-05-24
+
+### Added — ThreatLab / MiroShark integration
+
+- **ThreatLab command group** — first-class MiroShark swarm-simulation surface inside the terminal:
+  - `darksol threatlab install`
+  - `darksol threatlab setup`
+  - `darksol threatlab start`
+  - `darksol threatlab status`
+  - `darksol threatlab run-scan <address>`
+  - `darksol threatlab run-status <simulationId>`
+  - `darksol threatlab report <simulationId>`
+- **Local bootstrap flow** — users can now fetch the upstream MiroShark repo, seed `.env`, write a single OpenRouter key into the default five MiroShark API key slots, and persist the local service URL from DARKSOL Terminal.
+- **ThreatLab health coverage** — `darksol health` now probes the configured MiroShark backend.
+- **Config support** — added persisted `services.miroshark` defaulting to `http://127.0.0.1:5001`.
+- **CLI coverage** — added tests that assert the ThreatLab command surface is registered.
+
+### Changed
+
+- Tightened npm packaging with a `files` allowlist so published installs only ship the CLI/runtime assets, docs, and skill files they actually need.
+- Refreshed package metadata to better match the current terminal surface area, including Wiretap/AIM, agent tooling, Telegram, wallets, and ThreatLab workflows.
+- Updated dependency pins for `agentmail`, `ws`, and optional `playwright-core` to current compatible releases.
+- Synced README and bundled skill version references to the new release.
+
+### Verified
+
+- `npm test` passes (`228/228`)
+- `npm pack --dry-run --json` succeeds
+- `node ~/.git-hooks/secret-scan.js npm` passes clean
+
 ## [0.18.0] - 2026-05-19
 
 ### Added — Wiretap discovery + contact requests

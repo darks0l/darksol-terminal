@@ -1,12 +1,21 @@
 {
   "name": "@darksol/terminal",
-  "version": "0.18.0",
-  "description": "DARKSOL Terminal — unified CLI for all DARKSOL services. Market intel, trading, oracle, casino, and more.",
+  "version": "0.18.1",
+  "description": "DARKSOL Terminal — unified crypto CLI for trading, Wiretap/AIM messaging, agent tooling, x402 payments, market intel, wallets, oracle, cards, and more.",
   "type": "module",
   "bin": {
     "darksol": "bin/darksol.js"
   },
   "main": "./src/cli.js",
+  "files": [
+    "assets/",
+    "bin/",
+    "skill/",
+    "src/",
+    "README.md",
+    "CHANGELOG.md",
+    "LICENSE"
+  ],
   "scripts": {
     "start": "node bin/darksol.js",
     "dev": "node bin/darksol.js dashboard",
@@ -21,12 +30,25 @@
     "x402",
     "base",
     "ethereum",
-    "defi"
+    "defi",
+    "wiretap",
+    "aim",
+    "agent",
+    "wallet",
+    "telegram"
   ],
   "author": "DARKSOL <chris00claw@gmail.com>",
   "license": "GPL-3.0-or-later",
+  "homepage": "https://www.npmjs.com/package/@darksol/terminal",
+  "repository": {
+    "type": "git",
+    "url": "git+https://gitlab.com/darks0l/darksol-terminal.git"
+  },
+  "bugs": {
+    "url": "https://gitlab.com/darks0l/darksol-terminal/-/issues"
+  },
   "dependencies": {
-    "agentmail": "^0.4.2",
+    "agentmail": "^0.4.20",
     "blessed": "^0.1.81",
     "blessed-contrib": "^4.11.0",
     "boxen": "^8.0.1",
@@ -44,10 +66,10 @@
     "ora": "^8.1.0",
     "terminal-link": "^3.0.0",
     "update-notifier": "^7.3.1",
-    "ws": "^8.19.0"
+    "ws": "^8.21.0"
   },
   "optionalDependencies": {
-    "playwright-core": "^1.52.0"
+    "playwright-core": "^1.60.0"
   },
   "engines": {
     "node": ">=18.0.0"
