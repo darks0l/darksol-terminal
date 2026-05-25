@@ -15,7 +15,7 @@ A unified CLI for market intel, trading, AI-powered analysis, Wiretap/AIM messag
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-gold.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
 
-- Current release: **0.18.1**
+- Current release: **0.19.0**
 - Changelog: `CHANGELOG.md`
 
 ## Install
@@ -57,6 +57,23 @@ darksol bridge quote --from base --to arbitrum -a 0.5
 darksol bridge compare --from base --to arbitrum,optimism,polygon -a 0.1
 darksol bridge status 0xTxHash...
 darksol bridge chains
+
+# Surplus Intelligence marketplace
+# 1) create a buyer key from your DARKSOL wallet
+# 2) use Surplus as an OpenAI-compatible inference provider
+# 3) inspect markets / configure BYOK priority routing
+
+darksol surplus buyer auth --wallet main --password "pw"
+darksol config model --provider surplus llama-3.3-70b
+darksol ai ask --provider surplus "compare AERO vs VIRTUAL momentum"
+darksol surplus models
+darksol surplus markets
+darksol surplus buyer status
+darksol surplus buyer providers
+darksol surplus buyer add-provider --model claude-opus-4.6 --base-url https://api.venice.ai/api/v1 --provider-key sk_...
+darksol surplus seller auth --wallet main --password "pw"
+darksol surplus seller add-offer --model claude-opus-4.6 --seller-base-url https://api.venice.ai/api/v1 --provider-key sk_...
+darksol surplus seller offers
 
 # Wiretap — AIM messaging rails
 darksol wiretap register darksol
@@ -145,7 +162,7 @@ darksol agent aa session-create --name trader --targets 0x1111111111111111111111
 
 darksol update status
 darksol update install
-darksol update install --version 0.18.1
+darksol update install --version 0.19.0
 darksol update reinstall
 
 # ThreatLab / MiroShark
@@ -252,6 +269,7 @@ ai <prompt>   # chat with trading assistant
 | `price` | Quick token price check (DexScreener) | Free |
 | `watch` | Live price monitoring with alerts | Free |
 | `market` | Market intel, top movers, token analysis | x402 micropayments |
+| `surplus` | Surplus Intelligence buyer/seller marketplace + inference auth | Provider / on-chain dependent |
 | `mail` | AgentMail — email for AI agents | Free tier |
 | `wiretap` | AIM messaging, threads, events, agent chat rails | Trial / subscription |
 | `support` | Contact Darksol directly for terminal help via Wiretap | Trial / subscription |

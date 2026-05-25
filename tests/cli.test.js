@@ -134,4 +134,24 @@ test('command registration includes trade and script subcommands', (t) => {
   assert.match(wiretapHelp.stdout, /\binbox\b/);
   assert.match(wiretapHelp.stdout, /\bread\b/);
   assert.match(wiretapHelp.stdout, /\breply\b/);
+
+  const surplusHelp = runCli(['surplus', '--help'], env);
+  assert.equal(surplusHelp.status, 0, surplusHelp.stderr);
+  assert.match(surplusHelp.stdout, /\bmodels\b/);
+  assert.match(surplusHelp.stdout, /\bmarkets\b/);
+  assert.match(surplusHelp.stdout, /\bbuyer\b/);
+  assert.match(surplusHelp.stdout, /\bseller\b/);
+
+  const surplusBuyerHelp = runCli(['surplus', 'buyer', '--help'], env);
+  assert.equal(surplusBuyerHelp.status, 0, surplusBuyerHelp.stderr);
+  assert.match(surplusBuyerHelp.stdout, /\bstatus\b/);
+  assert.match(surplusBuyerHelp.stdout, /\bauth\b/);
+  assert.match(surplusBuyerHelp.stdout, /\bproviders\b/);
+  assert.match(surplusBuyerHelp.stdout, /add-provider/);
+
+  const surplusSellerHelp = runCli(['surplus', 'seller', '--help'], env);
+  assert.equal(surplusSellerHelp.status, 0, surplusSellerHelp.stderr);
+  assert.match(surplusSellerHelp.stdout, /\bauth\b/);
+  assert.match(surplusSellerHelp.stdout, /\boffers\b/);
+  assert.match(surplusSellerHelp.stdout, /add-offer/);
 });

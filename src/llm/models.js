@@ -57,6 +57,18 @@ export const MODEL_CATALOG = {
     defaultModel: 'claude-sonnet-4.6',
     managed: true,
   },
+  surplus: {
+    defaultModel: 'llama-3.3-70b',
+    choices: [
+      { value: 'llama-3.3-70b', label: 'llama-3.3-70b', desc: 'popular marketplace model' },
+      { value: 'llama-3.1-70b', label: 'llama-3.1-70b', desc: 'strong open model option' },
+      { value: 'claude-opus-4.6', label: 'claude-opus-4.6', desc: 'seller-routed premium model' },
+      { value: 'claude-sonnet-4.6', label: 'claude-sonnet-4.6', desc: 'balanced premium model' },
+      { value: 'gpt-5.4', label: 'gpt-5.4', desc: 'OpenAI-routed marketplace option' },
+      { value: 'gemini-2.5-pro', label: 'gemini-2.5-pro', desc: 'Google-class marketplace option' },
+    ],
+    allowCustom: true,
+  },
 };
 
 export function getProviderDefaultModel(provider) {

@@ -7,6 +7,35 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.19.0] - 2026-05-25
+
+### Added — Surplus Intelligence marketplace integration
+
+- **Surplus provider** — added native `surplus` LLM-provider support using Surplus Intelligence's OpenAI-compatible inference endpoint.
+- **Buyer marketplace commands**:
+  - `darksol surplus models`
+  - `darksol surplus markets`
+  - `darksol surplus buyer status`
+  - `darksol surplus buyer auth --wallet <name> --password <pw>`
+  - `darksol surplus buyer providers`
+  - `darksol surplus buyer add-provider --model <model> --base-url <url> --provider-key <key>`
+- **Seller marketplace commands**:
+  - `darksol surplus seller auth --wallet <name> --password <pw>`
+  - `darksol surplus seller offers`
+  - `darksol surplus seller add-offer --model <model> --seller-base-url <url> --provider-key <key> [--price <n>]`
+- **Setup + key management** — `darksol setup`, encrypted key storage, and the web terminal key menu now include Surplus Intelligence.
+- **Web terminal awareness** — AI/key status surfaces now recognize Surplus as a configured provider.
+- **Tests** — added coverage for Surplus provider registration and CLI help surface.
+
+### Changed
+
+- Model-selection metadata now includes Surplus marketplace defaults and common model presets.
+- README quick-start/docs now include Surplus buyer/seller workflows.
+
+### Verified
+
+- `node --test tests/llm-providers.test.js tests/cli.test.js` passes (`15/15`)
+
 ## [0.18.1] - 2026-05-24
 
 ### Added — ThreatLab / MiroShark integration

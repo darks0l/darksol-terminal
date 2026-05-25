@@ -21,6 +21,17 @@ import { aiDiscoverPairs, aiTuneThresholds, aiStrategyBriefing, aiLearn } from '
 import { listApprovals, revokeApproval, checkSpecificApproval } from './services/approvals.js';
 import { executeLifiSwap, executeLifiBridge, checkBridgeStatus, showSupportedChains, showBridgeQuote, compareBridgeQuotes } from './services/lifi.js';
 import { topMovers, tokenDetail, compareTokens } from './services/market.js';
+import {
+  surplusModels,
+  surplusMarkets,
+  surplusBuyerStatus,
+  surplusBuyerProviders,
+  surplusBuyerAddProvider,
+  surplusBuyerAuth,
+  surplusSellerOffers,
+  surplusSellerCreateOffer,
+  surplusSellerAuth,
+} from './services/surplus.js';
 import { oracleFlip, oracleDice, oracleNumber, oracleShuffle, oracleHealth } from './services/oracle.js';
 import { casinoBet, casinoTables, casinoStats, casinoReceipt, casinoHealth, casinoVerify } from './services/casino.js';
 import { pokerNewGame, pokerAction, pokerStatus, pokerHistory } from './services/poker.js';
@@ -724,6 +735,82 @@ export function cli(argv) {
     .description('Compare multiple tokens side by side')
     .option('--json', 'Output as JSON')
     .action((tokens, opts) => compareTokens(tokens, { json: opts.json }));
+
+  const surplus = program
+    .command('surplus')
+    .description('Surplus Intelligence marketplace - inference buyer/seller flows');
+
+  surplus
+    .command('models')
+    .description('List Surplus marketplace models')
+    .option('--json', 'Output as JSON')
+    .option('-l, --limit <n>', 'Number of rows to show', '25')
+    .action((opts) => surplusModels({ json: opts.json, limit: parseInt(opts.limit, 10) }));
+
+  surplus
+    .command('markets')
+    .description('List Surplus market pricing/availability')
+    .option('--json', 'Output as JSON')
+    .option('-l, --limit <n>', 'Number of rows to show', '25')
+    .action((opts) => surplusMarkets({ json: opts.json, limit: parseInt(opts.limit, 10) }));
+
+  const surplusBuyer = surplus
+    .command('buyer')
+    .description('Surplus buyer operations');
+
+  surplusBuyer
+    .command('status')
+    .description('Show Surplus buyer status')
+    .option('--json', 'Output as JSON')
+    .action((opts) => surplusBuyerStatus(opts));
+
+  surplusBuyer
+    .command('auth')
+    .description('Create a Surplus buyer API key via wallet SIWE')
+    .option('-w, --wallet <name>', 'Wallet to use')
+    .requiredOption('-p, --password <pw>', 'Wallet password')
+    .action((opts) => surplusBuyerAuth(opts));
+
+  surplusBuyer
+    .command('providers')
+    .description('List Surplus buyer priority providers')
+    .option('--json', 'Output as JSON')
+    .action((opts) => surplusBuyerProviders(opts));
+
+  surplusBuyer
+    .command('add-provider')
+    .description('Add a buyer priority provider (BYOK-first, marketplace fallback)')
+    .requiredOption('--model <model>', 'Target model')
+    .requiredOption('--base-url <url>', 'OpenAI-compatible provider base URL')
+    .requiredOption('--provider-key <key>', 'Provider API key')
+    .action((opts) => surplusBuyerAddProvider(opts));
+
+  const surplusSeller = surplus
+    .command('seller')
+    .description('Surplus seller operations');
+
+  surplusSeller
+    .command('auth')
+    .description('Create a Surplus seller API key via wallet SIWE')
+    .option('-w, --wallet <name>', 'Wallet to use')
+    .requiredOption('-p, --password <pw>', 'Wallet password')
+    .option('--store-as-default', 'Store returned token in the surplus key slot')
+    .action((opts) => surplusSellerAuth(opts));
+
+  surplusSeller
+    .command('offers')
+    .description('List your Surplus seller offers')
+    .option('--json', 'Output as JSON')
+    .action((opts) => surplusSellerOffers(opts));
+
+  surplusSeller
+    .command('add-offer')
+    .description('Create a seller offer for a model/provider lane')
+    .requiredOption('--model <model>', 'Model to sell')
+    .requiredOption('--seller-base-url <url>', 'OpenAI-compatible upstream base URL')
+    .requiredOption('--provider-key <key>', 'Upstream provider API key')
+    .option('--price <number>', 'Optional price override')
+    .action((opts) => surplusSellerCreateOffer(opts));
 
   // ═══════════════════════════════════════
   // ORACLE COMMANDS

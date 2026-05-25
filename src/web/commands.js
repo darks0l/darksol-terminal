@@ -854,7 +854,7 @@ export function getAIStatus() {
   const dim = '\x1b[38;2;102;102;102m';
   const reset = '\x1b[0m';
 
-  const providers = ['openai', 'anthropic', 'openrouter', 'minimax', 'ollama', 'bankr'];
+  const providers = ['openai', 'anthropic', 'openrouter', 'minimax', 'ollama', 'bankr', 'surplus'];
   const connected = providers.filter(p => hasKey(p));
   const soul = hasSoul() ? getSoul() : null;
 
@@ -874,6 +874,7 @@ export function getAIStatus() {
     `  ${green}keys add openrouter sk-or-...${reset}   ${dim}OpenRouter (any model)${reset}`,
     `  ${green}keys add minimax <key>${reset}          ${dim}MiniMax (MiniMax-M2.5)${reset}`,
     `  ${green}keys add bankr bk_...${reset}           ${dim}Bankr LLM Gateway (crypto credits)${reset}`,
+    `  ${green}keys add surplus inf_...${reset}        ${dim}Surplus Intelligence marketplace${reset}`,
     `  ${green}keys add ollama http://...${reset}      ${dim}Ollama (free, local)${reset}`,
     '',
   ].join('\r\n');
@@ -2646,7 +2647,7 @@ async function cmdKeys(args, ws) {
   ws.sendLine(`${ANSI.dim}  ${'─'.repeat(50)}${ANSI.reset}`);
   ws.sendLine('');
 
-  const llmProviders = ['openai', 'anthropic', 'openrouter', 'minimax', 'ollama', 'bankr'];
+  const llmProviders = ['openai', 'anthropic', 'openrouter', 'minimax', 'ollama', 'bankr', 'surplus'];
   ws.sendLine(`  ${ANSI.gold}LLM Providers:${ANSI.reset}`);
   for (const p of llmProviders) {
     const svc = SERVICES[p];

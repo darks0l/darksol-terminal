@@ -57,6 +57,7 @@ export async function runSetupWizard(opts = {}) {
       { name: 'Anthropic (Claude Opus, Sonnet) - API key or OAuth', value: 'anthropic' },
       { name: 'OpenRouter (any model, one key) - API key', value: 'openrouter' },
       { name: 'MiniMax (MiniMax-M2.5) - API key', value: 'minimax' },
+      { name: 'Surplus Intelligence (marketplace models) - API key', value: 'surplus' },
       { name: 'Ollama (local models, free, private) - no key needed', value: 'ollama' },
       { name: 'Skip for now', value: 'skip' },
     ],
@@ -125,6 +126,7 @@ async function setupCloudProvider(provider) {
     anthropic: 'Anthropic',
     openrouter: 'OpenRouter',
     minimax: 'MiniMax',
+    surplus: 'Surplus Intelligence',
   }[provider];
 
   if (supportsOAuth) {
@@ -162,6 +164,7 @@ async function setupAPIKey(provider) {
     anthropic: 'Anthropic',
     openrouter: 'OpenRouter',
     minimax: 'MiniMax',
+    surplus: 'Surplus Intelligence',
   }[provider];
 
   const { key } = await inquirer.prompt([{

@@ -69,6 +69,13 @@ const PROVIDERS = {
     parseResponse: (data) => data.choices?.[0]?.message?.content,
     parseUsage: (data) => data.usage,
   },
+  surplus: {
+    url: 'https://www.surplusintelligence.ai/api/inference/v1/chat/completions',
+    defaultModel: getProviderDefaultModel('surplus'),
+    authHeader: (key) => ({ Authorization: `Bearer ${key}` }),
+    parseResponse: (data) => data.choices?.[0]?.message?.content,
+    parseUsage: (data) => data.usage,
+  },
 };
 
 export class LLMEngine {

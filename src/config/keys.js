@@ -116,6 +116,14 @@ export const SERVICES = {
     docsUrl: 'https://docs.bankr.bot/llm-gateway/overview',
     validate: (key) => key.startsWith('bk_'),
   },
+  surplus: {
+    name: 'Surplus Intelligence',
+    category: 'llm',
+    description: 'Model marketplace — OpenAI-compatible inference, SIWE buyer keys, x402 support',
+    envVar: 'SURPLUS_API_KEY',
+    docsUrl: 'https://www.surplusintelligence.ai/docs',
+    validate: (key) => key.startsWith('inf_') || key.length > 10,
+  },
 
   // Data Providers
   coingecko: {
@@ -462,7 +470,7 @@ export function hasKey(service) {
  */
 export function hasAnyLLM() {
   // Cloud providers — need real validated API keys
-  if (['openai', 'anthropic', 'openrouter', 'minimax', 'nvidia', 'bankr'].some(s => hasKey(s))) return true;
+  if (['openai', 'anthropic', 'openrouter', 'minimax', 'nvidia', 'bankr', 'surplus'].some(s => hasKey(s))) return true;
   // Ollama — check if explicitly configured via hasKey (validates URL format)
   if (hasKey('ollama')) return true;
   return false;
