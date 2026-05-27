@@ -67,6 +67,7 @@ import { addKey, removeKey, listKeys } from './config/keys.js';
 import { parseIntent, startChat, adviseStrategy, analyzeToken, executeIntent } from './llm/intent.js';
 import { startAgentSigner, showAgentDocs } from './wallet/agent-signer.js';
 import { createSessionPolicy, getAAStatus, listSessionPolicies, removeSessionPolicy, setAAConfig, simulateWalletCalls, buildBatchPlan } from './services/aa.js';
+import { configureBaseMcp, showBaseMcpStatus } from './services/base-mcp.js';
 import { listSkills, installSkill, skillInfo, uninstallSkill } from './services/skills.js';
 import { runSetupWizard } from './setup/wizard.js';
 import { displaySoul, hasSoul, resetSoul, runSoulSetup } from './soul/index.js';
@@ -2016,6 +2017,25 @@ export function cli(argv) {
       });
       console.log(JSON.stringify(payload, null, 2));
     });
+
+  const baseMcp = program
+    .command('base-mcp')
+    .description('Base docs MCP setup helpers for Claude, Codex, and Cursor');
+
+  baseMcp
+    .command('status')
+    .description('Show current Base MCP config and ready-to-paste client setup')
+    .option('--json', 'Output raw JSON')
+    .action((opts) => showBaseMcpStatus(opts));
+
+  baseMcp
+    .command('configure')
+    .description('Set Base MCP metadata used for generated setup snippets')
+    .option('--docs-url <url>', 'Base MCP docs URL', 'https://docs.base.org/mcp')
+    .option('--server-name <name>', 'MCP server name', 'base-docs')
+    .option('--preferred-client <client>', 'Preferred client label (claude|codex|cursor)')
+    .option('--json', 'Output raw JSON')
+    .action((opts) => configureBaseMcp(opts));
 
   agentAA
     .command('session-list')

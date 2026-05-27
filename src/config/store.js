@@ -112,6 +112,14 @@ const config = new Conf({
         sessionPolicies: [],
       },
     },
+    baseMcp: {
+      type: 'object',
+      default: {
+        docsUrl: 'https://docs.base.org/mcp',
+        serverName: 'base-docs',
+        preferredClient: '',
+      },
+    },
     wiretap: {
       type: 'object',
       default: {

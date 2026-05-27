@@ -7,6 +7,18 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.19.1] - 2026-05-27
+
+### Added — Base MCP setup helpers
+
+- Added `darksol base-mcp status` to print ready-to-paste Base docs MCP setup for Claude Code, Codex CLI, and Cursor.
+- Added `darksol base-mcp configure` to persist MCP metadata such as docs URL, server name, and preferred client.
+- Added persisted `baseMcp` config defaults for the Base docs MCP endpoint.
+
+### Changed
+
+- README now explains the difference between the easy **Base docs MCP** integration and the deeper wallet/signing integration path.
+
 ## [0.19.0] - 2026-05-25
 
 ### Added — Surplus Intelligence marketplace integration

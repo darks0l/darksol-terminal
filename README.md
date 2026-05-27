@@ -182,6 +182,10 @@ darksol serve
 # Start agent signer for OpenClaw
 darksol agent start main
 
+# Base docs MCP setup helpers
+darksol base-mcp status
+darksol base-mcp configure --preferred-client codex
+
 # Telegram bot — AI chat through Telegram
 darksol telegram setup
 darksol telegram start
@@ -258,6 +262,35 @@ ai <prompt>   # chat with trading assistant
 | `agent task` | Autonomous ReAct agent loop with tool use | Provider dependent |
 | `agent harness` | Machine-callable harness with RPC, sessions, events, replay export | Provider dependent |
 | `agent aa` | Smart-wallet / AA readiness, simulation, batching, session policies | Free |
+| `base-mcp` | Ready-to-paste Base docs MCP setup for Claude/Codex/Cursor | Free |
+
+## Base MCP
+
+Yes — DARKSOL Terminal can help wire in the **Base docs MCP** today.
+
+```bash
+darksol base-mcp status
+darksol base-mcp configure --preferred-client codex
+```
+
+That prints ready-to-paste setup for:
+
+- **Claude Code**
+- **Codex CLI**
+- **Cursor**
+
+Current Base docs MCP endpoint:
+
+```txt
+https://docs.base.org/mcp
+```
+
+Important distinction:
+
+- **Base docs MCP** = live documentation access for your coding agent
+- **wallet / signing integration** = separate runtime layer handled by `darksol agent start`, `darksol agent aa`, or a future dedicated MCP adapter
+
+So the docs MCP path is an easy win right now. A full Base Account wallet-tool MCP bridge is possible too, but that is a deeper feature than just adding the docs server.
 | `ai` | LLM-powered trading assistant & intent execution | Provider dependent |
 | `agent` | Secure agent signer (PK-isolated proxy) | Free |
 | `keys` | Encrypted API key vault (LLMs/data/RPCs) | Free |

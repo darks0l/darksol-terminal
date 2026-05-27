@@ -105,6 +105,11 @@ test('command registration includes trade and script subcommands', (t) => {
   assert.match(harnessHelp.stdout, /\bevents\b/);
   assert.match(harnessHelp.stdout, /\bexport\b/);
 
+  const baseMcpHelp = runCli(['base-mcp', '--help'], env);
+  assert.equal(baseMcpHelp.status, 0, baseMcpHelp.stderr);
+  assert.match(baseMcpHelp.stdout, /\bstatus\b/);
+  assert.match(baseMcpHelp.stdout, /\bconfigure\b/);
+
   const autoHelp = runCli(['auto', '--help'], env);
   assert.equal(autoHelp.status, 0, autoHelp.stderr);
   assert.match(autoHelp.stdout, /\bstart\b/);
