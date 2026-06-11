@@ -23,7 +23,7 @@ const __dirname = dirname(__filename);
  * Command handler registry - maps command strings to async functions
  * that return { output: string } with ANSI stripped for web
  */
-import { handleCommand, getAIStatus } from './commands.js';
+import { handleCommand, getAIStatus, getMissionControlSnapshot } from './commands.js';
 
 export async function startWebShell(opts = {}) {
   process.on('uncaughtException', (err) => {
@@ -53,6 +53,15 @@ export async function startWebShell(opts = {}) {
       } else if (pathname === '/health') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'ok', version: PKG_VERSION }));
+      } else if (pathname === '/mission') {
+        try {
+          const snapshot = await getMissionControlSnapshot();
+          res.writeHead(200, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' });
+          res.end(JSON.stringify(snapshot));
+        } catch (err) {
+          res.writeHead(500, { 'Content-Type': 'application/json' });
+          res.end(JSON.stringify({ error: err.message || 'mission_snapshot_failed' }));
+        }
       } else if (pathname === '/browser/status') {
         try {
           const status = await sendBrowserCommand('status');

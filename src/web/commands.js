@@ -30,6 +30,77 @@ const signerState = {
   lastOutput: [],
 };
 
+export async function getMissionControlSnapshot() {
+  const providerKeys = ['openai', 'anthropic', 'openrouter', 'minimax', 'ollama', 'bankr', 'surplus'];
+  const connectedProviders = providerKeys.filter((p) => hasKey(p));
+  const provider = getConfig('llm.provider') || connectedProviders[0] || null;
+  const model = provider
+    ? (provider === 'bankr'
+      ? 'gateway managed'
+      : (getConfiguredModel(provider) || getProviderDefaultModel(provider) || 'default'))
+    : null;
+
+  const activeWallet = getConfig('activeWallet') || null;
+  const activeChain = getConfig('chain') || 'base';
+  let quickWallet = null;
+  if (activeWallet) {
+    try {
+      const { quickBalance } = await import('../wallet/portfolio.js');
+      quickWallet = await quickBalance(activeWallet);
+    } catch {}
+  }
+
+  let browser = { running: false };
+  try {
+    browser = await sendBrowserCommand('status');
+  } catch {}
+
+  const wiretapCfg = getConfig('wiretap') || {};
+  const agentStateCfg = getConfig('agentState') || {};
+
+  return {
+    package: '@darksol/terminal',
+    wallet: {
+      active: activeWallet,
+      chain: activeChain,
+      address: quickWallet?.address || null,
+      eth: typeof quickWallet?.eth === 'number' ? quickWallet.eth : null,
+    },
+    ai: {
+      ready: connectedProviders.length > 0,
+      provider,
+      model,
+      connectedProviders,
+    },
+    wiretap: {
+      username: wiretapCfg.username || null,
+      loggedIn: Boolean(wiretapCfg.sessionToken),
+      conversationId: wiretapCfg.conversationId || null,
+    },
+    browser: {
+      running: Boolean(browser?.running),
+      url: browser?.url || null,
+      title: browser?.title || null,
+      profile: browser?.profile || null,
+      headed: Boolean(browser?.headed),
+    },
+    signer: {
+      running: Boolean(signerState.proc),
+      wallet: signerState.wallet || null,
+      port: signerState.port,
+      startedAt: signerState.startedAt || null,
+    },
+    autonomous: {
+      status: agentStateCfg.status || null,
+      goal: agentStateCfg.goal || null,
+      stepsTaken: agentStateCfg.stepsTaken || 0,
+      maxSteps: agentStateCfg.maxSteps || 0,
+      allowActions: Boolean(agentStateCfg.allowActions),
+    },
+    timestamp: new Date().toISOString(),
+  };
+}
+
 function ensureChatLogDir() {
   if (!existsSync(CHAT_LOG_DIR)) mkdirSync(CHAT_LOG_DIR, { recursive: true });
 }

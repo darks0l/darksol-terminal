@@ -16,8 +16,11 @@ const A = {
 
 const COMMANDS = [
   'ai', 'price', 'watch', 'gas', 'portfolio', 'history', 'market',
-  'wallet', 'send', 'receive', 'agent', 'cards', 'mail', 'keys', 'oracle', 'casino', 'poker',
-  'facilitator', 'config', 'logs', 'help', 'clear', 'banner', 'exit',
+  'wallet', 'send', 'receive', 'trade', 'swap', 'bridge', 'dca', 'arb',
+  'agent', 'cards', 'mail', 'keys', 'oracle', 'casino', 'poker', 'wiretap',
+  'facilitator', 'support', 'config', 'memory', 'soul', 'skills', 'base-mcp',
+  'telegram', 'daemon', 'browser', 'health', 'tips', 'networks', 'quickstart',
+  'logs', 'help', 'clear', 'banner', 'exit',
 ];
 
 let term;
@@ -40,6 +43,48 @@ let promptId = '';
 let promptMeta = {};
 let promptInput = '';
 let promptMask = false;
+
+const activityEntries = [];
+const outputEntries = [];
+let paletteOpen = false;
+let stagedFlow = null;
+
+const FLOW_TEMPLATES = {
+  send: {
+    title: 'Guided transfer',
+    help: 'Fill in the amount and destination before sending funds.',
+    checks: [
+      { label: 'token selected', test: (cmd) => /--token\s+\S+/i.test(cmd) },
+      { label: 'amount set', test: (cmd) => /--amount\s+\S+/i.test(cmd) && !/--amount\s*$/i.test(cmd) },
+      { label: 'destination set', test: (cmd) => /(--to|--address|--recipient)\s+\S+/i.test(cmd) },
+    ],
+  },
+  trade: {
+    title: 'Guided swap',
+    help: 'Confirm both assets and the amount before running the swap path.',
+    checks: [
+      { label: 'from asset set', test: (cmd) => /--from\s+\S+/i.test(cmd) },
+      { label: 'to asset set', test: (cmd) => /--to\s+\S+/i.test(cmd) },
+      { label: 'amount set', test: (cmd) => /--amount\s+\S+/i.test(cmd) && !/--amount\s*$/i.test(cmd) },
+    ],
+  },
+  bridge: {
+    title: 'Guided bridge',
+    help: 'Set the amount, source, and destination chains before bridging.',
+    checks: [
+      { label: 'source chain set', test: (cmd) => /--from\s+\S+/i.test(cmd) },
+      { label: 'destination chain set', test: (cmd) => /--to\s+\S+/i.test(cmd) },
+      { label: 'amount set', test: (cmd) => /--amount\s+\S+/i.test(cmd) && !/--amount\s*$/i.test(cmd) },
+    ],
+  },
+  portfolio: {
+    title: 'Portfolio refresh',
+    help: 'Safe immediate scan - good for a quick state refresh.',
+    checks: [
+      { label: 'command ready', test: (cmd) => /^portfolio\b/i.test(cmd) },
+    ],
+  },
+};
 
 async function init() {
   term = new Terminal({
@@ -83,6 +128,10 @@ async function init() {
   const container = document.getElementById('terminal-container');
   term.open(container);
   fitAddon.fit();
+
+  wireMissionControl();
+  refreshHealthPanels();
+  setInterval(refreshHealthPanels, 15000);
 
   window.addEventListener('resize', () => fitAddon.fit());
 
@@ -163,6 +212,17 @@ async function init() {
     }
 
     // ── NORMAL MODE ──
+    if (ctrl && domEvent.key.toLowerCase() === 'k') {
+      domEvent.preventDefault();
+      togglePalette();
+      return;
+    }
+
+    if (code === 27 && paletteOpen) {
+      hidePalette();
+      return;
+    }
+
     if (ctrl && code === 67) {
       currentLine = '';
       term.write('^C\r\n');
@@ -318,6 +378,7 @@ function connectWS() {
   ws.onopen = () => {
     connected = true;
     updateStatus(true);
+    pushActivity('WebSocket connected. Mission Control is live.');
   };
 
   ws.onmessage = (event) => {
@@ -326,11 +387,15 @@ function connectWS() {
 
       if (msg.type === 'output') {
         term.write(msg.data);
+        captureOutput(msg.data);
         if (!menuActive) writePrompt();
       } else if (msg.type === 'clear') {
         term.clear();
+        clearOutputFeed();
+        pushActivity('Terminal cleared.');
         writePrompt();
       } else if (msg.type === 'menu') {
+        pushActivity(`Menu opened: ${msg.title}`);
         showMenu(msg.id, msg.title, msg.items);
       } else if (msg.type === 'prompt') {
         // Server wants text input (e.g. API key)
@@ -339,6 +404,7 @@ function connectWS() {
         promptMeta = { service: msg.service, ...msg };
         promptInput = '';
         promptMask = msg.mask || false;
+        pushActivity(`Prompt requested: ${msg.label || 'Input'}`);
         term.write(`  ${A.gold}${msg.label || 'Input:'}${A.r} `);
       }
     } catch {
@@ -349,6 +415,7 @@ function connectWS() {
   ws.onclose = () => {
     connected = false;
     updateStatus(false);
+    pushActivity('Connection lost. Reconnecting...');
     term.write(`\r\n${A.red}  ⚡ Connection lost. Reconnecting...${A.r}\r\n`);
     setTimeout(() => connectWS(), 3000);
   };
@@ -361,6 +428,10 @@ function connectWS() {
 
 function sendCommand(cmd) {
   if (ws && ws.readyState === WebSocket.OPEN) {
+    pushActivity(`Ran command: ${cmd}`);
+    const last = document.getElementById('last-command');
+    if (last) last.textContent = cmd;
+    clearStagedFlow(false);
     ws.send(JSON.stringify({ type: 'command', data: cmd }));
   } else {
     term.write(`${A.red}  ✗ Not connected${A.r}\r\n`);
@@ -377,6 +448,7 @@ function replaceInput(text) {
   for (let i = 0; i < clearLen; i++) term.write('\b \b');
   currentLine = text;
   term.write(text);
+  syncFlowCoach();
 }
 
 function autocomplete() {
@@ -396,8 +468,292 @@ function autocomplete() {
 function updateStatus(isConnected) {
   const dot = document.querySelector('.status-dot');
   const text = document.querySelector('.status-text');
+  const pill = document.getElementById('connection-pill');
   if (dot) dot.className = isConnected ? 'status-dot' : 'status-dot disconnected';
   if (text) text.textContent = isConnected ? 'Connected' : 'Disconnected';
+  if (pill) pill.textContent = isConnected ? 'connected' : 'disconnected';
+}
+
+function wireMissionControl() {
+  document.querySelectorAll('[data-command]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const cmd = button.getAttribute('data-command');
+      if (!cmd) return;
+      hidePalette();
+      term.focus();
+      sendCommand(cmd);
+    });
+  });
+
+  document.querySelectorAll('[data-prefill]').forEach((button) => {
+    button.addEventListener('click', () => {
+      const cmd = button.getAttribute('data-prefill');
+      if (!cmd) return;
+      hidePalette();
+      term.focus();
+      replaceInput(cmd);
+      stageFlow(cmd);
+      pushActivity(`Prepared flow: ${cmd.trim()}`);
+      const last = document.getElementById('last-command');
+      if (last) last.textContent = `staged → ${cmd.trim()}`;
+    });
+  });
+
+  document.getElementById('flow-run')?.addEventListener('click', () => {
+    if (!currentLine.trim()) return;
+    term.focus();
+    term.write('\r\n');
+    const cmd = currentLine.trim();
+    commandHistory.unshift(cmd);
+    if (commandHistory.length > 50) commandHistory.pop();
+    currentLine = '';
+    historyIndex = -1;
+    sendCommand(cmd);
+  });
+
+  document.getElementById('flow-clear')?.addEventListener('click', () => {
+    replaceInput('');
+    clearStagedFlow();
+    term.focus();
+  });
+
+  document.getElementById('palette-button')?.addEventListener('click', togglePalette);
+  document.getElementById('palette-close')?.addEventListener('click', hidePalette);
+  document.getElementById('command-palette')?.addEventListener('click', (event) => {
+    if (event.target?.id === 'command-palette') hidePalette();
+  });
+}
+
+function detectFlowType(cmd) {
+  const normalized = String(cmd || '').trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized.startsWith('send')) return 'send';
+  if (normalized.startsWith('trade') || normalized.startsWith('swap')) return 'trade';
+  if (normalized.startsWith('bridge')) return 'bridge';
+  if (normalized.startsWith('portfolio')) return 'portfolio';
+  return null;
+}
+
+function stageFlow(cmd) {
+  const type = detectFlowType(cmd);
+  stagedFlow = type ? { type, command: cmd } : null;
+  syncFlowCoach();
+}
+
+function clearStagedFlow(resetInput = true) {
+  stagedFlow = null;
+  if (resetInput && currentLine) replaceInput('');
+  syncFlowCoach();
+}
+
+function syncFlowCoach() {
+  const coach = document.getElementById('flow-coach');
+  const title = document.getElementById('flow-coach-title');
+  const status = document.getElementById('flow-coach-status');
+  const body = document.getElementById('flow-coach-body');
+  const pill = document.getElementById('flow-coach-pill');
+  const checklist = document.getElementById('flow-coach-checklist');
+  if (!coach || !title || !status || !body || !pill || !checklist) return;
+
+  const activeType = stagedFlow?.type || detectFlowType(currentLine);
+  const activeCmd = currentLine || stagedFlow?.command || '';
+  const flow = activeType ? FLOW_TEMPLATES[activeType] : null;
+
+  checklist.innerHTML = '';
+
+  if (!flow) {
+    coach.className = 'flow-coach idle';
+    title.textContent = 'No staged flow';
+    status.textContent = 'Pick a launcher or start typing a guided command.';
+    body.textContent = 'The shell will flag missing pieces before you fire a send, swap, or bridge flow.';
+    pill.className = 'flow-pill idle';
+    pill.textContent = 'idle';
+    return;
+  }
+
+  const results = flow.checks.map((check) => ({ ...check, ok: check.test(activeCmd) }));
+  const ready = results.every((check) => check.ok);
+
+  coach.className = `flow-coach ${ready ? 'ready' : 'warning'}`;
+  title.textContent = flow.title;
+  status.textContent = ready ? 'Looks runnable.' : 'Needs a couple more pieces before fire.';
+  body.textContent = flow.help;
+  pill.className = `flow-pill ${ready ? 'ready' : 'warning'}`;
+  pill.textContent = ready ? 'ready' : 'needs input';
+
+  for (const item of results) {
+    const row = document.createElement('div');
+    row.className = `flow-check-item ${item.ok ? 'ok' : 'missing'}`;
+    row.textContent = `${item.ok ? '✓' : '•'} ${item.label}`;
+    checklist.appendChild(row);
+  }
+}
+
+function togglePalette() {
+  paletteOpen ? hidePalette() : showPalette();
+}
+
+function showPalette() {
+  const palette = document.getElementById('command-palette');
+  if (!palette) return;
+  palette.classList.remove('hidden');
+  paletteOpen = true;
+}
+
+function hidePalette() {
+  const palette = document.getElementById('command-palette');
+  if (!palette) return;
+  palette.classList.add('hidden');
+  paletteOpen = false;
+}
+
+function pushActivity(text) {
+  activityEntries.unshift({ text, at: new Date() });
+  if (activityEntries.length > 8) activityEntries.pop();
+  renderActivityFeed();
+}
+
+function stripAnsi(text) {
+  return String(text || '')
+    .replace(/\x1B\[[0-9;?]*[ -/]*[@-~]/g, '')
+    .replace(/\x1B\][^\x07]*(\x07|\x1B\\)/g, '');
+}
+
+function stripBackspaces(text) {
+  let out = '';
+  for (const ch of String(text || '')) {
+    if (ch === '\b') {
+      out = out.slice(0, -1);
+      continue;
+    }
+    out += ch;
+  }
+  return out;
+}
+
+function isMostlyArt(line) {
+  const sample = String(line || '').trim();
+  if (!sample) return false;
+  const artChars = (sample.match(/[█▓▒░▁▂▃▄▅▆▇⣿⣀-⣷┌┐└┘│─╭╮╰╯═║]/g) || []).length;
+  return artChars >= 8 || artChars / Math.max(sample.length, 1) > 0.3;
+}
+
+function captureOutput(text) {
+  const clean = stripBackspaces(stripAnsi(text))
+    .replace(/\r/g, '\n')
+    .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+    .trim();
+  if (!clean) return;
+
+  const collapsed = clean
+    .split('\n')
+    .map((line) => line.trim())
+    .filter((line) => line && !isMostlyArt(line))
+    .slice(-4)
+    .join('\n');
+  if (!collapsed) return;
+
+  outputEntries.unshift(collapsed.slice(0, 280));
+  if (outputEntries.length > 8) outputEntries.pop();
+  renderOutputFeed();
+}
+
+function clearOutputFeed() {
+  outputEntries.length = 0;
+  renderOutputFeed();
+}
+
+function renderOutputFeed() {
+  const feed = document.getElementById('output-feed');
+  if (!feed) return;
+  feed.innerHTML = '';
+
+  if (!outputEntries.length) {
+    const row = document.createElement('div');
+    row.className = 'output-item';
+    row.textContent = 'Terminal output will surface here.';
+    feed.appendChild(row);
+    return;
+  }
+
+  for (const entry of outputEntries) {
+    const row = document.createElement('div');
+    row.className = 'output-item';
+    row.textContent = entry;
+    feed.appendChild(row);
+  }
+}
+
+function updateBrowserPreview(browser) {
+  const image = document.getElementById('browser-preview-image');
+  const empty = document.getElementById('browser-preview-empty');
+  const title = document.getElementById('browser-preview-title');
+  const url = document.getElementById('browser-preview-url');
+
+  if (title) title.textContent = browser?.title || (browser?.running ? 'Browser running' : 'Idle');
+  if (url) url.textContent = browser?.url || (browser?.running ? 'Current page unavailable' : 'Launch the browser lane to preview pages here.');
+
+  if (!image || !empty) return;
+
+  if (browser?.running) {
+    image.src = `/browser/screenshot?t=${Date.now()}`;
+    image.style.display = 'block';
+    empty.style.display = 'none';
+    image.onerror = () => {
+      image.style.display = 'none';
+      empty.style.display = 'flex';
+      empty.textContent = 'No screenshot captured yet. Run browser screenshot or navigate a page.';
+    };
+  } else {
+    image.removeAttribute('src');
+    image.style.display = 'none';
+    empty.style.display = 'flex';
+    empty.textContent = 'No browser capture yet';
+  }
+}
+
+function renderActivityFeed() {
+  const feed = document.getElementById('activity-feed');
+  if (!feed) return;
+  feed.innerHTML = '';
+  for (const entry of activityEntries) {
+    const row = document.createElement('div');
+    row.className = 'activity-item';
+    row.textContent = `[${entry.at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}] ${entry.text}`;
+    feed.appendChild(row);
+  }
+}
+
+async function refreshHealthPanels() {
+  try {
+    const health = await fetch('/health').then((r) => r.json());
+    const version = document.getElementById('service-version');
+    if (version) version.textContent = health.version || 'unknown';
+  } catch {}
+
+  try {
+    const browser = await fetch('/browser/status').then((r) => r.json());
+    const browserState = document.getElementById('browser-state');
+    if (browserState) browserState.textContent = browser.running ? 'running' : 'idle';
+  } catch {
+    const browserState = document.getElementById('browser-state');
+    if (browserState) browserState.textContent = 'unavailable';
+  }
+
+  try {
+    const mission = await fetch('/mission').then((r) => r.json());
+    const setText = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    };
+
+    setText('live-wallet', mission.wallet?.active || 'none');
+    setText('live-chain', mission.wallet?.chain || 'base');
+    setText('live-ai', mission.ai?.ready ? `${mission.ai.provider || 'provider'}${mission.ai.model ? ` / ${mission.ai.model}` : ''}` : 'offline');
+    setText('live-wiretap', mission.wiretap?.loggedIn ? (mission.wiretap.username || 'connected') : 'offline');
+    setText('live-signer', mission.signer?.running ? `:${mission.signer.port}` : 'stopped');
+    updateBrowserPreview(mission.browser);
+  } catch {}
 }
 
 document.addEventListener('DOMContentLoaded', init);

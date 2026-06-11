@@ -7,6 +7,27 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.19.2] - 2026-06-11
+
+### Added — Mission Control web shell
+
+- Added a new **Mission Control** sidebar to the web shell with live wallet, AI, Wiretap, signer, and browser status snapshots.
+- Added **browser preview**, **quick actions**, **operator lanes**, **recent output**, and **session pulse** panels for a more productized operator surface.
+- Added **flow launchers** for send, swap, bridge, and portfolio actions.
+- Added a new **Flow Coach** that detects staged flows, highlights missing inputs, and surfaces a runnable checklist before execution.
+- Added `/mission` web endpoint to expose the live Mission Control snapshot for the shell.
+- Expanded the web terminal command surface and palette coverage for guided operator workflows.
+
+### Changed
+
+- Upgraded the web shell layout from a plain terminal wrapper into a two-pane control surface with richer product framing.
+- Synced README release references for the new version.
+
+### Verified
+
+- `npm test` passes (`231/231`)
+- `npm pack --dry-run --json` succeeds
+
 ## [0.19.1] - 2026-05-27
 
 ### Added — Base MCP setup helpers

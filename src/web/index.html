@@ -19,28 +19,221 @@
   <link rel="stylesheet" href="/terminal.css" />
 </head>
 <body>
-  <!-- Top bar (macOS-style window chrome) -->
-  <div class="top-bar">
-    <div class="dots">
-      <div class="dot red"></div>
-      <div class="dot yellow"></div>
-      <div class="dot green"></div>
-    </div>
-    <span class="title">DARKSOL TERMINAL</span>
-    <span class="badge">v0.4.0</span>
+  <div class="app-shell">
+    <aside class="mission-panel">
+      <div class="mission-brand">
+        <div>
+          <div class="eyebrow">MISSION CONTROL</div>
+          <h1>DARKSOL Terminal</h1>
+          <p>Operator-grade control surface for wallets, agents, messaging, markets, and execution.</p>
+        </div>
+        <button id="palette-button" class="panel-button ghost" type="button">⌘K Command Palette</button>
+      </div>
+
+      <section class="panel-card hero-card">
+        <div class="hero-stat-row">
+          <div>
+            <div class="stat-label">Package</div>
+            <div class="stat-value">@darksol/terminal</div>
+          </div>
+          <div>
+            <div class="stat-label">Version</div>
+            <div class="stat-value" id="service-version">loading…</div>
+          </div>
+        </div>
+        <div class="hero-stat-row">
+          <div>
+            <div class="stat-label">Web shell</div>
+            <div class="stat-value" id="connection-pill">connecting…</div>
+          </div>
+          <div>
+            <div class="stat-label">Browser lane</div>
+            <div class="stat-value" id="browser-state">checking…</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-card">
+        <div class="section-title">Live systems</div>
+        <div class="live-stack">
+          <div class="live-row"><span>Wallet</span><strong id="live-wallet">none</strong></div>
+          <div class="live-row"><span>Chain</span><strong id="live-chain">base</strong></div>
+          <div class="live-row"><span>AI</span><strong id="live-ai">offline</strong></div>
+          <div class="live-row"><span>Wiretap</span><strong id="live-wiretap">offline</strong></div>
+          <div class="live-row"><span>Signer</span><strong id="live-signer">stopped</strong></div>
+        </div>
+      </section>
+
+      <section class="panel-card">
+        <div class="section-title">Browser preview</div>
+        <div class="browser-preview-frame" id="browser-preview-frame">
+          <img id="browser-preview-image" alt="Browser preview" />
+          <div id="browser-preview-empty" class="browser-preview-empty">No browser capture yet</div>
+        </div>
+        <div class="browser-preview-meta">
+          <div id="browser-preview-title">Idle</div>
+          <div id="browser-preview-url">Launch the browser lane to preview pages here.</div>
+        </div>
+      </section>
+
+      <section class="panel-card">
+        <div class="section-title">Quick actions</div>
+        <div class="quick-grid">
+          <button class="panel-button" data-command="help">Help Menu</button>
+          <button class="panel-button" data-command="wallet">Wallet</button>
+          <button class="panel-button" data-command="portfolio">Portfolio</button>
+          <button class="panel-button" data-command="market">Market Intel</button>
+          <button class="panel-button" data-command="wiretap">Wiretap</button>
+          <button class="panel-button" data-command="agent">Agent</button>
+          <button class="panel-button" data-command="browser">Browser</button>
+          <button class="panel-button" data-command="health">Health</button>
+        </div>
+      </section>
+
+      <section class="panel-card">
+        <div class="section-title">Operator lanes</div>
+        <div class="lane-list">
+          <div class="lane-item">
+            <span class="lane-name">Wallets & funds</span>
+            <span class="lane-desc">balance, send, receive, history</span>
+          </div>
+          <div class="lane-item">
+            <span class="lane-name">Markets & trading</span>
+            <span class="lane-desc">price, gas, swap, bridge, arb</span>
+          </div>
+          <div class="lane-item">
+            <span class="lane-name">Agents & memory</span>
+            <span class="lane-desc">ai, agent, memory, soul</span>
+          </div>
+          <div class="lane-item">
+            <span class="lane-name">Messaging & comms</span>
+            <span class="lane-desc">wiretap, mail, telegram</span>
+          </div>
+        </div>
+      </section>
+
+      <section class="panel-card activity-card">
+        <div class="section-title">Session pulse</div>
+        <div class="activity-meta">
+          <span>Mode: <strong id="terminal-mode">interactive terminal</strong></span>
+          <span>Last command: <strong id="last-command">none yet</strong></span>
+        </div>
+        <div id="activity-feed" class="activity-feed">
+          <div class="activity-item">Waiting for first operator action…</div>
+        </div>
+      </section>
+
+      <section class="panel-card">
+        <div class="section-title">Recent output</div>
+        <div id="output-feed" class="output-feed">
+          <div class="output-item">Terminal output will surface here.</div>
+        </div>
+      </section>
+
+      <section class="panel-card">
+        <div class="section-title">Guided actions</div>
+        <div class="quick-grid">
+          <button class="panel-button" data-command="wallet">Inspect wallet</button>
+          <button class="panel-button" data-command="send">Send funds</button>
+          <button class="panel-button" data-command="trade">Trade flow</button>
+          <button class="panel-button" data-command="browser status">Browser status</button>
+          <button class="panel-button" data-command="agent">Signer control</button>
+          <button class="panel-button" data-command="wiretap inbox --unread">Unread inbox</button>
+        </div>
+      </section>
+
+      <section class="panel-card">
+        <div class="section-title">Flow launchers</div>
+        <div class="flow-stack">
+          <button class="flow-card" data-prefill="send --token USDC --amount ">
+            <span class="flow-title">Stage transfer</span>
+            <span class="flow-desc">Preload a send command and fill in amount + destination.</span>
+          </button>
+          <button class="flow-card" data-prefill="trade swap --from ETH --to USDC --amount ">
+            <span class="flow-title">Stage swap</span>
+            <span class="flow-desc">Load a swap path for ETH → USDC and finish the amount.</span>
+          </button>
+          <button class="flow-card" data-prefill="bridge --from base --to arbitrum --token USDC --amount ">
+            <span class="flow-title">Stage bridge</span>
+            <span class="flow-desc">Queue a cross-chain bridge flow with sane defaults.</span>
+          </button>
+          <button class="flow-card" data-command="portfolio">
+            <span class="flow-title">Refresh portfolio</span>
+            <span class="flow-desc">Run the multi-chain portfolio scan immediately.</span>
+          </button>
+        </div>
+      </section>
+
+      <section class="panel-card">
+        <div class="section-title">Flow coach</div>
+        <div id="flow-coach" class="flow-coach idle">
+          <div class="flow-coach-head">
+            <div>
+              <div id="flow-coach-title" class="flow-coach-title">No staged flow</div>
+              <div id="flow-coach-status" class="flow-coach-status">Pick a launcher or start typing a guided command.</div>
+            </div>
+            <span id="flow-coach-pill" class="flow-pill idle">idle</span>
+          </div>
+          <div id="flow-coach-body" class="flow-coach-body">The shell will flag missing pieces before you fire a send, swap, or bridge flow.</div>
+          <div id="flow-coach-checklist" class="flow-checklist"></div>
+          <div class="flow-actions">
+            <button id="flow-run" class="panel-button" type="button">Run staged flow</button>
+            <button id="flow-clear" class="panel-button ghost" type="button">Clear</button>
+          </div>
+        </div>
+      </section>
+    </aside>
+
+    <main class="terminal-shell">
+      <!-- Top bar (macOS-style window chrome) -->
+      <div class="top-bar">
+        <div class="dots">
+          <div class="dot red"></div>
+          <div class="dot yellow"></div>
+          <div class="dot green"></div>
+        </div>
+        <span class="title">DARKSOL TERMINAL</span>
+        <span class="badge">Mission Control</span>
+      </div>
+
+      <!-- Terminal -->
+      <div id="terminal-container"></div>
+
+      <!-- Status bar -->
+      <div class="status-bar">
+        <span class="status-dot"></span>
+        <span class="status-text">Connecting...</span>
+        <span style="flex: 1;"></span>
+        <span>@darksol/terminal</span>
+        <span>•</span>
+        <span>127.0.0.1</span>
+        <span>•</span>
+        <span>ws</span>
+      </div>
+    </main>
   </div>
 
-  <!-- Terminal -->
-  <div id="terminal-container"></div>
-
-  <!-- Status bar -->
-  <div class="status-bar">
-    <span class="status-dot"></span>
-    <span class="status-text">Connecting...</span>
-    <span style="flex: 1;"></span>
-    <span>127.0.0.1</span>
-    <span>•</span>
-    <span>ws</span>
+  <div id="command-palette" class="command-palette hidden">
+    <div class="palette-card">
+      <div class="palette-header">
+        <span>Command Palette</span>
+        <button id="palette-close" class="palette-close" type="button">Esc</button>
+      </div>
+      <div class="palette-grid">
+        <button class="panel-button" data-command="help">help</button>
+        <button class="panel-button" data-command="wallet">wallet</button>
+        <button class="panel-button" data-command="portfolio">portfolio</button>
+        <button class="panel-button" data-command="trade">trade</button>
+        <button class="panel-button" data-command="market">market</button>
+        <button class="panel-button" data-command="gas">gas</button>
+        <button class="panel-button" data-command="wiretap">wiretap</button>
+        <button class="panel-button" data-command="agent">agent</button>
+        <button class="panel-button" data-command="browser">browser</button>
+        <button class="panel-button" data-command="health">health</button>
+        <button class="panel-button" data-command="memory">memory</button>
+        <button class="panel-button" data-command="clear">clear</button>
+      </div>
+    </div>
   </div>
 
   <!-- Terminal client -->
