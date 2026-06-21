@@ -7,7 +7,7 @@ description: "DARKSOL Terminal — unified CLI + x402 platform for trading, wall
 
 **All DARKSOL services. One terminal. Zero trust required. 🌑**
 
-`@darksol/terminal` v0.18.1 | npm: `npm install -g @darksol/terminal`
+`@darksol/terminal` v0.21.0 | npm: `npm install -g @darksol/terminal`
 
 ---
 
@@ -346,6 +346,15 @@ import { topMovers, tokenDetail } from '@darksol/terminal/src/services/market.js
 # Run a DCA script every 4 hours
 darksol script run eth-dca -p "$DARKSOL_WALLET_PASSWORD" -y
 ```
+
+### Hermes Agent MCP bridge
+```bash
+darksol hermes status                  # Show Hermes config snippet + exposed tools
+darksol hermes install                 # Add/update DARKSOL MCP server in Hermes config.yaml
+darksol hermes mcp                     # Run stdio MCP server for Hermes
+```
+
+Hermes registers the server as an MCP toolset. Read-only tools include price, gas, wallet balance, portfolio, market, memory, Wiretap, and AA simulation/status helpers. Mutating tools such as send, swap, script-run, and AA session mutation stay blocked unless the caller explicitly passes `allowActions=true`.
 
 ---
 

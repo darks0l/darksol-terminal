@@ -15,7 +15,7 @@ A unified CLI for market intel, trading, AI-powered analysis, Wiretap/AIM messag
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-gold.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
 
-- Current release: **0.20.0**
+- Current release: **0.21.0**
 - Changelog: `CHANGELOG.md`
 
 ## Install
@@ -32,6 +32,7 @@ darksol setup                  # connect an AI provider and defaults
 darksol wallet create main     # create an encrypted wallet
 darksol serve                  # open Mission Control in your browser
 darksol security status        # review mutating tool and signer boundaries
+darksol hermes install         # expose DARKSOL tools to Hermes Agent via MCP
 ```
 
 Mission Control is the main operator surface: wallet state, AI/provider status, Wiretap, signer state, browser lane, harness safe mode, and replay sessions in one local web shell.
@@ -165,6 +166,16 @@ darksol agent harness call-tool price --input '{"token":"ETH"}' --json
 darksol agent harness run "analyze my wallet and summarize risks" --stream-json
 darksol agent harness rpc --method harness.callTool --params '{"tool":"memory-recent","input":{"limit":3}}'
 
+# Hermes Agent bridge
+darksol hermes status
+darksol hermes install
+darksol hermes mcp
+
+# After install, restart Hermes or run /reload-mcp.
+# Hermes sees tools such as mcp_darksol_darksol_price,
+# mcp_darksol_darksol_wallet_balance, and mcp_darksol_darksol_security_status.
+# Mutating tools remain blocked unless allowActions=true is passed.
+
 # Agent AA / smart-wallet flows
 darksol agent aa status
 darksol agent aa batch-build --calls '[{"to":"0x1111111111111111111111111111111111111111","data":"0x","value":"0"}]' --json
@@ -176,7 +187,7 @@ darksol doctor
 darksol security status
 darksol update status
 darksol update install
-darksol update install --version 0.20.0
+darksol update install --version 0.21.0
 darksol update reinstall
 
 # ThreatLab / MiroShark
@@ -277,6 +288,7 @@ ai <prompt>   # chat with trading assistant
 | `agent harness` | Machine-callable harness with RPC, sessions, events, replay export | Provider dependent |
 | `agent aa` | Smart-wallet / AA readiness, simulation, batching, session policies | Free |
 | `base-mcp` | Ready-to-paste Base docs MCP setup for Claude/Codex/Cursor | Free |
+| `hermes` | Hermes Agent MCP bridge for DARKSOL harness tools | Free |
 | `ai` | LLM-powered trading assistant & intent execution | Provider dependent |
 | `agent` | Secure agent signer (PK-isolated proxy) | Free |
 | `keys` | Encrypted API key vault (LLMs/data/RPCs) | Free |

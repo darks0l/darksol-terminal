@@ -7,6 +7,17 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.21.0] - 2026-06-21
+
+### Added — Hermes Agent bridge
+
+- Added `darksol hermes status` to show the Hermes MCP config snippet, install state, default tools, and safety notes.
+- Added `darksol hermes install` to install or update a `darksol` stdio MCP server entry in Hermes Agent's `config.yaml`.
+- Added `darksol hermes mcp`, a protocol-clean stdio MCP server exposing DARKSOL Terminal harness tools to Hermes.
+- Added MCP tools for harness manifest/status, security status, read-only wallet/market/memory/Wiretap/AA flows, and generic harness tool calls.
+- Kept mutating tools blocked by default unless a caller explicitly passes `allowActions=true`.
+- Added tests for Hermes config writing, MCP initialize/list/call handling, and default mutating-tool blocking.
+
 ## [0.20.0] - 2026-06-21
 
 ### Added — trust, safety, and operator readiness

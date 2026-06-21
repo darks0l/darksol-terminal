@@ -1,6 +1,6 @@
 {
   "name": "@darksol/terminal",
-  "version": "0.20.0",
+  "version": "0.21.0",
   "description": "DARKSOL Terminal — unified crypto CLI for trading, Wiretap/AIM messaging, agent tooling, x402 payments, market intel, wallets, oracle, cards, and more.",
   "type": "module",
   "bin": {

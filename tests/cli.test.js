@@ -110,6 +110,12 @@ test('command registration includes trade and script subcommands', (t) => {
   assert.match(baseMcpHelp.stdout, /\bstatus\b/);
   assert.match(baseMcpHelp.stdout, /\bconfigure\b/);
 
+  const hermesHelp = runCli(['hermes', '--help'], env);
+  assert.equal(hermesHelp.status, 0, hermesHelp.stderr);
+  assert.match(hermesHelp.stdout, /\bstatus\b/);
+  assert.match(hermesHelp.stdout, /\binstall\b/);
+  assert.match(hermesHelp.stdout, /\bmcp\b/);
+
   const autoHelp = runCli(['auto', '--help'], env);
   assert.equal(autoHelp.status, 0, autoHelp.stderr);
   assert.match(autoHelp.stdout, /\bstart\b/);
