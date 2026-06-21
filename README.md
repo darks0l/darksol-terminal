@@ -15,7 +15,7 @@ A unified CLI for market intel, trading, AI-powered analysis, Wiretap/AIM messag
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-gold.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
 
-- Current release: **0.19.2**
+- Current release: **0.20.0**
 - Changelog: `CHANGELOG.md`
 
 ## Install
@@ -176,7 +176,7 @@ darksol doctor
 darksol security status
 darksol update status
 darksol update install
-darksol update install --version 0.19.2
+darksol update install --version 0.20.0
 darksol update reinstall
 
 # ThreatLab / MiroShark

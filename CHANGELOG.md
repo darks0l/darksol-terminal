@@ -7,7 +7,7 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
-## [Unreleased]
+## [0.20.0] - 2026-06-21
 
 ### Added — trust, safety, and operator readiness
 
