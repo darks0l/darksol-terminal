@@ -5,8 +5,7 @@ tests/
 .gitignore
 .git/
 
-# Docs (keep README)
-CHANGELOG.md
+# Docs are controlled by the package.json files allowlist.
 
 # IDE
 .vscode/

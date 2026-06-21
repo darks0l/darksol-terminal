@@ -24,6 +24,18 @@ A unified CLI for market intel, trading, AI-powered analysis, Wiretap/AIM messag
 npm install -g @darksol/terminal
 ```
 
+## First 60 Seconds
+
+```bash
+darksol doctor                 # local install/config/safety checks
+darksol setup                  # connect an AI provider and defaults
+darksol wallet create main     # create an encrypted wallet
+darksol serve                  # open Mission Control in your browser
+darksol security status        # review mutating tool and signer boundaries
+```
+
+Mission Control is the main operator surface: wallet state, AI/provider status, Wiretap, signer state, browser lane, harness safe mode, and replay sessions in one local web shell.
+
 ## Quick Start
 
 ```bash
@@ -160,6 +172,8 @@ darksol agent aa session-create --name trader --targets 0x1111111111111111111111
 
 # Install / update
 
+darksol doctor
+darksol security status
 darksol update status
 darksol update install
 darksol update install --version 0.19.2
@@ -263,34 +277,6 @@ ai <prompt>   # chat with trading assistant
 | `agent harness` | Machine-callable harness with RPC, sessions, events, replay export | Provider dependent |
 | `agent aa` | Smart-wallet / AA readiness, simulation, batching, session policies | Free |
 | `base-mcp` | Ready-to-paste Base docs MCP setup for Claude/Codex/Cursor | Free |
-
-## Base MCP
-
-Yes — DARKSOL Terminal can help wire in the **Base docs MCP** today.
-
-```bash
-darksol base-mcp status
-darksol base-mcp configure --preferred-client codex
-```
-
-That prints ready-to-paste setup for:
-
-- **Claude Code**
-- **Codex CLI**
-- **Cursor**
-
-Current Base docs MCP endpoint:
-
-```txt
-https://docs.base.org/mcp
-```
-
-Important distinction:
-
-- **Base docs MCP** = live documentation access for your coding agent
-- **wallet / signing integration** = separate runtime layer handled by `darksol agent start`, `darksol agent aa`, or a future dedicated MCP adapter
-
-So the docs MCP path is an easy win right now. A full Base Account wallet-tool MCP bridge is possible too, but that is a deeper feature than just adding the docs server.
 | `ai` | LLM-powered trading assistant & intent execution | Provider dependent |
 | `agent` | Secure agent signer (PK-isolated proxy) | Free |
 | `keys` | Encrypted API key vault (LLMs/data/RPCs) | Free |
@@ -317,6 +303,36 @@ So the docs MCP path is an easy win right now. A full Base Account wallet-tool M
 | `browser` | Playwright-powered browser automation | Free |
 | `serve` | Local interactive web terminal (xterm.js) | Free |
 | `config` | Terminal configuration | Free |
+| `doctor` | Local install, config, and safety checks | Free |
+| `security` | Wallet, signer, harness, and mutating-tool boundary status | Free |
+
+## Base MCP
+
+Yes - DARKSOL Terminal can help wire in the **Base docs MCP** today.
+
+```bash
+darksol base-mcp status
+darksol base-mcp configure --preferred-client codex
+```
+
+That prints ready-to-paste setup for:
+
+- **Claude Code**
+- **Codex CLI**
+- **Cursor**
+
+Current Base docs MCP endpoint:
+
+```txt
+https://docs.base.org/mcp
+```
+
+Important distinction:
+
+- **Base docs MCP** = live documentation access for your coding agent
+- **wallet / signing integration** = separate runtime layer handled by `darksol agent start`, `darksol agent aa`, or a future dedicated MCP adapter
+
+So the docs MCP path is an easy win right now. A full Base Account wallet-tool MCP bridge is possible too, but that is a deeper feature than just adding the docs server.
 
 ---
 
@@ -757,15 +773,14 @@ Next scope for live execution:
 | `/audit` | GET | Operation audit log |
 | `/health` | GET | Health check |
 
-**Security guarantees:**
-- ✅ No `/private-key` endpoint exists — literally impossible to extract
-- ✅ Loopback-only (127.0.0.1) — not accessible from network
-- ✅ One-time bearer token auth (shown only in terminal)
-- ✅ Per-TX value limits + daily spending cap
-- ✅ Contract allowlist support
-- ✅ Dangerous selectors blocked (transferOwnership, selfdestruct)
-- ✅ Full audit log of all operations
-- ✅ Prompt injection proof — the LLM cannot access what doesn't exist in any API response
+**Security boundaries:**
+- The signer API does not expose a private-key endpoint.
+- Local signer flows bind to loopback by default.
+- Bearer token auth is shown only in the operator terminal.
+- Per-transaction value limits and daily spending caps can be enforced by policy.
+- Contract allowlists and dangerous-selector blocking are supported.
+- Operations are written to an audit log.
+- LLM tool access is bounded by the API surface and configured policy; treat prompt injection as a risk to contain, not a solved problem.
 
 ---
 
@@ -1106,12 +1121,14 @@ All commands work without prompts when flags are provided.
 ## Development
 
 ```bash
-git clone https://gitlab.com/darks0l/darksol-terminal
+git clone https://github.com/darks0l/darksol-terminal.git
 cd darksol-terminal
 npm install
 npm test           # Run test suite (node:test)
 node bin/darksol.js
 ```
+
+GitHub is the public issue and contribution surface. GitLab may still be used by DARKSOL for internal release flow.
 
 ---
 

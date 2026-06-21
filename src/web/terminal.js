@@ -752,6 +752,8 @@ async function refreshHealthPanels() {
     setText('live-ai', mission.ai?.ready ? `${mission.ai.provider || 'provider'}${mission.ai.model ? ` / ${mission.ai.model}` : ''}` : 'offline');
     setText('live-wiretap', mission.wiretap?.loggedIn ? (mission.wiretap.username || 'connected') : 'offline');
     setText('live-signer', mission.signer?.running ? `:${mission.signer.port}` : 'stopped');
+    setText('live-harness', mission.harness?.mutatingToolsRequireExplicitFlag ? `${mission.harness.mutatingTools || 0} gated` : 'check');
+    setText('live-replay', `${mission.harness?.sessions?.length || 0} sessions`);
     updateBrowserPreview(mission.browser);
   } catch {}
 }

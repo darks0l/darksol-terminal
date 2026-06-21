@@ -12,6 +12,7 @@ import { fileURLToPath } from 'url';
 import { getConfiguredModel, getModelSelectionMeta, getProviderDefaultModel } from '../llm/models.js';
 import { pokerNewGame, pokerAction, pokerStatus, pokerHistory } from '../services/poker.js';
 import { sendBrowserCommand, installPlaywrightBrowsers } from '../services/browser.js';
+import { getHarnessManifest, listHarnessSessions } from '../agent/harness.js';
 
 // ══════════════════════════════════════════════════
 // CHAT LOG PERSISTENCE
@@ -57,6 +58,9 @@ export async function getMissionControlSnapshot() {
 
   const wiretapCfg = getConfig('wiretap') || {};
   const agentStateCfg = getConfig('agentState') || {};
+  const harness = getHarnessManifest();
+  const harnessSessions = listHarnessSessions().slice(-5).reverse();
+  const mutatingTools = harness.tools.filter((tool) => tool.mutating).length;
 
   return {
     package: '@darksol/terminal',
@@ -96,6 +100,18 @@ export async function getMissionControlSnapshot() {
       stepsTaken: agentStateCfg.stepsTaken || 0,
       maxSteps: agentStateCfg.maxSteps || 0,
       allowActions: Boolean(agentStateCfg.allowActions),
+    },
+    harness: {
+      safeModeByDefault: Boolean(harness.capabilities.safeModeByDefault),
+      mutatingToolsRequireExplicitFlag: Boolean(harness.capabilities.mutatingToolsRequireExplicitFlag),
+      mutatingTools,
+      sessions: harnessSessions.map((session) => ({
+        id: session.id,
+        goal: session.goal,
+        status: session.status,
+        allowActions: Boolean(session.allowActions),
+        updatedAt: session.updatedAt || session.completedAt || session.startedAt || null,
+      })),
     },
     timestamp: new Date().toISOString(),
   };

@@ -15,6 +15,8 @@ test('harness manifest exposes core capabilities and entrypoints', () => {
   assert.equal(manifest.harness.kind, 'agent-harness');
   assert.match(manifest.harness.entrypoint, /darksol agent harness run/);
   assert.equal(manifest.capabilities.planning, true);
+  assert.equal(manifest.capabilities.dryRunReceipts, true);
+  assert.equal(manifest.safety.defaultMode, 'read-only');
   assert.ok(Array.isArray(manifest.tools));
   assert.ok(manifest.tools.find((tool) => tool.name === 'price'));
 });
@@ -28,7 +30,10 @@ test('harness tools expose mutating metadata', () => {
     },
   });
 
-  assert.ok(tools.find((tool) => tool.name === 'swap' && tool.mutating === true));
+  const swap = tools.find((tool) => tool.name === 'swap' && tool.mutating === true);
+  assert.ok(swap);
+  assert.equal(swap.permission, 'allow-actions');
+  assert.equal(swap.riskLevel, 'mutating');
 });
 
 test('harness status shape is stable even before runs', () => {
@@ -69,6 +74,9 @@ test('callHarnessTool executes read-only tools directly', async () => {
   });
   assert.equal(payload.ok, true);
   assert.equal(payload.tool, 'price');
+  assert.equal(payload.permission, 'read-only');
+  assert.equal(typeof payload.receipt.id, 'string');
+  assert.equal(payload.receipt.action, 'tool-call');
   assert.equal(payload.result.summary, 'ETH ready');
 });
 

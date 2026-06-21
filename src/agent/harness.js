@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { getAgentStatus, planAgentGoal, runAgentTask } from './index.js';
 import { createToolExecutor, createToolRegistry, listTools } from './tools.js';
@@ -111,6 +111,8 @@ function manifestTools(registry) {
   return listTools(registry).map((tool) => ({
     ...tool,
     inputSchema: toolSchema(tool.name),
+    permission: tool.mutating ? 'allow-actions' : 'read-only',
+    riskLevel: tool.mutating ? 'mutating' : 'read-only',
   }));
 }
 
@@ -119,6 +121,22 @@ function protocolEnvelope({ id = null, result = null, error = null }) {
     jsonrpc: '2.0',
     id,
     ...(error ? { error } : { result }),
+  };
+}
+
+function stableHash(value) {
+  return createHash('sha256').update(JSON.stringify(value || {})).digest('hex');
+}
+
+function createHarnessReceipt({ action, tool = null, input = {}, allowActions = false, ok = null }) {
+  return {
+    id: randomUUID(),
+    action,
+    tool,
+    inputHash: stableHash(input),
+    allowActions: Boolean(allowActions),
+    ok,
+    createdAt: nowIso(),
   };
 }
 
@@ -148,6 +166,14 @@ export function getHarnessManifest(opts = {}) {
       jsonRpc: true,
       eventStreaming: true,
       sessionExport: true,
+      dryRunReceipts: true,
+      replayLog: true,
+      permissionMetadata: true,
+    },
+    safety: {
+      defaultMode: 'read-only',
+      mutatingPermission: '--allow-actions',
+      receiptFields: ['id', 'action', 'tool', 'inputHash', 'allowActions', 'ok', 'createdAt'],
     },
     defaults: {
       chain: config.chain || 'base',
@@ -177,19 +203,39 @@ export async function planHarnessGoal(goal, opts = {}) {
 
 export async function callHarnessTool(name, input = {}, opts = {}) {
   const registry = opts.registry || createToolRegistry(opts.toolDeps);
+  const tool = registry[name];
   const executeTool = opts.executeTool || createToolExecutor({
     registry,
     allowActions: Boolean(opts.allowActions),
     onEvent: opts.onToolEvent,
   });
   const result = await executeTool(name, input);
-  return {
+  const receipt = createHarnessReceipt({
+    action: 'tool-call',
+    tool: name,
+    input,
+    allowActions: Boolean(opts.allowActions),
+    ok: result.ok !== false,
+  });
+  if (opts.sessionId) {
+    recordHarnessEvent(opts.sessionId, {
+      type: 'receipt',
+      receipt,
+      mutating: Boolean(tool?.mutating),
+      permission: tool?.mutating ? 'allow-actions' : 'read-only',
+    });
+  }
+  const payload = {
     ok: result.ok !== false,
     mode: 'tool',
     tool: name,
+    mutating: Boolean(tool?.mutating),
+    permission: tool?.mutating ? 'allow-actions' : 'read-only',
     input,
     result,
+    receipt,
   };
+  return payload;
 }
 
 export async function runHarnessGoal(goal, opts = {}) {

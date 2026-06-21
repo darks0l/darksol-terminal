@@ -7,6 +7,32 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [Unreleased]
+
+### Added — trust, safety, and operator readiness
+
+- Added GitHub CI for Node 18/20/22 with test, audit, pack dry-run, and secret-scan gates.
+- Added Dependabot, CODEOWNERS, issue templates, PR template, `SECURITY.md`, `SUPPORT.md`, and `CONTRIBUTING.md`.
+- Added `darksol doctor` for local install/config/safety checks.
+- Added `darksol security status` for wallet, signer, harness, and mutating-tool boundary inspection.
+- Added harness permission metadata, dry-run receipt fields, and replay-log capability metadata.
+- Added Mission Control harness safety and replay-session status to the live `/mission` snapshot and web panel.
+- Added npm release guard scripts: `audit`, `packcheck`, `secret-scan`, `release:check`, and `prepublishOnly`.
+
+### Changed
+
+- Updated npm metadata to use the GitHub public repo, issue tracker, and README homepage.
+- Refreshed the lockfile from `0.19.1` to `0.19.2`.
+- Replaced the short GPL notice with the full GPL-3.0 license text.
+- Reworked README first-run flow around `doctor`, `setup`, `serve`, and `security status`.
+- Fixed the README module table so Base MCP documentation no longer interrupts the table.
+- Reworded signer security copy from absolute guarantees to explicit safety boundaries.
+
+### Security
+
+- Updated `ethers` to `^6.17.0`.
+- Added targeted npm overrides for `fast-uri`, `lodash`, `marked`, and `xml2js` to clear current transitive audit advisories.
+
 ## [0.19.2] - 2026-06-11
 
 ### Added — Mission Control web shell

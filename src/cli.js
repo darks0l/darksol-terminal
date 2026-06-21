@@ -40,6 +40,7 @@ import { agentCommsBuyNumber, agentCommsCountries, agentCommsHealth, agentCommsM
 import { wiretapRegister, wiretapLogin, wiretapStatus, wiretapContacts, wiretapPendingContacts, wiretapDiscover, wiretapAddContact, wiretapAcceptContact, wiretapBlockContact, wiretapThreads, wiretapUseThread, wiretapMessages, wiretapInbox, wiretapRead, wiretapSend, wiretapReply, wiretapSupport, wiretapEvents } from './services/wiretap.js';
 import { facilitatorHealth, facilitatorVerify, facilitatorSettle } from './services/facilitator.js';
 import { healthCommand } from './services/health.js';
+import { doctorCommand, securityStatusCommand } from './services/doctor.js';
 import { scanToken, displayScanResult, scanResultToJSON } from './services/scanner.js';
 import { threatlabGenerateReport, threatlabInstall, threatlabRunScan, threatlabRunStatus, threatlabSetup, threatlabStart, threatlabStatus } from './services/threatlab.js';
 import {
@@ -2898,6 +2899,23 @@ export function cli(argv) {
     .action((opts) => healthCommand({ json: opts.json }));
 
   program
+    .command('doctor')
+    .description('Run local install, config, and safety checks')
+    .option('--json', 'Output as JSON')
+    .option('--with-services', 'Also probe remote/local DARKSOL service endpoints')
+    .action((opts) => doctorCommand({ json: opts.json, withServices: opts.withServices }));
+
+  const security = program
+    .command('security')
+    .description('Inspect local safety boundaries and mutating tool policy');
+
+  security
+    .command('status')
+    .description('Show wallet, harness, and operator safety boundaries')
+    .option('--json', 'Output as JSON')
+    .action((opts) => securityStatusCommand({ json: opts.json }));
+
+  program
     .command('dash')
     .description('Launch the live terminal dashboard')
     .option('--refresh <seconds>', 'Refresh interval in seconds', '30')
@@ -3373,7 +3391,7 @@ function generateBashCompletion() {
     'mail', 'serve', 'browser', 'scan', 'gas', 'price', 'watch',
     'chat', 'soul', 'memory', 'setup', 'ai', 'keys', 'agent', 'skills',
     'daemon', 'update', 'telegram', 'lightning', 'ln', 'pay', 'tips', 'networks',
-    'quickstart', 'lookup', 'script', 'config', 'dashboard', 'health',
+    'quickstart', 'lookup', 'script', 'config', 'dashboard', 'health', 'doctor', 'security',
     'dash', 'portfolio', 'send', 'receive', 'balance', 'swap', 'history',
     'completion',
   ];
@@ -3411,6 +3429,7 @@ function generateBashCompletion() {
     memory: 'show search clear export',
     script: 'create list run show edit delete clone templates',
     config: 'show model set rpc',
+    security: 'status',
     gas: 'monitor',
   };
 
@@ -3439,7 +3458,7 @@ function generateZshCompletion() {
     'mail', 'serve', 'browser', 'scan', 'gas', 'price', 'watch',
     'chat', 'soul', 'memory', 'setup', 'ai', 'keys', 'agent', 'skills',
     'daemon', 'telegram', 'tips', 'networks', 'quickstart', 'lookup',
-    'script', 'config', 'dashboard', 'health', 'dash', 'portfolio',
+    'script', 'config', 'dashboard', 'health', 'doctor', 'security', 'dash', 'portfolio',
     'lightning', 'ln', 'support', 'send', 'receive', 'balance', 'swap', 'history', 'completion',
   ];
 

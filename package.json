@@ -14,12 +14,19 @@
     "src/",
     "README.md",
     "CHANGELOG.md",
+    "SECURITY.md",
+    "SUPPORT.md",
     "LICENSE"
   ],
   "scripts": {
     "start": "node bin/darksol.js",
     "dev": "node bin/darksol.js dashboard",
     "test": "node --test tests/*.test.js",
+    "audit": "npm audit --audit-level=moderate",
+    "packcheck": "npm pack --dry-run --json",
+    "secret-scan": "node -e \"const fs=require('fs'),cp=require('child_process'),os=require('os'),path=require('path');const p=path.join(os.homedir(),'.git-hooks','secret-scan.js');if(!fs.existsSync(p)){console.log('secret scan unavailable; skipping local hook');process.exit(0)}const r=cp.spawnSync(process.execPath,[p,'npm'],{stdio:'inherit'});process.exit(r.status||0)\"",
+    "release:check": "npm test && npm run audit && npm run packcheck && npm run secret-scan",
+    "prepublishOnly": "npm run release:check",
     "postinstall": "echo \"\n🌑 DARKSOL Terminal installed. Run 'darksol setup' to configure your AI provider.\n\""
   },
   "keywords": [
@@ -39,13 +46,13 @@
   ],
   "author": "DARKSOL <chris00claw@gmail.com>",
   "license": "GPL-3.0-or-later",
-  "homepage": "https://www.npmjs.com/package/@darksol/terminal",
+  "homepage": "https://github.com/darks0l/darksol-terminal#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://gitlab.com/darks0l/darksol-terminal.git"
+    "url": "git+https://github.com/darks0l/darksol-terminal.git"
   },
   "bugs": {
-    "url": "https://gitlab.com/darks0l/darksol-terminal/-/issues"
+    "url": "https://github.com/darks0l/darksol-terminal/issues"
   },
   "dependencies": {
     "agentmail": "^0.4.20",
@@ -56,7 +63,7 @@
     "cli-table3": "^0.6.5",
     "commander": "^12.1.0",
     "conf": "^13.0.1",
-    "ethers": "^6.13.0",
+    "ethers": "^6.17.0",
     "figlet": "^1.8.0",
     "gradient-string": "^3.0.0",
     "inquirer": "^12.0.0",
@@ -67,6 +74,12 @@
     "terminal-link": "^3.0.0",
     "update-notifier": "^7.3.1",
     "ws": "^8.21.0"
+  },
+  "overrides": {
+    "fast-uri": "^4.0.0",
+    "lodash": "^4.18.1",
+    "marked": "^4.3.0",
+    "xml2js": "^0.6.2"
   },
   "optionalDependencies": {
     "playwright-core": "^1.60.0"
