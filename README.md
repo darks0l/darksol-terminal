@@ -15,7 +15,7 @@ A unified CLI for market intel, trading, AI-powered analysis, Wiretap/AIM messag
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-gold.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
 
-- Current release: **0.21.0**
+- Current release: **0.22.0**
 - Changelog: `CHANGELOG.md`
 
 ## Install
@@ -49,6 +49,7 @@ darksol wallet create main
 # Check balance + multi-chain portfolio
 darksol wallet balance
 darksol portfolio
+darksol wallet funds 0xabc...        # read-only multi-chain scan for any EVM address
 
 # Send / receive
 darksol receive

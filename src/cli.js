@@ -5,7 +5,7 @@ import { spinner, kvDisplay, success, error, warn, info } from './ui/components.
 import { createDashboard } from './ui/dashboard.js';
 import { getConfig, setConfig, getAllConfig, getRPC, setRPC, configPath } from './config/store.js';
 import { createWallet, importWallet, showWallets, getBalance, useWallet, exportWallet, sendFunds, receiveAddress } from './wallet/manager.js';
-import { showPortfolio } from './wallet/portfolio.js';
+import { showAddressPortfolio, showPortfolio } from './wallet/portfolio.js';
 import { showHistory, exportHistory } from './wallet/history.js';
 import { showGas, showGasAll, monitorGas } from './services/gas.js';
 import { watchPrice, checkPrices } from './services/watch.js';
@@ -163,6 +163,12 @@ export function cli(argv) {
     .description('View balances across all EVM chains')
     .option('--json', 'Output as JSON')
     .action((name, opts) => showPortfolio(name, { json: opts.json }));
+
+  wallet
+    .command('funds <address>')
+    .description('Read-only scan of an EVM address across supported chains')
+    .option('--json', 'Output as JSON')
+    .action((address, opts) => showAddressPortfolio(address, { json: opts.json }));
 
   wallet
     .command('history [name]')

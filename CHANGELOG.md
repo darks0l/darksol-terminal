@@ -7,6 +7,18 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.22.0] - 2026-06-23
+
+### Added — read-only funds scanner
+
+- Added `darksol wallet funds <address>` for read-only multi-chain balance scans of any EVM address without importing a key.
+- Added JSON output for address fund scans so agents can consume native/token totals across Base, Ethereum, Arbitrum, Optimism, and Polygon.
+
+### Changed
+
+- Portfolio scans now report each chain's native symbol instead of labeling every native balance as ETH.
+- Polygon portfolio checks now use a public Polygon endpoint that works without a project API key.
+
 ## [0.21.0] - 2026-06-21
 
 ### Added — Hermes Agent bridge

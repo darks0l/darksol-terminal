@@ -166,3 +166,14 @@ test('command registration includes trade and script subcommands', (t) => {
   assert.match(surplusSellerHelp.stdout, /\boffers\b/);
   assert.match(surplusSellerHelp.stdout, /add-offer/);
 });
+
+test('wallet command exposes read-only funds scanner', (t) => {
+  const walletHelp = runCli(['wallet', '--help'], env);
+  if (walletHelp.error && walletHelp.error.code === 'EPERM') {
+    t.skip('Child process spawn not permitted in this environment');
+    return;
+  }
+  assert.equal(walletHelp.status, 0, walletHelp.stderr);
+  assert.match(walletHelp.stdout, /\bfunds\b/);
+  assert.match(walletHelp.stdout, /Read-only scan/);
+});
