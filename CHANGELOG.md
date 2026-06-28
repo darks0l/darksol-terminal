@@ -7,6 +7,16 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## [0.23.0] - 2026-06-28
+
+### Added - ReMEM codebase graph ingestion
+
+- Added `@darksol/remem` v0.18 integration for codebase graph ingestion.
+- Added `darksol memory codebase ingest <repo>` to scan source files, build file/symbol/import graphs, and ingest them into a local ReMEM SQLite store.
+- Added `darksol memory codebase search <query>` for ReMEM-backed codebase node recall.
+- Added `darksol memory codebase impact <query>` to traverse neighboring subgraph context around files, symbols, imports, and packages.
+- Added tests for lightweight graph generation, persisted ReMEM search, and impact traversal.
+
 ## [0.22.0] - 2026-06-23
 
 ### Added — read-only funds scanner

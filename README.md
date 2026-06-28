@@ -15,7 +15,7 @@ A unified CLI for market intel, trading, AI-powered analysis, Wiretap/AIM messag
 [![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-gold.svg)](https://www.gnu.org/licenses/gpl-3.0)
 [![Node](https://img.shields.io/badge/node-%3E%3D18.0.0-green.svg)](https://nodejs.org/)
 
-- Current release: **0.22.0**
+- Current release: **0.23.0**
 - Changelog: `CHANGELOG.md`
 
 ## Install
@@ -154,6 +154,11 @@ darksol ai chat
 # View/search persistent memories
 darksol memory show
 darksol memory search "preferred chain"
+
+# Ingest a repo into ReMEM as a traversable codebase graph
+darksol memory codebase ingest ./my-repo --project my-repo
+darksol memory codebase search "wallet signer" --project my-repo
+darksol memory codebase impact "src/wallet/agent-signer.js" --project my-repo
 
 # Autonomous agent task (ReAct loop)
 darksol agent task "check AERO price and tell me if it's above $2"

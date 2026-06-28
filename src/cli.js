@@ -75,6 +75,7 @@ import { listSkills, installSkill, skillInfo, uninstallSkill } from './services/
 import { runSetupWizard } from './setup/wizard.js';
 import { displaySoul, hasSoul, resetSoul, runSoulSetup } from './soul/index.js';
 import { clearMemories, exportMemories, getRecentMemories, searchMemories } from './memory/index.js';
+import { getDefaultCodebaseDbPath, impactCodebaseGraph, ingestCodebase, searchCodebaseGraph } from './memory/codebase.js';
 import { getAgentStatus, planAgentGoal, runAgentTask } from './agent/index.js';
 import { callHarnessTool, exportHarnessSession, getHarnessEventStream, getHarnessManifest, getHarnessStatus, getHarnessTools, invokeHarnessRpc, listHarnessSessions, planHarnessGoal, runHarnessGoal } from './agent/harness.js';
 import { getAuditLog, getStatus as getAutoStatus, listStrategies as listAutoStrategies, startAutonomous, stopAutonomous } from './agent/autonomous.js';
@@ -1652,6 +1653,146 @@ export function cli(argv) {
       const target = resolve(file || `darksol-memory-export-${Date.now()}.json`);
       await exportMemories(target);
       success(`Memory exported to ${target}`);
+    });
+
+  const codebaseMemory = memory
+    .command('codebase')
+    .description('ReMEM-backed codebase graph ingestion and subgraph recall');
+
+  codebaseMemory
+    .command('ingest [repo]')
+    .description('Build a lightweight code graph and ingest it into ReMEM')
+    .option('-p, --project <name>', 'Project name for graph namespace')
+    .option('--db <file>', 'ReMEM SQLite DB path', getDefaultCodebaseDbPath())
+    .option('--max-files <n>', 'Maximum source files to scan', '750')
+    .option('--json', 'Output as JSON')
+    .action(async (repo = '.', opts) => {
+      const spin = spinner('Building codebase graph and ingesting into ReMEM...').start();
+      try {
+        const result = await ingestCodebase(repo, {
+          project: opts.project,
+          dbPath: resolve(opts.db),
+          maxFiles: parseInt(opts.maxFiles, 10) || 750,
+        });
+        spin.succeed('Codebase graph ingested');
+
+        if (opts.json) {
+          console.log(JSON.stringify(result, null, 2));
+          return;
+        }
+
+        kvDisplay([
+          ['Project', result.project],
+          ['Files', result.filesScanned],
+          ['Symbols', result.symbolsFound],
+          ['Nodes Stored', result.nodesStored],
+          ['Edges Linked', result.edgesLinked],
+          ['Skipped Edges', result.skippedEdges],
+          ['DB', result.dbPath],
+          ['Artifact', result.artifactPath],
+        ]);
+        console.log('');
+        info(`Search: darksol memory codebase search "${result.project}" --project ${result.project}`);
+        info(`Impact: darksol memory codebase impact "<file or symbol>" --project ${result.project}`);
+      } catch (err) {
+        spin.fail('Codebase ingestion failed');
+        error(err.message);
+      }
+    });
+
+  codebaseMemory
+    .command('search <query...>')
+    .description('Search ingested codebase graph memories')
+    .option('-p, --project <name>', 'Limit search to a project')
+    .option('--db <file>', 'ReMEM SQLite DB path', getDefaultCodebaseDbPath())
+    .option('-l, --limit <n>', 'Maximum matches', '10')
+    .option('--json', 'Output as JSON')
+    .action(async (queryParts, opts) => {
+      const query = queryParts.join(' ');
+      const result = await searchCodebaseGraph(query, {
+        project: opts.project,
+        dbPath: resolve(opts.db),
+        limit: parseInt(opts.limit, 10) || 10,
+      });
+
+      if (opts.json) {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+
+      showMiniBanner();
+      showSection('CODEBASE SEARCH');
+      info(`Query: ${query}`);
+      console.log('');
+
+      const matches = result.results || [];
+      if (!matches.length) {
+        warn('No matching codebase graph memories.');
+        console.log('');
+        return;
+      }
+
+      matches.forEach((entry) => {
+        const meta = entry.metadata || {};
+        kvDisplay([
+          ['Name', meta.name || entry.content?.slice(0, 80) || '-'],
+          ['Type', meta.label || '-'],
+          ['Path', meta.path || '-'],
+          ['Project', meta.project || '-'],
+          ['Score', entry.score ?? '-'],
+        ]);
+        console.log('');
+      });
+    });
+
+  codebaseMemory
+    .command('impact <query...>')
+    .description('Find neighboring subgraph context around a file or symbol')
+    .option('-p, --project <name>', 'Limit traversal to a project')
+    .option('--db <file>', 'ReMEM SQLite DB path', getDefaultCodebaseDbPath())
+    .option('-l, --limit <n>', 'Maximum result rows', '20')
+    .option('--neighbors <n>', 'Maximum neighbor results', '20')
+    .option('--json', 'Output as JSON')
+    .action(async (queryParts, opts) => {
+      const query = queryParts.join(' ');
+      const result = await impactCodebaseGraph(query, {
+        project: opts.project,
+        dbPath: resolve(opts.db),
+        limit: parseInt(opts.limit, 10) || 20,
+        neighborLimit: parseInt(opts.neighbors, 10) || 20,
+      });
+
+      if (opts.json) {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+
+      showMiniBanner();
+      showSection('CODEBASE IMPACT');
+      info(`Query: ${query}`);
+      console.log('');
+
+      const matches = result.results || [];
+      if (!matches.length) {
+        warn('No neighboring subgraph context found.');
+        console.log('');
+        return;
+      }
+
+      matches.forEach((entry) => {
+        const meta = entry.metadata || {};
+        kvDisplay([
+          ['Name', meta.name || entry.content?.slice(0, 80) || '-'],
+          ['Type', meta.label || '-'],
+          ['Path', meta.path || '-'],
+          ['Project', meta.project || '-'],
+        ]);
+        console.log('');
+      });
+
+      if (result.linksTraversed !== undefined) {
+        info(`Links traversed: ${result.linksTraversed}`);
+      }
     });
 
   // ═══════════════════════════════════════
@@ -3376,6 +3517,7 @@ function showCommandList() {
     ['keys', 'API key vault'],
     ['soul', 'Identity and agent personality'],
     ['memory', 'Persistent cross-session memory'],
+    ['memory codebase', 'ReMEM codebase graph ingestion + subgraph recall'],
     ['script', 'Execution scripts & strategies'],
     ['market', 'Market intel & token data'],
     ['whale', 'Whale Radar - wallet tracking'],
@@ -3461,7 +3603,8 @@ function generateBashCompletion() {
     lightning: 'init start stop info balance pay invoice offer decode channels open close force-close peers connect liquidity jit-channel history',
     ln: 'init start stop info balance pay invoice offer decode channels open close force-close peers connect liquidity jit-channel history',
     soul: 'show reset',
-    memory: 'show search clear export',
+    memory: 'show search clear export codebase',
+    codebase: 'ingest search impact',
     script: 'create list run show edit delete clone templates',
     config: 'show model set rpc',
     security: 'status',
