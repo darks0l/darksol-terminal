@@ -43,6 +43,26 @@ function projectNameFromRoot(root) {
   return basename(root) || 'codebase';
 }
 
+function listFromInput(value) {
+  if (!value) return [];
+  if (Array.isArray(value)) return value.flatMap(listFromInput);
+  return String(value)
+    .split(',')
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function buildResourceGrant(opts = {}) {
+  const scopes = listFromInput(opts.grantScopes || opts.scopes);
+  if (!opts.resourceUri && !scopes.length) return undefined;
+  return {
+    ...(opts.resourceUri ? { resourceUri: opts.resourceUri } : {}),
+    source: 'darksol-terminal',
+    ...(opts.project ? { project: opts.project } : {}),
+    scopes,
+  };
+}
+
 function uniqueById(items) {
   const seen = new Set();
   return items.filter((item) => {
@@ -255,6 +275,8 @@ export async function buildCodebaseGraph(repoPath = '.', opts = {}) {
   return {
     source: 'darksol-terminal',
     project,
+    ...(opts.resourceUri ? { resourceUri: opts.resourceUri } : {}),
+    requiredScopes: listFromInput(opts.requiredScopes),
     artifactPath: '',
     nodes: uniqueById(nodes),
     edges: uniqueEdges(edges),
@@ -288,6 +310,8 @@ export async function ingestCodebase(repoPath = '.', opts = {}) {
       ...result,
       dbPath: opts.dbPath || DEFAULT_DB_PATH,
       artifactPath: artifact.artifactPath,
+      resourceUri: artifact.resourceUri,
+      requiredScopes: artifact.requiredScopes,
       filesScanned: artifact.nodes.filter((node) => node.label === 'File').length,
       symbolsFound: artifact.nodes.filter((node) => ['Function', 'Class', 'Constant'].includes(node.label)).length,
     };
@@ -322,3 +346,22 @@ export async function impactCodebaseGraph(query, opts = {}) {
     memory.close();
   }
 }
+
+export async function contextCodebaseGraph(query, opts = {}) {
+  const memory = await openCodebaseMemory(opts.dbPath || DEFAULT_DB_PATH);
+  try {
+    const adapter = createCodebaseMemoryAdapter(memory);
+    return await adapter.subgraph(query, {
+      project: opts.project,
+      limit: opts.limit,
+      neighborLimit: opts.neighborLimit,
+      maxContextChars: opts.maxContextChars,
+      connectionTypes: listFromInput(opts.connectionTypes),
+      resourceGrant: buildResourceGrant(opts),
+    });
+  } finally {
+    memory.close();
+  }
+}
+
+export const parseCodebaseResourceList = listFromInput;

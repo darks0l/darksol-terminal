@@ -75,7 +75,7 @@ import { listSkills, installSkill, skillInfo, uninstallSkill } from './services/
 import { runSetupWizard } from './setup/wizard.js';
 import { displaySoul, hasSoul, resetSoul, runSoulSetup } from './soul/index.js';
 import { clearMemories, exportMemories, getRecentMemories, searchMemories } from './memory/index.js';
-import { getDefaultCodebaseDbPath, impactCodebaseGraph, ingestCodebase, searchCodebaseGraph } from './memory/codebase.js';
+import { contextCodebaseGraph, getDefaultCodebaseDbPath, impactCodebaseGraph, ingestCodebase, parseCodebaseResourceList, searchCodebaseGraph } from './memory/codebase.js';
 import { getAgentStatus, planAgentGoal, runAgentTask } from './agent/index.js';
 import { callHarnessTool, exportHarnessSession, getHarnessEventStream, getHarnessManifest, getHarnessStatus, getHarnessTools, invokeHarnessRpc, listHarnessSessions, planHarnessGoal, runHarnessGoal } from './agent/harness.js';
 import { getAuditLog, getStatus as getAutoStatus, listStrategies as listAutoStrategies, startAutonomous, stopAutonomous } from './agent/autonomous.js';
@@ -1665,6 +1665,8 @@ export function cli(argv) {
     .option('-p, --project <name>', 'Project name for graph namespace')
     .option('--db <file>', 'ReMEM SQLite DB path', getDefaultCodebaseDbPath())
     .option('--max-files <n>', 'Maximum source files to scan', '750')
+    .option('--resource-uri <uri>', 'Absolute resource URI attached to this graph')
+    .option('--required-scopes <scopes>', 'Comma-separated scopes required to return this graph context')
     .option('--json', 'Output as JSON')
     .action(async (repo = '.', opts) => {
       const spin = spinner('Building codebase graph and ingesting into ReMEM...').start();
@@ -1673,6 +1675,8 @@ export function cli(argv) {
           project: opts.project,
           dbPath: resolve(opts.db),
           maxFiles: parseInt(opts.maxFiles, 10) || 750,
+          resourceUri: opts.resourceUri,
+          requiredScopes: opts.requiredScopes,
         });
         spin.succeed('Codebase graph ingested');
 
@@ -1688,6 +1692,8 @@ export function cli(argv) {
           ['Nodes Stored', result.nodesStored],
           ['Edges Linked', result.edgesLinked],
           ['Skipped Edges', result.skippedEdges],
+          ['Resource URI', result.resourceUri || '-'],
+          ['Required Scopes', result.requiredScopes?.length ? result.requiredScopes.join(', ') : '-'],
           ['DB', result.dbPath],
           ['Artifact', result.artifactPath],
         ]);
@@ -1743,6 +1749,72 @@ export function cli(argv) {
         ]);
         console.log('');
       });
+    });
+
+  codebaseMemory
+    .command('context <query...>')
+    .description('Return grant-filtered graph context around a file or symbol')
+    .option('-p, --project <name>', 'Limit traversal to a project')
+    .option('--db <file>', 'ReMEM SQLite DB path', getDefaultCodebaseDbPath())
+    .option('-l, --limit <n>', 'Maximum seed result rows', '20')
+    .option('--neighbors <n>', 'Maximum neighbor results', '20')
+    .option('--max-context-chars <n>', 'Maximum context text size', '6000')
+    .option('--connections <types>', 'Comma-separated connection/link types to include')
+    .option('--resource-uri <uri>', 'Granted resource URI for filtering scoped graph nodes')
+    .option('--grant-scopes <scopes>', 'Comma-separated granted scopes for filtering scoped graph nodes')
+    .option('--json', 'Output as JSON')
+    .action(async (queryParts, opts) => {
+      const query = queryParts.join(' ');
+      const result = await contextCodebaseGraph(query, {
+        project: opts.project,
+        dbPath: resolve(opts.db),
+        limit: parseInt(opts.limit, 10) || 20,
+        neighborLimit: parseInt(opts.neighbors, 10) || 20,
+        maxContextChars: parseInt(opts.maxContextChars, 10) || 6000,
+        connectionTypes: opts.connections,
+        resourceUri: opts.resourceUri,
+        grantScopes: opts.grantScopes,
+      });
+
+      if (opts.json) {
+        console.log(JSON.stringify(result, null, 2));
+        return;
+      }
+
+      showMiniBanner();
+      showSection('CODEBASE CONTEXT');
+      info(`Query: ${query}`);
+      if (opts.resourceUri || opts.grantScopes) {
+        info(`Grant: ${opts.resourceUri || '*'} / ${parseCodebaseResourceList(opts.grantScopes).join(', ') || 'no scopes'}`);
+      }
+      console.log('');
+
+      const matches = result.results || [];
+      if (!matches.length) {
+        warn('No graph context matched the current query and grant.');
+        console.log('');
+        return;
+      }
+
+      matches.slice(0, 10).forEach((entry) => {
+        const meta = entry.metadata || {};
+        kvDisplay([
+          ['Name', meta.name || entry.content?.slice(0, 80) || '-'],
+          ['Type', meta.label || '-'],
+          ['Path', meta.path || '-'],
+          ['Project', meta.project || '-'],
+          ['Resource', meta.resourceUri || '-'],
+        ]);
+        console.log('');
+      });
+
+      if (result.context) {
+        info('Context');
+        console.log(result.context);
+        console.log('');
+      }
+
+      info(`Links traversed: ${result.linksTraversed ?? 0}`);
     });
 
   codebaseMemory
@@ -3604,7 +3676,7 @@ function generateBashCompletion() {
     ln: 'init start stop info balance pay invoice offer decode channels open close force-close peers connect liquidity jit-channel history',
     soul: 'show reset',
     memory: 'show search clear export codebase',
-    codebase: 'ingest search impact',
+    codebase: 'ingest search context impact',
     script: 'create list run show edit delete clone templates',
     config: 'show model set rpc',
     security: 'status',

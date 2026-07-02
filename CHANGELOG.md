@@ -7,6 +7,15 @@
 
 All notable changes to `@darksol/terminal` are documented here.
 
+## Unreleased
+
+### Added - scoped ReMEM codebase context
+
+- Updated the ReMEM integration to `@darksol/remem` v0.20.
+- Added `--resource-uri` and `--required-scopes` to `darksol memory codebase ingest` so graph imports can carry resource metadata.
+- Added `darksol memory codebase context <query>` for grant-filtered graph context with `--resource-uri` and `--grant-scopes`.
+- Added coverage for scoped codebase graph metadata and grant filtering.
+
 ## [0.23.0] - 2026-06-28
 
 ### Added - ReMEM codebase graph ingestion

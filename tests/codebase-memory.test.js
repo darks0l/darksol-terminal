@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { buildCodebaseGraph, impactCodebaseGraph, ingestCodebase, searchCodebaseGraph } from '../src/memory/codebase.js';
+import { buildCodebaseGraph, contextCodebaseGraph, impactCodebaseGraph, ingestCodebase, searchCodebaseGraph } from '../src/memory/codebase.js';
 
 function makeFixture() {
   const root = mkdtempSync(join(tmpdir(), 'darksol-codebase-'));
@@ -56,6 +56,48 @@ test('ingestCodebase stores searchable ReMEM subgraph context', async () => {
     const impact = await impactCodebaseGraph('orders.js', { project: 'fixture', dbPath, limit: 5, neighborLimit: 10 });
     const names = impact.results.map((entry) => entry.metadata?.name);
     assert.ok(names.includes('payments.js') || names.includes('chargeCard'));
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    rmSync(dbRoot, { recursive: true, force: true });
+  }
+});
+
+test('ingestCodebase stores scoped resource metadata and context honors grants', async () => {
+  const root = makeFixture();
+  const dbRoot = mkdtempSync(join(tmpdir(), 'darksol-codebase-db-'));
+  const dbPath = join(dbRoot, 'remem.db');
+  const resourceUri = 'memory://codebase/fixture/graph';
+  try {
+    const result = await ingestCodebase(root, {
+      project: 'fixture',
+      dbPath,
+      resourceUri,
+      requiredScopes: 'codebase:read,graph:snapshot',
+    });
+    assert.equal(result.resourceUri, resourceUri);
+    assert.deepEqual(result.requiredScopes, ['codebase:read', 'graph:snapshot']);
+
+    const blocked = await contextCodebaseGraph('OrderService', {
+      project: 'fixture',
+      dbPath,
+      resourceUri,
+      grantScopes: 'codebase:read',
+      limit: 5,
+      neighborLimit: 10,
+    });
+    assert.equal(blocked.results.length, 0);
+    assert.equal(blocked.linksTraversed, 0);
+
+    const allowed = await contextCodebaseGraph('OrderService', {
+      project: 'fixture',
+      dbPath,
+      resourceUri,
+      grantScopes: 'codebase:read,graph:snapshot',
+      limit: 5,
+      neighborLimit: 10,
+    });
+    assert.ok(allowed.results.some((entry) => entry.metadata?.name === 'OrderService'));
+    assert.ok(allowed.context.includes('OrderService'));
   } finally {
     rmSync(root, { recursive: true, force: true });
     rmSync(dbRoot, { recursive: true, force: true });

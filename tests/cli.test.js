@@ -120,6 +120,7 @@ test('command registration includes trade and script subcommands', (t) => {
   assert.equal(memoryHelp.status, 0, memoryHelp.stderr);
   assert.match(memoryHelp.stdout, /\bingest\b/);
   assert.match(memoryHelp.stdout, /\bsearch\b/);
+  assert.match(memoryHelp.stdout, /\bcontext\b/);
   assert.match(memoryHelp.stdout, /\bimpact\b/);
 
   const autoHelp = runCli(['auto', '--help'], env);

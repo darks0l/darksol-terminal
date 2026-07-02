@@ -158,7 +158,16 @@ darksol memory search "preferred chain"
 # Ingest a repo into ReMEM as a traversable codebase graph
 darksol memory codebase ingest ./my-repo --project my-repo
 darksol memory codebase search "wallet signer" --project my-repo
+darksol memory codebase context "wallet signer" --project my-repo
 darksol memory codebase impact "src/wallet/agent-signer.js" --project my-repo
+
+# Scoped codebase context for MCP-style resource boundaries
+darksol memory codebase ingest ./private-repo --project private-repo \
+  --resource-uri memory://codebase/private-repo/graph \
+  --required-scopes codebase:read,graph:snapshot
+darksol memory codebase context "signer policy" --project private-repo \
+  --resource-uri memory://codebase/private-repo/graph \
+  --grant-scopes codebase:read,graph:snapshot
 
 # Autonomous agent task (ReAct loop)
 darksol agent task "check AERO price and tell me if it's above $2"

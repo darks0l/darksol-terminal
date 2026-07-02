@@ -55,7 +55,7 @@
     "url": "https://github.com/darks0l/darksol-terminal/issues"
   },
   "dependencies": {
-    "@darksol/remem": "^0.18.0",
+    "@darksol/remem": "^0.20.0",
     "agentmail": "^0.4.20",
     "blessed": "^0.1.81",
     "blessed-contrib": "^4.11.0",
