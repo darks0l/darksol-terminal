@@ -45,6 +45,9 @@ async function request(path, { method = 'GET', body, token, allowUnauthed = fals
 }
 
 async function promptPassword(label = 'Password:') {
+  if (!process.stdin.isTTY) {
+    throw new Error('Password required. Use --password <pw> or run in an interactive terminal.');
+  }
   const { password } = await inquirer.prompt([{
     type: 'password',
     name: 'password',
@@ -279,7 +282,7 @@ export async function wiretapPendingContacts(opts = {}) {
 
 export async function wiretapDiscover(opts = {}) {
   let query = String(opts.query || opts.q || opts.username || '').trim();
-  if (!query && !opts.json) {
+  if (!query && !opts.json && process.stdin.isTTY) {
     const answers = await inquirer.prompt([{ type: 'input', name: 'query', message: theme.gold('Discover username or handle:'), default: '' }]);
     query = String(answers.query || '').trim();
   }
@@ -316,7 +319,7 @@ export async function wiretapDiscover(opts = {}) {
 export async function wiretapAddContact(opts = {}) {
   let recipient = String(opts.username || opts.handle || opts.to || '').trim().toLowerCase();
   let subject = String(opts.subject || '').trim();
-  if (!recipient && !opts.json) {
+  if (!recipient && !opts.json && process.stdin.isTTY) {
     const answers = await inquirer.prompt([
       { type: 'input', name: 'recipient', message: theme.gold('Contact username or handle:'), default: '' },
       { type: 'input', name: 'subject', message: theme.gold('Subject (optional):'), default: subject || '' },
@@ -361,7 +364,7 @@ export async function wiretapAddContact(opts = {}) {
 
 export async function wiretapAcceptContact(opts = {}) {
   let requester = String(opts.username || opts.requester || opts.from || '').trim().toLowerCase();
-  if (!requester && !opts.json) {
+  if (!requester && !opts.json && process.stdin.isTTY) {
     const answers = await inquirer.prompt([{ type: 'input', name: 'requester', message: theme.gold('Accept contact from username:'), default: '' }]);
     requester = String(answers.requester || '').trim().toLowerCase();
   }
@@ -400,7 +403,7 @@ export async function wiretapAcceptContact(opts = {}) {
 
 export async function wiretapBlockContact(opts = {}) {
   let username = String(opts.username || opts.to || opts.handle || '').trim().toLowerCase();
-  if (!username && !opts.json) {
+  if (!username && !opts.json && process.stdin.isTTY) {
     const answers = await inquirer.prompt([{ type: 'input', name: 'username', message: theme.gold('Block contact username:'), default: '' }]);
     username = String(answers.username || '').trim().toLowerCase();
   }
@@ -582,7 +585,7 @@ export async function wiretapSend(opts = {}) {
   let toUsername = opts.to;
   let body = opts.message || opts.body;
   if (!fromUsername) throw new Error('Log in first so Wiretap knows who you are.');
-  if (!toUsername || !body) {
+  if ((!toUsername || !body) && process.stdin.isTTY) {
     const answers = await inquirer.prompt([
       { type: 'input', name: 'toUsername', message: theme.gold('Send to username:'), default: toUsername || '' },
       { type: 'input', name: 'body', message: theme.gold('Message:'), default: body || '' },
@@ -590,6 +593,8 @@ export async function wiretapSend(opts = {}) {
     toUsername = toUsername || answers.toUsername;
     body = body || answers.body;
   }
+  if (!toUsername) throw new Error('Recipient required. Pass --to <username>.');
+  if (!body) throw new Error('Message body required. Pass --message <text>.');
   const spin = spinner(`Sending Wiretap message to ${toUsername}...`).start();
   try {
     const data = await request('/message', {
@@ -620,7 +625,7 @@ export async function wiretapReply(opts = {}) {
   const conversationId = resolved.conversationId;
   let toUsername = String(opts.to || resolved.toUsername || '').trim().toLowerCase();
   let body = String(opts.message || opts.body || '').trim();
-  if (!body && !opts.json) {
+  if (!body && !opts.json && process.stdin.isTTY) {
     const answers = await inquirer.prompt([
       { type: 'input', name: 'body', message: theme.gold('Reply message:'), default: '' },
     ]);
@@ -639,7 +644,7 @@ export async function wiretapSupport(opts = {}) {
   let subject = opts.subject;
   let sendMessage = body;
 
-  if (!subject && !sendMessage && !opts.json) {
+  if (!subject && !sendMessage && !opts.json && process.stdin.isTTY) {
     const answers = await inquirer.prompt([
       { type: 'input', name: 'subject', message: theme.gold('Support subject:'), default: 'darksol-terminal support' },
       { type: 'input', name: 'message', message: theme.gold('What do you need help with?'), default: '' },
