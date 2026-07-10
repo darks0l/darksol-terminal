@@ -40,7 +40,10 @@ async function request(path, { method = 'GET', body, token, allowUnauthed = fals
   try { data = text ? JSON.parse(text) : {}; } catch {
     throw new Error(`Expected JSON (HTTP ${resp.status}): ${truncate(text, 120)}`);
   }
-  if (!resp.ok) throw new Error(data?.message || data?.error || `HTTP ${resp.status}`);
+  if (!resp.ok) {
+    const errMsg = data?.message || data?.error?.message || data?.error || `HTTP ${resp.status}`;
+    throw new Error(errMsg);
+  }
   return data;
 }
 
@@ -166,7 +169,8 @@ export async function wiretapRegister(username, opts = {}) {
     return data;
   } catch (err) {
     spin.fail('Wiretap registration failed');
-    error(err.message);
+    const msg = err instanceof Error ? err.message : String(err);
+    error(msg);
     return null;
   }
 }
