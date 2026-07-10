@@ -143,10 +143,10 @@ async function resolveThreadByConversationOrHandle(input = {}) {
 export async function wiretapRegister(username, opts = {}) {
   const handle = String(username || '').trim().toLowerCase();
   if (!handle) throw new Error('Username required. Example: darksol wiretap register darksol');
-  const password = opts.password || await promptPassword('Wiretap password:');
   const displayName = opts.displayName || handle;
   const spin = spinner('Creating Wiretap account...').start();
   try {
+    const password = opts.password || await promptPassword('Wiretap password:');
     const data = await request('/auth/register', {
       method: 'POST',
       body: authPayload(handle, password, { displayName, discoverable: opts.discoverable !== false }),
@@ -174,9 +174,9 @@ export async function wiretapRegister(username, opts = {}) {
 export async function wiretapLogin(username, opts = {}) {
   const handle = String(username || wiretapState().username || '').trim().toLowerCase();
   if (!handle) throw new Error('Username required. Example: darksol wiretap login darksol');
-  const password = opts.password || await promptPassword('Wiretap password:');
   const spin = spinner('Logging into Wiretap...').start();
   try {
+    const password = opts.password || await promptPassword('Wiretap password:');
     const data = await request('/auth/login', {
       method: 'POST',
       body: { username: handle, password },
