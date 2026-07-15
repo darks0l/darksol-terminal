@@ -95,7 +95,7 @@ function compactValue(value) {
   return `${raw.slice(0, 8)}…${raw.slice(-6)}`;
 }
 
-export function cli(argv) {
+export async function cli(argv) {
   const program = new Command();
 
   program
@@ -3284,7 +3284,12 @@ export function cli(argv) {
     }
   });
 
-  program.parse(argv);
+  try {
+    await program.parseAsync(argv);
+  } catch (err) {
+    error(err.message);
+    process.exitCode = 1;
+  }
 }
 
 // ═══════════════════════════════════════

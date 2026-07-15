@@ -439,14 +439,14 @@ export async function checkSpecificApproval(tokenAddress, spenderAddress, opts =
   const spenderInfo = getSpenderInfo(spenderAddress);
 
   console.log(theme.gold('\n🔍 Approval Check'));
-  kvDisplay({
+  kvDisplay(Object.entries({
     'Token': `${tokenInfo.symbol} (${tokenInfo.name})`,
     'Token Address': tokenAddress,
     'Spender': spenderInfo.name,
     'Spender Address': spenderAddress,
     'Allowance': allowance > 0n ? formatApproval(allowance, tokenInfo.decimals) : theme.success('None (0)'),
     'Risk': riskColor(spenderInfo.risk)(spenderInfo.risk.toUpperCase()),
-  });
+  }));
 
   return { allowance, tokenInfo, spenderInfo };
 }

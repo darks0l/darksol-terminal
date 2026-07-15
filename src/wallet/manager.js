@@ -2,7 +2,7 @@ import { ethers } from 'ethers';
 import { encryptKey, decryptKey, saveWallet, loadWallet, listWallets, walletExists, WALLET_DIR } from './keystore.js';
 import { getConfig, setConfig, getRPC } from '../config/store.js';
 import { theme } from '../ui/theme.js';
-import { card, kvDisplay, success, error, warn, spinner, table } from '../ui/components.js';
+import { card, kvDisplay, success, error, warn, info, spinner, table } from '../ui/components.js';
 import { showSection } from '../ui/banner.js';
 import inquirer from 'inquirer';
 

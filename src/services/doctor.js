@@ -141,11 +141,11 @@ export async function doctorCommand(opts = {}) {
   }
 
   showSection('DARKSOL DOCTOR');
-  kvDisplay({
+  kvDisplay(Object.entries({
     Package: pkg.name,
     Version: pkg.version,
     Node: process.versions.node,
-  });
+  }));
   console.log('');
   renderChecks(checks);
   if (failed.length) {
@@ -163,13 +163,13 @@ export function securityStatusCommand(opts = {}) {
   }
 
   showSection('SECURITY STATUS');
-  kvDisplay({
+  kvDisplay(Object.entries({
     Package: status.package,
     Version: status.version,
     'Safe mode': status.policy.safeModeByDefault ? 'enabled' : 'check required',
     'Mutating tools': `${status.mutatingTools.length} require allow-actions`,
     Config: status.localPaths.config,
-  });
+  }));
 
   console.log('');
   table(['Boundary', 'Status'], status.boundaries.map((boundary) => [
