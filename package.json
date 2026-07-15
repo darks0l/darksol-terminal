@@ -1,6 +1,6 @@
 {
   "name": "@darksol/terminal",
-  "version": "0.23.1",
+  "version": "0.23.2",
   "description": "DARKSOL Terminal — unified crypto CLI for trading, Wiretap/AIM messaging, agent tooling, x402 payments, market intel, wallets, oracle, cards, and more.",
   "type": "module",
   "bin": {
@@ -55,7 +55,7 @@
     "url": "https://github.com/darks0l/darksol-terminal/issues"
   },
   "dependencies": {
-    "@darksol/remem": "^0.21.1",
+    "@darksol/remem": "^0.22.1",
     "agentmail": "^0.4.20",
     "blessed": "^0.1.81",
     "blessed-contrib": "^4.11.0",

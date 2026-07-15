@@ -11,6 +11,15 @@ All notable changes to `@darksol/terminal` are documented here.
 
 No unreleased changes yet.
 
+## [0.23.2] - 2026-07-15
+
+### Changed - CLI stability and release alignment
+
+- Merged the `kvDisplay` tuple fix so `darksol doctor`, `darksol security status`, and `darksol approvals check` no longer crash when rendering structured output.
+- Hardened Wiretap CLI flows for non-interactive terminals so scripted and CI usage returns friendly errors instead of raw prompt crashes.
+- Fixed wallet manager output by restoring the missing `info` import used by wallet list/create paths.
+- Updated the ReMEM dependency target to `@darksol/remem` `^0.22.1`.
+
 ## [0.23.1] - 2026-07-10
 
 ### Added - scoped ReMEM codebase context
